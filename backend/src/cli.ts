@@ -4,6 +4,7 @@ import { extractInterface } from './parser/extractors/interface-extractor.js';
 import { extractFunction } from './parser/extractors/function-extractor.js';
 import { extractImport } from './parser/extractors/import-extractor.js';
 import type { ParsedFile } from '../../shared/types.js';
+import { buildGraph } from './graph/graph-builder.js';
 import * as path from 'path';
 
 function main() {
@@ -41,7 +42,10 @@ function main() {
     parsedFiles.push(parsedFile);
   }
 
-  console.log(JSON.stringify(parsedFiles, null, 2));
+  console.log('Building graph...');
+  const graph = buildGraph(parsedFiles);
+
+  console.log(JSON.stringify(graph, null, 2));
 }
 
 main();

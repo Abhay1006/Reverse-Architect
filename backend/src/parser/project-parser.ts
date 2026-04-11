@@ -11,14 +11,16 @@ export function parseProject(projectPath: string): SourceFile[] {
   
   // Create a Project instance from ts-morph
   const project = new Project({
-    // Useful for a future configuration override
+    compilerOptions: {
+      allowJs: true,
+    }
   });
 
   console.log(`Adding source files from ${projectPath}...`);
   
-  // Add source files from the given path (*.ts, *.tsx)
+  // Add source files from the given path (*.ts, *.tsx, *.js, *.jsx)
   // We make sure it captures all files recursively using the glob pattern.
-  project.addSourceFilesAtPaths(`${projectPath}/**/*.{ts,tsx}`);
+  project.addSourceFilesAtPaths(`${projectPath}/**/*.{ts,tsx,js,jsx}`);
 
   // Retrieve all discovered source files
   const allFiles = project.getSourceFiles();
