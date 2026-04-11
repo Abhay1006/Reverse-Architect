@@ -13,7 +13,7 @@ export function extractFunction(functionNode: FunctionDeclaration): ParsedFuncti
 
   const parameters: ParsedParameter[] = functionNode.getParameters().map((param) => ({
     name: param.getName(),
-    type: param.getType().getText(),
+    type: param.getTypeNode()?.getText() || param.getType().getText().replace(/import\([^)]+\)\./g, ''),
   }));
 
   return {
@@ -21,6 +21,6 @@ export function extractFunction(functionNode: FunctionDeclaration): ParsedFuncti
     name,
     isExported,
     parameters,
-    returnType: functionNode.getReturnType().getText(),
+    returnType: functionNode.getReturnTypeNode()?.getText() || functionNode.getReturnType().getText().replace(/import\([^)]+\)\./g, ''),
   };
 }

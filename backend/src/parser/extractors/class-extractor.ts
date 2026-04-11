@@ -19,7 +19,7 @@ export function extractClass(classNode: ClassDeclaration): ParsedClass {
 
     return {
       name: prop.getName(),
-      type: prop.getType().getText(),
+      type: prop.getTypeNode()?.getText() || prop.getType().getText().replace(/import\([^)]+\)\./g, ''),
       visibility,
     };
   });
@@ -31,13 +31,13 @@ export function extractClass(classNode: ClassDeclaration): ParsedClass {
 
     const parameters: ParsedParameter[] = method.getParameters().map((param) => ({
       name: param.getName(),
-      type: param.getType().getText(),
+      type: param.getTypeNode()?.getText() || param.getType().getText().replace(/import\([^)]+\)\./g, ''),
     }));
 
     return {
       name: method.getName() || 'AnonymousMethod',
       parameters,
-      returnType: method.getReturnType().getText(),
+      returnType: method.getReturnTypeNode()?.getText() || method.getReturnType().getText().replace(/import\([^)]+\)\./g, ''),
       visibility,
     };
   });

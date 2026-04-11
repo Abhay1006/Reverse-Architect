@@ -4,6 +4,7 @@
 
 # --- Planning & Documentation (local only) ---
 docs/
+test-fixtures/
 
 # --- Dependencies ---
 node_modules/
