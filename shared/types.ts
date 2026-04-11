@@ -31,7 +31,7 @@ export interface ParsedClass {
   isAbstract: boolean;
   properties: ParsedProperty[];
   methods: ParsedMethod[];
-  extends?: string;
+  extends?: string | undefined;
   implements: string[];
   decorators: string[];
 }
@@ -39,13 +39,27 @@ export interface ParsedClass {
 export interface ParsedInterface {
   kind: "interface";
   name: string;
-  // to be expanded later...
+  isExported: boolean;
+  properties: ParsedProperty[];
+  methods: ParsedMethod[];
+  extends: string[];
 }
 
 export interface ParsedFunction {
   kind: "function";
   name: string;
-  // to be expanded later...
+  isExported: boolean;
+  parameters: ParsedParameter[];
+  returnType: string;
+}
+
+export interface ParsedImport {
+  kind: "import";
+  moduleSpecifier: string;
+  resolvedPath?: string | undefined;
+  defaultImport?: string | undefined;
+  namedImports: string[];
+  namespaceImport?: string | undefined;
 }
 
 // --- Graph Node ---

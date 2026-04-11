@@ -184,10 +184,4 @@ Contributions are welcome! Please read the contributing guide before submitting 
 
 ---
 
-## 📄 License
-
-This project is licensed under the ISC License.
-
----
-
 **Built with ❤️ by Abhay**
