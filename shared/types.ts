@@ -62,6 +62,16 @@ export interface ParsedImport {
   namespaceImport?: string | undefined;
 }
 
+export interface ParsedFile {
+  kind: "file";
+  name: string;
+  filePath: string;
+  imports: ParsedImport[];
+  classes: ParsedClass[];
+  interfaces: ParsedInterface[];
+  functions: ParsedFunction[];
+}
+
 // --- Graph Node ---
 export interface ArchNode {
   id: string;
