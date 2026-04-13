@@ -54,7 +54,7 @@ export function computeLayout(graph: ArchGraph, options: LayoutOptions = {}): Po
   // 1. Add all nodes to the dagre graph
   for (const node of graph.nodes) {
     g.setNode(node.id, { 
-      label: node.name, 
+      label: node.label, 
       width: nodeWidth, 
       height: nodeHeight 
     });
