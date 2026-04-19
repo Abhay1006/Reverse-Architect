@@ -126,7 +126,10 @@ export default function Upload({ isOpen, onClose }: UploadProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300"
+      onClick={onClose}
+    >
       <div 
         className="relative w-full max-w-lg overflow-hidden bg-[var(--glass-bg)] border border-[var(--card-border)] rounded-2xl shadow-2xl animate-in zoom-in-95 duration-300"
         onClick={(e) => e.stopPropagation()}
@@ -141,7 +144,7 @@ export default function Upload({ isOpen, onClose }: UploadProps) {
         <div className="px-8 pb-8 space-y-6">
           {/* Progress / Spinner Overlay */}
           {isAnalyzing && (
-            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-[var(--glass-bg)] backdrop-blur-md space-y-4">
+            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-[#0a0a0c] space-y-4 rounded-2xl">
               <div className="w-12 h-12 border-4 border-[var(--primary)] border-t-transparent rounded-full animate-spin"></div>
               <div className="text-center">
                 <p className="text-white font-medium">Analyzing architecture...</p>
@@ -222,7 +225,13 @@ export default function Upload({ isOpen, onClose }: UploadProps) {
             <button 
               type="submit"
               disabled={isAnalyzing || !githubUrl.trim()}
-              className="w-full relative overflow-hidden bg-white/5 hover:bg-indigo-600 text-white font-semibold flex flex-row items-center justify-center gap-3 py-2.5 rounded-xl transition-all duration-300 shadow-lg border border-white/10 hover:border-indigo-500/80 hover:shadow-[0_0_30px_rgba(79,70,229,0.4)] active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white/5 disabled:hover:border-white/10 disabled:hover:shadow-none"
+              style={{
+                backgroundColor: (isAnalyzing || !githubUrl.trim()) ? "rgba(255,255,255,0.05)" : "#4f46e5",
+                color: (isAnalyzing || !githubUrl.trim()) ? "rgba(255,255,255,0.4)" : "#ffffff",
+                borderColor: (isAnalyzing || !githubUrl.trim()) ? "rgba(255,255,255,0.1)" : "#6366f1",
+                boxShadow: (isAnalyzing || !githubUrl.trim()) ? "none" : "0 0 20px rgba(79,70,229,0.4)"
+              }}
+              className="w-full relative overflow-hidden font-bold flex flex-row items-center justify-center gap-3 py-2.5 rounded-xl transition-all duration-300 border active:scale-[0.98] disabled:cursor-not-allowed"
             >
               <svg className="w-4 h-4 text-current opacity-80" fill="currentColor" viewBox="0 0 24 24">
                 <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.268 2.75 1.022A9.607 9.607 0 0112 6.82c.85.004 1.705.114 2.504.336 1.909-1.29 2.747-1.022 2.747-1.022.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.161 22 16.416 22 12c0-5.523-4.477-10-10-10z" />

@@ -1,187 +1,60 @@
-# 🗺️ Atlas-TS
+# 🏛️ Atlas-TS
 
-**Google Maps for your Source Code.**
+**Atlas-TS** is an intelligent, automated Architecture Visualization and AI Analysis tool for modern TypeScript and JavaScript codebases. 
 
-Atlas-TS is a web application that analyzes TypeScript projects and generates live, interactive architecture diagrams with smart Low-Level Design (LLD) analysis. Upload a project or paste a GitHub link — Atlas-TS visualizes how your code is connected and highlights architectural issues automatically.
-
----
+Instead of reading thousands of lines of raw code to deduce interactions, Atlas-TS parses your repository, extracts its entities (Classes, Interfaces, Functions), computes relationships, detects anti-patterns (God Objects, Circular Dependencies, Dead Code), identifies architectural designs (Factories, Observers, Singletons), and renders it all in an interactive, sleek, animated node map.
 
 ## ✨ Features
 
-### 🔍 Interactive Architecture Graph
-- Visualize your entire project as a **draggable, zoomable dependency graph**
-- Each node displays the class/interface name, properties, and methods
-- Color-coded edges for imports, extends, and implements relationships
-
-### 🧠 Smart LLD Analysis
-
-| Feature | What It Does |
-|---------|-------------|
-| 🔴 **God Object Detector** | Highlights files/classes with too many connections (violating Single Responsibility) |
-| 🟡 **Design Pattern Inference** | Identifies Observer, Singleton, and Factory patterns in your code |
-| 👻 **Dead Code Finder** | Fades out files that aren't imported by anything |
-| 🔄 **Circular Dependency Detector** | Highlights import cycles with dashed red edges |
-| 🔍 **Search & Highlight** | Search for any class/file and see its immediate connections |
-
----
-
-## 🏗️ Architecture
-
-```
-┌──────────────────────────────────────────────────────┐
-│                  FRONTEND (Next.js)                   │
-│                                                       │
-│  [ Upload/URL ]  [ React Flow Canvas ]  [ Analysis ]  │
-│  [ Component  ]  [ (interactive)     ]  [ Sidebar  ]  │
-│                         │                             │
-│                   Zustand Store                       │
-└─────────────────────────┼─────────────────────────────┘
-                          │  REST API
-┌─────────────────────────┼─────────────────────────────┐
-│                  BACKEND (Node.js)                     │
-│                                                        │
-│  [ ts-morph    ]  [ Graph Builder ]  [ Analyzers     ] │
-│  [ AST Parser  ]  [ (DFS/BFS)    ]  [ (God Object,  ] │
-│  [             ]  [              ]  [  Patterns,    ] │
-│  [             ]  [              ]  [  Dead Code)   ] │
-└────────────────────────────────────────────────────────┘
-```
-
----
-
-## 🛠️ Tech Stack
-
-### Backend
-- **Node.js** + **TypeScript** — Runtime & language
-- **ts-morph** — AST parsing (wrapper over TypeScript Compiler API)
-- **Express.js** — REST API server
-- **dagre** — Automatic graph layout calculation
-
-### Frontend
-- **Next.js 15** — React framework with App Router
-- **React Flow (XyFlow)** — Interactive graph visualization
-- **Zustand** — Lightweight state management
-
-### Shared
-- **TypeScript interfaces** — Shared types between frontend and backend
-
----
-
-## 📂 Project Structure
-
-```
-Reverse-Architect/
-├── backend/              # Node.js + Express + ts-morph
-│   └── src/
-│       ├── parser/       # AST parsing with ts-morph
-│       ├── graph/        # Graph building & algorithms
-│       ├── analyzers/    # God object, dead code, patterns
-│       └── api/          # Express routes
-│
-├── frontend/             # Next.js + React Flow
-│   └── app/
-│       ├── components/   # Canvas, Upload, Sidebar, Custom Nodes
-│       ├── store/        # Zustand state management
-│       ├── hooks/        # Custom React hooks
-│       └── lib/          # API client & utilities
-│
-└── shared/               # Shared TypeScript types
-    └── types.ts
-```
-
----
+- 🔭 **Interactive Graph Mapping**: Drag, pan, and zoom through beautiful, color-coded node graphs mapped automatically by React Flow and Dagre algorithms.
+- ⚡ **Real-Time Search & Highlight**: Instantly focus on complex interactions out of thousands with a fuzzy search dropdown that elegantly dims non-matching entities.
+- 🐙 **1-Click GitHub Loading**: Pull and visualize any public (or private) GitHub repository simply by pasting its URL directly into the engine, powered by `simple-git`.
+- 🕵️ **Heuristic Design Pattern Inference**: Automatically badges components with pattern detections like **Singleton**, **Factory**, or **Observer** layouts.
+- 🚨 **Issue & Anti-Pattern Detection**: Instantly warns you about God Objects (over-bloated components), Circular Dependencies (highlighted dynamically in red), and potentially Dead / Unused Code snippets.
+- 📁 **Zero-Configuration Zip Uploads**: Drag and drop arbitrary codebase .zip files directly onto the browser canvas; Multer and Express handles the rapid extraction securely.
 
 ## 🚀 Getting Started
 
+Atlas-TS uses a powerful monorepo architecture divided between a high-speed Express/TypeScript backend running `ts-morph` and a React+Next.js frontend.
+
 ### Prerequisites
-- **Node.js** v20 or higher
-- **npm** v10 or higher
+- Node.js (v18+ recommended)
+- `npm` or `yarn`
 
-### Installation
-
+### 1. Run the Backend Server
+The backend parses AST structures and manages rate-controlled external integrations.
 ```bash
-# Clone the repository
-git clone https://github.com/your-username/Reverse-Architect.git
-cd Reverse-Architect
-
-# Install backend dependencies
 cd backend
 npm install
-
-# Install frontend dependencies
-cd ../frontend
-npm install
-```
-
-### Running Locally
-
-```bash
-# Terminal 1 — Start the backend
-cd backend
 npm run dev
+```
+*The API will start on `http://localhost:4000`*
 
-# Terminal 2 — Start the frontend
+### 2. Run the Frontend App
+The sleek UI dashboard built using Next.js 14 and Tailwind CSS.
+```bash
 cd frontend
+npm install
 npm run dev
 ```
+*The Web App will ignite on `http://localhost:3000`*
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+## 📚 Core API Reference
 
----
+The backend operates over a rapid REST architecture:
 
-## 📡 API Endpoints
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/api/analyze/upload` | Analyze an uploaded zip file |
-| `POST` | `/api/analyze/github` | Analyze a GitHub repository URL |
-| `GET` | `/api/analysis/:id` | Retrieve a cached analysis |
-| `GET` | `/api/health` | Health check |
-
----
-
-## 🧪 How It Works
-
-1. **Upload** a TypeScript project (zip file or GitHub URL)
-2. **Parse** — ts-morph reads every `.ts`/`.tsx` file and builds an Abstract Syntax Tree
-3. **Graph** — A directed graph is constructed from import relationships using DFS
-4. **Analyze** — Detectors scan for god objects, dead code, circular dependencies, and design patterns
-5. **Layout** — dagre calculates optimal node positions
-6. **Render** — React Flow displays the interactive graph with custom nodes
-
----
-
-## 🎯 Use Cases
-
-- **Onboarding** — New developers can visually explore an unfamiliar codebase
-- **Code Reviews** — See how a PR changes the architecture at a glance
-- **Refactoring** — Identify god objects and circular dependencies before they become tech debt
-- **Documentation** — Export architecture diagrams as PNG/SVG
-
----
-
-## 🗺️ Roadmap
-
-| Phase | Status | Description |
-|-------|--------|-------------|
-| Phase 1: Parser | 🔧 In Progress | AST extraction with ts-morph |
-| Phase 2: Graph | ⏳ Planned | Directed graph + cycle detection |
-| Phase 3: Canvas | ⏳ Planned | React Flow interactive visualization |
-| Phase 4: Analysis | ⏳ Planned | God objects, patterns, dead code |
-| Phase 5: Polish | ⏳ Planned | GitHub integration, export, dark mode |
-
----
+- `GET /api/health`: Validates server allocation and rate-limit availability.
+- `POST /api/analyze/upload`: Accepts `multipart/form-data` containing a .zip repository. Automatically scales into the provided temporary container for heuristic mappings. *(Limited to 50MB; 30req/hr).*
+- `POST /api/analyze/github`: Provide JSON `{ "url": "https://github.com/user/repo" }`. The server clones the repository `--depth 1` instantly, evaluates it, and drops the clone to preserve local disk space.
 
 ## 🤝 Contributing
+Contributions are absolutely welcome to help push Node/AST visualization bounds.
 
-Contributions are welcome! Please read the contributing guide before submitting a PR.
+1. **Fork the repo** and clone it locally.
+2. **Create a feature branch** (`git checkout -b feature/EpicVisualization`).
+3. **Commit your changes** (`git commit -m 'Added incredible new design pattern inference'`).
+4. **Push to the branch** (`git push origin feature/EpicVisualization`).
+5. **Open a Pull Request**! Ensure both frontend UI adjustments and backend parser updates match existing architectural styling in `globals.css` and `types.ts`!
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
----
-
-**Built with ❤️ by Abhay**
+## 📜 License
+Atlas-TS is completely open-source and free to utilize. Go untangle those codebases!

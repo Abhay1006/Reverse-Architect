@@ -36,7 +36,8 @@ export interface PositionedGraph extends Omit<ArchGraph, 'nodes'> {
  * @returns A new graph object where nodes contain x, y coordinates along with width and height.
  */
 export function computeLayout(graph: ArchGraph, options: LayoutOptions = {}): PositionedGraph {
-  const g = new dagre.graphlib.Graph();
+  // 1. Enable compound graphs for Sub-flow grouping bounds
+  const g = new dagre.graphlib.Graph({ compound: true });
   
   // Apply graph defaults and layout direction
   g.setGraph({
@@ -53,11 +54,19 @@ export function computeLayout(graph: ArchGraph, options: LayoutOptions = {}): Po
 
   // 1. Add all nodes to the dagre graph
   for (const node of graph.nodes) {
-    g.setNode(node.id, { 
-      label: node.label, 
-      width: nodeWidth, 
-      height: nodeHeight 
-    });
+    if (node.type === 'group') {
+      g.setNode(node.id, { label: node.label }); // Groups dynamically expand to fit children
+    } else {
+      g.setNode(node.id, { 
+        label: node.label, 
+        width: nodeWidth, 
+        height: nodeHeight 
+      });
+      // 1.5 Anchor children to parent borders
+      if (node.parentNode) {
+        g.setParent(node.id, node.parentNode);
+      }
+    }
   }
 
   // 2. Add all edges to the dagre graph
@@ -70,13 +79,21 @@ export function computeLayout(graph: ArchGraph, options: LayoutOptions = {}): Po
 
   // 4. Map the computed coordinates back to our ArchNode structures
   const positionedNodes: PositionedNode[] = graph.nodes.map(node => {
-    const dagreNode = g.node(node.id);
+    const pos = g.node(node.id);
+    // Dagre returns { x, y, width, height } for both individual items and compound groups
     return {
       ...node,
-      x: dagreNode.x,
-      y: dagreNode.y,
-      width: dagreNode.width,
-      height: dagreNode.height,
+      x: pos?.x || 0,
+      y: pos?.y || 0,
+      width: pos?.width || nodeWidth,
+      height: pos?.height || nodeHeight,
+      // Pass the computed width/height to React Flow explicitly 
+      // This forces the "GroupNode" div to stretch bounding boxes to encapsulate its children dynamically
+      style: node.type === 'group' ? { 
+        ...node.style, 
+        width: pos?.width || nodeWidth, 
+        height: pos?.height || nodeHeight 
+      } : node.style
     };
   });
 

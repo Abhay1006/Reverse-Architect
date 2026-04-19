@@ -6,6 +6,7 @@ import Upload from "./components/Upload";
 import AnalysisSidebar from "./components/AnalysisSidebar";
 import SearchBar from "./components/SearchBar";
 import { useAtlasStore } from "./store/atlas-store";
+import { toPng } from "html-to-image";
 
 export default function Home() {
   const setGraph = useAtlasStore((state) => state.setGraph);
@@ -87,8 +88,27 @@ export default function Home() {
     setGraph(mockNodes as any, mockEdges as any, mockAnalysis as any);
   }, [setGraph]);
 
+  const handleExportPng = () => {
+    const el = document.querySelector('.react-flow') as HTMLElement;
+    if (!el) return;
+    
+    toPng(el, { 
+      backgroundColor: '#0a0a0c',
+      pixelRatio: 2, // High resolution output
+    })
+    .then((dataUrl) => {
+      const a = document.createElement('a');
+      a.setAttribute('download', `atlas-architecture-${Date.now()}.png`);
+      a.setAttribute('href', dataUrl);
+      a.click();
+    })
+    .catch((err) => {
+      console.error("Failed to export image", err);
+    });
+  };
+
   return (
-    <main className="w-full h-screen overflow-hidden">
+    <main className="w-full h-screen overflow-hidden relative">
       {/* Header Overlay */}
       <div className="absolute top-6 left-6 z-10 pointer-events-none">
         <h1 className="text-2xl font-black tracking-tighter text-white/90">
@@ -98,19 +118,25 @@ export default function Home() {
       </div>
 
       {/* Floating Toolbar */}
-      <div className="absolute top-6 right-6 z-10 flex gap-2 items-center">
+      <div className="absolute top-6 right-6 z-10 flex flex-wrap justify-end gap-2 items-center pointer-events-none max-w-[calc(100vw-3rem)]">
         <SearchBar />
         <button 
-          onClick={() => setIsSidebarOpen(true)}
-          className="px-4 py-2 bg-primary/20 hover:bg-primary/30 border border-primary/50 text-primary text-xs font-bold rounded-lg backdrop-blur-md transition-all pointer-events-auto"
+          onClick={handleExportPng}
+          className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 text-white/80 hover:text-white text-xs font-bold rounded-lg backdrop-blur-md transition-all pointer-events-auto"
         >
-          ANALYSIS
+          EXPORT PNG
         </button>
         <button 
           onClick={() => setIsUploadOpen(true)}
-          className="px-4 py-2 bg-primary/20 hover:bg-primary/30 border border-primary/50 text-primary text-xs font-bold rounded-lg backdrop-blur-md transition-all pointer-events-auto"
+          className="px-4 py-2 bg-primary/20 hover:bg-primary/30 border border-primary/50 text-white hover:text-white text-xs font-bold rounded-lg backdrop-blur-md transition-all pointer-events-auto shadow-[0_0_15px_rgba(99,102,241,0.2)]"
         >
           RE-ANALYZE
+        </button>
+        <button 
+          onClick={() => setIsSidebarOpen(true)}
+          className="px-4 py-2 bg-primary/20 hover:bg-primary/30 border border-primary/50 text-white hover:text-white text-xs font-bold rounded-lg backdrop-blur-md transition-all pointer-events-auto shadow-[0_0_15px_rgba(99,102,241,0.2)]"
+        >
+          ANALYSIS
         </button>
       </div>
 

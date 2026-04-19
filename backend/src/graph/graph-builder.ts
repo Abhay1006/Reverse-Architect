@@ -1,3 +1,4 @@
+import * as path from 'path';
 import type { ArchGraph, ArchNode, ArchEdge, ParsedFile } from '../../../shared/types.js';
 
 /**
@@ -21,23 +22,48 @@ export function buildGraph(files: ParsedFile[]): ArchGraph {
   // Helper to generate consistent Node IDs
   const getFileNodeId = (filePath: string) => `file:${filePath}`;
   const getEntityNodeId = (filePath: string, name: string) => `entity:${filePath}:${name}`;
+  const getGroupNodeId = (groupName: string) => `group:${groupName}`;
 
   // --- Step 1: Node Generation ---
+  const groupSet = new Set<string>();
+
   for (const file of files) {
+    const parentDir = path.basename(path.dirname(file.filePath));
+    groupSet.add(parentDir);
+    const parentNodeId = getGroupNodeId(parentDir);
+
     // 1.1 Add File Node
     nodes.push({
       id: getFileNodeId(file.filePath),
       label: file.name,
       type: 'file',
       filePath: file.filePath,
+      parentNode: parentNodeId,
       metadata: {
-        lineCount: 0, // Future: could be added to parser
-        exportCount: file.classes.filter(c => c.isExported).length + 
-                     file.interfaces.filter(i => i.isExported).length + 
-                     file.functions.filter(f => f.isExported).length
+        lineCount: 0,
+        exportCount: file.classes.length + file.interfaces.length + file.functions.length
       },
       position: { x: 0, y: 0 }
     });
+
+    // Add Database nodes if they exist
+    if (file.databaseTables) {
+      for (const table of file.databaseTables) {
+        nodes.push({
+          id: getEntityNodeId(file.filePath, table.name),
+          label: table.name,
+          type: 'database',
+          filePath: file.filePath,
+          parentNode: parentNodeId,
+          metadata: {
+            lineCount: 0,
+            exportCount: 0
+          },
+          position: { x: 0, y: 0 }
+        });
+      }
+    }
+
 
     // 1.2 Add Entity Nodes (Classes)
     for (const cls of file.classes) {
@@ -46,6 +72,7 @@ export function buildGraph(files: ParsedFile[]): ArchGraph {
         label: cls.name,
         type: 'class',
         filePath: file.filePath,
+        parentNode: parentNodeId,
         metadata: {
           properties: cls.properties.map(p => p.name),
           methods: cls.methods.map(m => m.name),
@@ -63,6 +90,7 @@ export function buildGraph(files: ParsedFile[]): ArchGraph {
         label: intf.name,
         type: 'interface',
         filePath: file.filePath,
+        parentNode: parentNodeId,
         metadata: {
           properties: intf.properties.map(p => p.name),
           methods: intf.methods.map(m => m.name),
@@ -80,6 +108,7 @@ export function buildGraph(files: ParsedFile[]): ArchGraph {
         label: fn.name,
         type: 'function',
         filePath: file.filePath,
+        parentNode: parentNodeId,
         metadata: {
           lineCount: 0,
           exportCount: 0
@@ -87,6 +116,19 @@ export function buildGraph(files: ParsedFile[]): ArchGraph {
         position: { x: 0, y: 0 }
       });
     }
+  }
+
+  // Generate the actual Group Nodes
+  for (const group of groupSet) {
+    if (!group || group === '.') continue; // Skip empty/root if anomalies occur
+    nodes.push({
+      id: getGroupNodeId(group),
+      label: group,
+      type: 'group',
+      filePath: '',
+      metadata: { lineCount: 0, exportCount: 0 },
+      position: { x: 0, y: 0 }
+    });
   }
 
   // --- Step 2: Edge Generation ---

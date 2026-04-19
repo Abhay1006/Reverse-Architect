@@ -11,8 +11,9 @@ import path from 'path';
 import fs from 'fs';
 import os from 'os';
 import AdmZip from 'adm-zip';
+import rateLimit from 'express-rate-limit';
 
-import { parseProject } from './parser/project-parser.js';
+import { parseProject, parseDatabaseSchemas } from './parser/project-parser.js';
 import { extractClass } from './parser/extractors/class-extractor.js';
 import { extractInterface } from './parser/extractors/interface-extractor.js';
 import { extractFunction } from './parser/extractors/function-extractor.js';
@@ -36,11 +37,37 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Multer: store uploads in a temp directory
-const upload = multer({ dest: os.tmpdir() });
+// Multer: store uploads in a temp directory, limit to 50MB
+const upload = multer({ 
+  dest: os.tmpdir(),
+  limits: { fileSize: 50 * 1024 * 1024 }
+});
 
 // ---------------------------------------------------------------------------
-//  Analysis Pipeline
+//  Rate Limiting
+// ---------------------------------------------------------------------------
+
+// General API limiter
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  limit: 100, // Limit each IP to 100 requests per `window`
+  message: { error: 'Too many requests from this IP, please try again after 15 minutes' },
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+});
+
+// Stricter limiter for heavy analysis endpoints
+const analysisLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  limit: 30, // Limit each IP to 30 analysis requests per window
+  message: { error: 'Analysis quota exceeded. Please try again or host your own instance.' },
+});
+
+app.use('/api/', apiLimiter);
+
+// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+
 // ---------------------------------------------------------------------------
 
 /**
@@ -48,11 +75,12 @@ const upload = multer({ dest: os.tmpdir() });
  * Works on an already-extracted directory path.
  */
 function analyzeProjectDir(projectPath: string) {
-  // 1. Parse project files
+  // 1. Parse project files and database schemas
   const sourceFiles = parseProject(projectPath);
+  const dbFiles = parseDatabaseSchemas(projectPath);
 
   // 2. Extract entities from each source file
-  const parsedFiles: ParsedFile[] = [];
+  const parsedFiles: ParsedFile[] = [...dbFiles];
   for (const file of sourceFiles) {
     const classes = file.getClasses().map(extractClass);
     const interfaces = file.getInterfaces().map(extractInterface);
@@ -88,20 +116,58 @@ function analyzeProjectDir(projectPath: string) {
   graph.analysis.patterns = detectPatterns(graph);
 
   // 8. Compute layout positions
+  // Use LR (Left-to-Right) layout and drastically increase dimensions 
+  // since custom React Flow nodes containing metadata are large.
   const positioned = computeLayout(graph, {
-    direction: 'TB',
-    nodeWidth: 200,
-    nodeHeight: 80,
-    ranksep: 80,
-    nodesep: 60,
+    direction: 'LR',
+    nodeWidth: 350,
+    nodeHeight: 300,
+    ranksep: 250,
+    nodesep: 150,
   });
 
   // 7. Serialize to React Flow format
-  const result = serializeToReactFlow(positioned);
+  const initialNodes: any[] = positioned.nodes.map((n) => {
+    const rfNode: any = {
+      id: n.id,
+      type: n.type,
+      position: { x: n.x, y: n.y },
+      data: {
+        label: n.label,
+        filePath: n.filePath,
+        metadata: n.metadata,
+        analysis: {
+          isGodObject: graph.analysis.godObjects.includes(n.id),
+          isDeadCode: graph.analysis.deadCode.includes(n.id),
+        },
+      },
+    };
+    
+    // Assign Dagre boundary sizes directly to DOM styling for Group Nodes
+    if (n.style) {
+      rfNode.style = n.style;
+    }
+    
+    // Assign mathematical sub-flow nesting parent linkage
+    if (n.parentNode) {
+      rfNode.parentId = n.parentNode;
+      rfNode.extent = 'parent'; // Prevent dragging outside the boundary mathematically
+    }
 
-  // Attach enriched analysis data for the sidebar
+    return rfNode;
+  });
+
+  const initialEdges: any[] = positioned.edges.map((e) => ({
+    id: e.id,
+    source: e.source,
+    target: e.target,
+    label: e.label,
+    type: 'smoothstep',
+  }));
+
   return {
-    ...result,
+    nodes: initialNodes,
+    edges: initialEdges,
     godObjectDetails: godObjectHits,
     deadCodeDetails: deadCodeHits,
   };
@@ -146,7 +212,7 @@ app.get('/api/health', (_req, res) => {
 });
 
 /** POST /api/analyze/upload — accept a .zip file */
-app.post('/api/analyze/upload', upload.single('file'), async (req, res) => {
+app.post('/api/analyze/upload', upload.single('file'), analysisLimiter, async (req, res) => {
   const file = req.file;
   if (!file) {
     res.status(400).json({ error: 'No file uploaded' });
@@ -183,7 +249,7 @@ app.post('/api/analyze/upload', upload.single('file'), async (req, res) => {
 });
 
 /** POST /api/analyze/github — clone and analyze a GitHub repo */
-app.post('/api/analyze/github', async (req, res) => {
+app.post('/api/analyze/github', analysisLimiter, async (req, res) => {
   const { url } = req.body as { url?: string };
 
   if (!url || typeof url !== 'string') {
@@ -191,20 +257,20 @@ app.post('/api/analyze/github', async (req, res) => {
     return;
   }
 
-  if (!url.includes('github.com')) {
-    res.status(400).json({ error: 'URL must be a GitHub repository' });
+  // Strict validation for GitHub URLs to prevent SSRF or malformed repos
+  const githubUrlRegex = /^https?:\/\/(www\.)?github\.com\/[\w.-]+\/[\w.-]+\/?$/;
+  if (!githubUrlRegex.test(url.trim())) {
+    res.status(400).json({ error: 'URL must be a valid GitHub repository (e.g., https://github.com/user/repo)' });
     return;
   }
 
+  const cleanUrl = url.trim();
+
   const cloneDir = path.join(os.tmpdir(), `atlas-gh-${Date.now()}`);
   try {
-    // Clone the repo using git (shallow clone for speed)
-    const { execSync } = await import('child_process');
-    console.log(`Cloning ${url} into ${cloneDir}...`);
-    execSync(`git clone --depth 1 ${url} ${cloneDir}`, {
-      stdio: 'pipe',
-      timeout: 60_000, // 60 second timeout
-    });
+    console.log(`Cloning ${cleanUrl} into ${cloneDir}...`);
+    const { cloneRepo } = await import('./github/clone.js');
+    await cloneRepo(cleanUrl, cloneDir);
 
     const result = analyzeProjectDir(cloneDir);
     res.json(result);

@@ -4,7 +4,7 @@
 // ============================================================
 
 // --- Parser Types ---
-export type EntityKind = "class" | "interface" | "function" | "file";
+export type EntityKind = "class" | "interface" | "function" | "file" | "database" | "group";
 
 export interface ParsedParameter {
   name: string;
@@ -53,6 +53,12 @@ export interface ParsedFunction {
   returnType: string;
 }
 
+export interface ParsedDatabase {
+  kind: "database";
+  name: string;
+  columns: ParsedProperty[];
+}
+
 export interface ParsedImport {
   kind: "import";
   moduleSpecifier: string;
@@ -70,14 +76,16 @@ export interface ParsedFile {
   classes: ParsedClass[];
   interfaces: ParsedInterface[];
   functions: ParsedFunction[];
+  databaseTables?: ParsedDatabase[];
 }
 
 // --- Graph Node ---
 export interface ArchNode {
   id: string;
   label: string;
-  type: "file" | "class" | "interface" | "function";
+  type: "file" | "class" | "interface" | "function" | "database" | "group";
   filePath: string;
+  parentNode?: string;
   metadata: {
     properties?: string[];
     methods?: string[];
@@ -85,6 +93,7 @@ export interface ArchNode {
     exportCount: number;
   };
   position: { x: number; y: number };
+  style?: Record<string, any>; // Used by React Flow for size overrides
 }
 
 // --- Graph Edge ---

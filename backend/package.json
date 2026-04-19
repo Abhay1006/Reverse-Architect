@@ -28,7 +28,9 @@
     "cors": "^2.8.6",
     "dagre": "^0.8.5",
     "express": "^5.2.1",
+    "express-rate-limit": "^8.3.2",
     "multer": "^2.1.1",
+    "simple-git": "^3.36.0",
     "ts-morph": "^27.0.2"
   }
 }

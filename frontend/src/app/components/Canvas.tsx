@@ -15,6 +15,8 @@ import ClassNode from "./nodes/ClassNode";
 import InterfaceNode from "./nodes/InterfaceNode";
 import FunctionNode from "./nodes/FunctionNode";
 import FileNode from "./nodes/FileNode";
+import GroupNode from "./nodes/GroupNode";
+import DatabaseNode from "./nodes/DatabaseNode";
 
 const Canvas = () => {
   const { 
@@ -32,6 +34,8 @@ const Canvas = () => {
     interface: InterfaceNode,
     function: FunctionNode,
     file: FileNode,
+    group: GroupNode,
+    database: DatabaseNode,
   }), []);
 
   const onNodeClick = (_: React.MouseEvent, node: any) => {
@@ -129,11 +133,15 @@ const Canvas = () => {
         />
         <Controls />
         <MiniMap 
+          pannable
+          zoomable
           style={{ backgroundColor: "var(--glass-bg)" }}
           nodeColor={(n) => {
             if (n.type === 'class') return 'var(--class-bg)';
             if (n.type === 'interface') return 'var(--interface-bg)';
             if (n.type === 'function') return 'var(--function-bg)';
+            if (n.type === 'database') return '#10b981';
+            if (n.type === 'group') return 'rgba(255, 255, 255, 0.05)';
             return 'var(--file-bg)';
           }}
           maskColor="rgba(0, 0, 0, 0.5)"
