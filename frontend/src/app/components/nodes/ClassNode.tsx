@@ -11,6 +11,7 @@ const ClassNode = ({ data, selected, id }: NodeProps<ClassNodeType>) => {
   
   const isGodObject = analysis?.godObjects.includes(id);
   const isDeadCode = analysis?.deadCode.includes(id);
+  const nodePatterns = analysis?.patterns?.filter(p => p.nodeId === id) || [];
   
   const status = isGodObject ? "god" : isDeadCode ? "dead" : "default";
 
@@ -54,7 +55,7 @@ const ClassNode = ({ data, selected, id }: NodeProps<ClassNodeType>) => {
         )}
 
         {/* Info badges */}
-        <div className="flex gap-2 pt-2 border-t border-white/5">
+        <div className="flex flex-wrap gap-2 pt-2 border-t border-white/5">
           <span className="px-1.5 py-0.5 rounded bg-white/5 text-[10px] text-white/40">
             {data.metadata?.lineCount || 0} lines
           </span>
@@ -63,6 +64,16 @@ const ClassNode = ({ data, selected, id }: NodeProps<ClassNodeType>) => {
               GOD OBJECT
             </span>
           )}
+          {nodePatterns.map((match, i) => {
+            let colorClass = "bg-blue-500/20 text-blue-400";
+            if (match.pattern === "factory") colorClass = "bg-purple-500/20 text-purple-400";
+            if (match.pattern === "singleton") colorClass = "bg-teal-500/20 text-teal-400";
+            return (
+              <span key={i} className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${colorClass}`}>
+                {match.pattern} ({match.confidence})
+              </span>
+            );
+          })}
         </div>
       </div>
     </BaseNode>

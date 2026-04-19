@@ -19,7 +19,9 @@ import FileNode from "./nodes/FileNode";
 const Canvas = () => {
   const { 
     nodes, 
-    edges, 
+    edges,
+    analysisResults,
+    searchQuery,
     onNodesChange, 
     onEdgesChange, 
     setSelectedNode 
@@ -45,14 +47,34 @@ const Canvas = () => {
     animated: true,
   };
 
+  // Pre-calculate which edges belong to a cycle
+  const cycleEdges = useMemo(() => {
+    const cycleSet = new Set<string>();
+    const cycles = analysisResults?.cycles || [];
+    for (const cycle of cycles) {
+      for (let i = 0; i < cycle.length; i++) {
+        const source = cycle[i];
+        const target = cycle[(i + 1) % cycle.length];
+        cycleSet.add(`${source}->${target}`);
+      }
+    }
+    return cycleSet;
+  }, [analysisResults?.cycles]);
+
   const styledEdges = useMemo(() => {
     return edges.map((edge) => {
       let color = "var(--primary)";
       let strokeDasharray = "";
+      const isCycle = cycleEdges.has(`${edge.source}->${edge.target}`);
 
-      if (edge.label === "implements") color = "var(--accent)";
-      if (edge.label === "extends") color = "var(--secondary)";
-      if (edge.label === "calls") color = "var(--primary)";
+      if (isCycle) {
+        color = "var(--god-object)"; // Red color for issues
+        strokeDasharray = "5,5";
+      } else {
+        if (edge.label === "implements") color = "var(--accent)";
+        if (edge.label === "extends") color = "var(--secondary)";
+        if (edge.label === "calls") color = "var(--primary)";
+      }
 
       return {
         ...edge,
@@ -63,12 +85,32 @@ const Canvas = () => {
         },
       };
     });
-  }, [edges]);
+  }, [edges, cycleEdges]);
+
+  // Apply search filtering
+  const styledNodes = useMemo(() => {
+    if (!searchQuery) return nodes;
+    const lowerQuery = searchQuery.toLowerCase();
+    
+    return nodes.map(node => {
+      const label = (node.data?.label as string) || node.id;
+      const matches = label.toLowerCase().includes(lowerQuery);
+      
+      return {
+        ...node,
+        style: {
+          ...node.style,
+          opacity: matches ? 1 : 0.2, // Dim non-matching
+          filter: matches ? 'none' : 'grayscale(100%)',
+        }
+      };
+    });
+  }, [nodes, searchQuery]);
 
   return (
     <div className="w-full h-screen">
       <ReactFlow
-        nodes={nodes}
+        nodes={styledNodes}
         edges={styledEdges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}

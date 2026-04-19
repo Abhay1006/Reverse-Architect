@@ -8,19 +8,22 @@ import {
   applyEdgeChanges,
 } from '@xyflow/react';
 import type { AnalysisResult } from '../../../../shared/types';
+import type { GodObjectDetail, DeadCodeDetail } from '../lib/atlas-api';
 
 interface AtlasState {
   // --- Graph State ---
   nodes: Node[];
   edges: Edge[];
   analysisResults: AnalysisResult | null;
+  godObjectDetails: GodObjectDetail[];
+  deadCodeDetails: DeadCodeDetail[];
   
   // --- UI State ---
   selectedNodeId: string | null;
   searchQuery: string;
 
   // --- Actions ---
-  setGraph: (nodes: Node[], edges: Edge[], analysis: AnalysisResult) => void;
+  setGraph: (nodes: Node[], edges: Edge[], analysis: AnalysisResult, godObjectDetails?: GodObjectDetail[], deadCodeDetails?: DeadCodeDetail[]) => void;
   
   // React Flow required actions
   onNodesChange: OnNodesChange;
@@ -36,11 +39,13 @@ export const useAtlasStore = create<AtlasState>((set, get) => ({
   nodes: [],
   edges: [],
   analysisResults: null,
+  godObjectDetails: [],
+  deadCodeDetails: [],
   selectedNodeId: null,
   searchQuery: '',
 
-  setGraph: (nodes, edges, analysisResults) => {
-    set({ nodes, edges, analysisResults });
+  setGraph: (nodes, edges, analysisResults, godObjectDetails, deadCodeDetails) => {
+    set({ nodes, edges, analysisResults, godObjectDetails: godObjectDetails ?? [], deadCodeDetails: deadCodeDetails ?? [] });
   },
 
   onNodesChange: (changes) => {

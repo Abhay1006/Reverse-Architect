@@ -2,6 +2,12 @@
 
 import React, { useState, useRef } from "react";
 import { useAtlasStore } from "../store/atlas-store";
+import {
+  analyzeUpload,
+  analyzeGithub,
+  toStoreGraph,
+  AtlasApiError,
+} from "../lib/atlas-api";
 
 interface UploadProps {
   isOpen: boolean;
@@ -13,11 +19,14 @@ export default function Upload({ isOpen, onClose }: UploadProps) {
   const [githubUrl, setGithubUrl] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
+
   const setGraph = useAtlasStore((state) => state.setGraph);
 
   if (!isOpen) return null;
+
+  // ── Drag & Drop handlers ──────────────────────────────────────────────
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -38,14 +47,19 @@ export default function Upload({ isOpen, onClose }: UploadProps) {
     }
   };
 
+  // ── File validation ───────────────────────────────────────────────────
+
   const handleFileSelected = (file: File) => {
     if (!file.name.endsWith(".zip")) {
       setError("Please upload a .zip file.");
       return;
     }
     setError(null);
-    simulateAnalysis(file.name);
+    setSelectedFile(file);
+    runUploadAnalysis(file);
   };
+
+  // ── GitHub URL submission ─────────────────────────────────────────────
 
   const handleAnalyzeUrl = (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,53 +72,57 @@ export default function Upload({ isOpen, onClose }: UploadProps) {
       return;
     }
     setError(null);
-    simulateAnalysis(githubUrl);
+    runGithubAnalysis(githubUrl);
   };
 
-  const simulateAnalysis = (source: string) => {
+  // ── Real API integration ──────────────────────────────────────────────
+
+  const runUploadAnalysis = async (file: File) => {
     setIsAnalyzing(true);
-    
-    // Simulating analysis delay
-    setTimeout(() => {
-      // Mock data representing the "analyzed" project
-      const mockNodes = [
-        {
-          id: "n1",
-          type: "class",
-          position: { x: 250, y: 150 },
-          data: {
-            label: "AppController",
-            filePath: "src/controller.ts",
-            metadata: { properties: ["service: AppService"], methods: ["index()"], lineCount: 120 }
-          }
-        },
-        {
-          id: "n2",
-          type: "class",
-          position: { x: 450, y: 350 },
-          data: {
-            label: "AppService",
-            filePath: "src/service.ts",
-            metadata: { properties: ["repository: DB"], methods: ["getData()"], lineCount: 200 }
-          }
-        }
-      ];
+    setError(null);
 
-      const mockEdges = [
-        { id: "e1-2", source: "n1", target: "n2", animated: true, label: "injects" }
-      ];
-
-      const mockAnalysis = {
-        godObjects: [],
-        deadCode: [],
-        cycles: [],
-        patterns: []
-      };
-
-      setGraph(mockNodes as any, mockEdges as any, mockAnalysis as any);
-      setIsAnalyzing(false);
+    try {
+      const graph = await analyzeUpload(file);
+      const { nodes, edges, analysis, godObjectDetails, deadCodeDetails } = toStoreGraph(graph);
+      setGraph(nodes, edges, analysis, godObjectDetails, deadCodeDetails);
       onClose();
-    }, 2500);
+    } catch (err) {
+      if (err instanceof AtlasApiError) {
+        setError(err.details ? `${err.message}: ${err.details}` : err.message);
+      } else {
+        setError(
+          err instanceof Error
+            ? err.message
+            : "An unexpected error occurred during upload analysis.",
+        );
+      }
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  const runGithubAnalysis = async (url: string) => {
+    setIsAnalyzing(true);
+    setError(null);
+
+    try {
+      const graph = await analyzeGithub(url);
+      const { nodes, edges, analysis, godObjectDetails, deadCodeDetails } = toStoreGraph(graph);
+      setGraph(nodes, edges, analysis, godObjectDetails, deadCodeDetails);
+      onClose();
+    } catch (err) {
+      if (err instanceof AtlasApiError) {
+        setError(err.details ? `${err.message}: ${err.details}` : err.message);
+      } else {
+        setError(
+          err instanceof Error
+            ? err.message
+            : "An unexpected error occurred during GitHub analysis.",
+        );
+      }
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
 
   return (
@@ -160,8 +178,19 @@ export default function Upload({ isOpen, onClose }: UploadProps) {
                 </svg>
               </div>
               <div>
-                <p className="text-white font-medium">Drop .zip project here</p>
-                <p className="text-white/30 text-xs">or click to browse local files</p>
+                {selectedFile ? (
+                  <>
+                    <p className="text-white font-medium">{selectedFile.name}</p>
+                    <p className="text-white/30 text-xs">
+                      {(selectedFile.size / 1024).toFixed(1)} KB — click to change
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-white font-medium">Drop .zip project here</p>
+                    <p className="text-white/30 text-xs">or click to browse local files</p>
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -174,9 +203,9 @@ export default function Upload({ isOpen, onClose }: UploadProps) {
 
           {/* GitHub URL Input */}
           <form onSubmit={handleAnalyzeUrl} className="space-y-3">
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none text-white/30">
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+            <div className="relative group">
+              <div className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none text-white/40 group-focus-within:text-white transition-colors duration-300">
+                <svg className="w-5 h-5 drop-shadow-md" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12" />
                 </svg>
               </div>
@@ -185,14 +214,19 @@ export default function Upload({ isOpen, onClose }: UploadProps) {
                 placeholder="https://github.com/username/repo"
                 value={githubUrl}
                 onChange={(e) => setGithubUrl(e.target.value)}
-                className="w-full bg-white/5 border border-white/10 rounded-xl py-3 pl-11 pr-4 text-white text-sm placeholder:text-white/20 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/50 focus:border-[var(--primary)] transition-all"
+                style={{ backgroundColor: "#17171a", color: "#ffffff" }}
+                className="w-full border border-white/20 rounded-xl py-3 pl-11 pr-4 font-medium text-sm placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/50 focus:border-[var(--primary)] transition-all shadow-inner"
               />
             </div>
             
             <button 
               type="submit"
-              className="w-full bg-[var(--primary)] hover:bg-[var(--primary)]/90 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-[var(--primary-glow)] active:scale-[0.98]"
+              disabled={isAnalyzing || !githubUrl.trim()}
+              className="w-full relative overflow-hidden bg-white/5 hover:bg-indigo-600 text-white font-semibold flex flex-row items-center justify-center gap-3 py-2.5 rounded-xl transition-all duration-300 shadow-lg border border-white/10 hover:border-indigo-500/80 hover:shadow-[0_0_30px_rgba(79,70,229,0.4)] active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white/5 disabled:hover:border-white/10 disabled:hover:shadow-none"
             >
+              <svg className="w-4 h-4 text-current opacity-80" fill="currentColor" viewBox="0 0 24 24">
+                <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.268 2.75 1.022A9.607 9.607 0 0112 6.82c.85.004 1.705.114 2.504.336 1.909-1.29 2.747-1.022 2.747-1.022.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.161 22 16.416 22 12c0-5.523-4.477-10-10-10z" />
+              </svg>
               Analyze GitHub Repository
             </button>
           </form>
@@ -206,11 +240,11 @@ export default function Upload({ isOpen, onClose }: UploadProps) {
         </div>
 
         {/* Footer */}
-        <div className="bg-white/5 px-8 py-4 flex justify-between items-center text-[10px] text-white/30 font-bold uppercase tracking-widest">
+        <div className="bg-[#101014] px-8 py-5 flex justify-between items-center text-[10px] text-white/30 font-bold uppercase tracking-widest border-t border-white/5">
           <span>Supported: TypeScript, JavaScript</span>
           <button 
             onClick={onClose}
-            className="hover:text-white transition-colors"
+            className="px-6 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/60 hover:text-white transition-all border border-white/5 hover:border-white/20 shadow-md"
           >
             Cancel
           </button>
