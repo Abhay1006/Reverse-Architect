@@ -1,4 +1,4 @@
-import type { ArchGraph, PatternMatch } from '../../../shared/types.js';
+import type { ArchGraph, PatternMatch } from '../../../../shared/types.js';
 import { detectSingleton } from './singleton.js';
 import { detectObserver } from './observer.js';
 import { detectFactory } from './factory.js';

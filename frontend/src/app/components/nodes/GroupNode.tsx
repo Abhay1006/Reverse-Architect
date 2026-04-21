@@ -1,13 +1,15 @@
 "use client";
 
 import React, { memo } from "react";
-import { NodeProps, NodeResizer } from "@xyflow/react";
+import { NodeProps, NodeResizer, Node } from "@xyflow/react";
 
 export type GroupNodeData = {
   label: string;
 };
 
-const GroupNode = ({ data, selected }: NodeProps<{ label: string }>) => {
+export type GroupNodeType = Node<GroupNodeData, "group">;
+
+const GroupNode = ({ data, selected }: NodeProps<GroupNodeType>) => {
   return (
     <>
       <div

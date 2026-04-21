@@ -79,7 +79,7 @@ export function parseDatabaseSchemas(projectPath: string): ParsedFile[] {
       while ((match = modelRegex.exec(content)) !== null) {
         tables.push({
           kind: 'database',
-          name: match[1],
+          name: match[1] || 'unknown_model',
           columns: []
         });
       }
@@ -89,7 +89,7 @@ export function parseDatabaseSchemas(projectPath: string): ParsedFile[] {
       while ((match = tableRegex.exec(content)) !== null) {
         tables.push({
           kind: 'database',
-          name: match[1],
+          name: match[1] || 'unknown_table',
           columns: []
         });
       }

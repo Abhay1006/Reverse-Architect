@@ -80,21 +80,27 @@ export function computeLayout(graph: ArchGraph, options: LayoutOptions = {}): Po
   // 4. Map the computed coordinates back to our ArchNode structures
   const positionedNodes: PositionedNode[] = graph.nodes.map(node => {
     const pos = g.node(node.id);
+    const width = pos?.width || nodeWidth;
+    const height = pos?.height || nodeHeight;
     // Dagre returns { x, y, width, height } for both individual items and compound groups
-    return {
+    
+    const positioned: PositionedNode = {
       ...node,
       x: pos?.x || 0,
       y: pos?.y || 0,
-      width: pos?.width || nodeWidth,
-      height: pos?.height || nodeHeight,
-      // Pass the computed width/height to React Flow explicitly 
-      // This forces the "GroupNode" div to stretch bounding boxes to encapsulate its children dynamically
-      style: node.type === 'group' ? { 
-        ...node.style, 
-        width: pos?.width || nodeWidth, 
-        height: pos?.height || nodeHeight 
-      } : node.style
+      width,
+      height,
     };
+
+    if (node.type === 'group') {
+      positioned.style = { 
+        ...node.style, 
+        width, 
+        height 
+      };
+    }
+
+    return positioned;
   });
 
   return {
