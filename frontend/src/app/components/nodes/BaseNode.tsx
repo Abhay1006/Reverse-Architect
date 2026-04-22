@@ -80,12 +80,12 @@ const BaseNode = ({
       {/* Connection Handles */}
       <Handle
         type="target"
-        position={Position.Top}
+        position={Position.Left}
         className="!w-2.5 !h-2.5 !bg-primary !border-2 !border-[#17171a]"
       />
       <Handle
         type="source"
-        position={Position.Bottom}
+        position={Position.Right}
         className="!w-2.5 !h-2.5 !bg-primary !border-2 !border-[#17171a]"
       />
     </div>

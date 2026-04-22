@@ -16,7 +16,8 @@ import rateLimit from 'express-rate-limit';
 import { parseProject, parseDatabaseSchemas } from './parser/project-parser.js';
 import { extractClass } from './parser/extractors/class-extractor.js';
 import { extractInterface } from './parser/extractors/interface-extractor.js';
-import { extractFunction } from './parser/extractors/function-extractor.js';
+import { extractFunction, extractArrowFunction } from './parser/extractors/function-extractor.js';
+import { SyntaxKind } from 'ts-morph';
 import { extractImport } from './parser/extractors/import-extractor.js';
 import { buildGraph } from './graph/graph-builder.js';
 import { computeLayout } from './graph/layout.js';
@@ -85,7 +86,14 @@ function analyzeProjectDir(projectPath: string) {
     const classes = file.getClasses().map(extractClass);
     const interfaces = file.getInterfaces().map(extractInterface);
     const functions = file.getFunctions().map(extractFunction);
+    
+    const arrowFunctions = file.getVariableDeclarations()
+      .filter(v => v.getInitializerIfKind(SyntaxKind.ArrowFunction))
+      .map(v => extractArrowFunction(v, v.getInitializerIfKind(SyntaxKind.ArrowFunction)!));
+    functions.push(...arrowFunctions);
+    
     const imports = file.getImportDeclarations().map(extractImport);
+    const lineCount = file.getEndLineNumber() - file.getStartLineNumber() + 1;
 
     parsedFiles.push({
       kind: 'file',
@@ -95,6 +103,7 @@ function analyzeProjectDir(projectPath: string) {
       interfaces,
       functions,
       imports,
+      lineCount,
     });
   }
 
@@ -126,12 +135,34 @@ function analyzeProjectDir(projectPath: string) {
     nodesep: 150,
   });
 
+  // Create a quick lookup map for parent resolution
+  const posNodeMap = new Map<string, typeof positioned.nodes[0]>();
+  for (const n of positioned.nodes) {
+    posNodeMap.set(n.id, n);
+  }
+
   // 7. Serialize to React Flow format
   const initialNodes: any[] = positioned.nodes.map((n) => {
+    
+    // React Flow requires child nodes strictly position relatively to their mathematical parent bounding top-left corner
+    let relativeX = n.x;
+    let relativeY = n.y;
+    
+    if (n.parentNode) {
+      const parentNode = posNodeMap.get(n.parentNode);
+      if (parentNode) {
+        // Since layout.ts already converted everyone to absolute top-left, we calculate relative offsets directly
+        relativeX = n.x - parentNode.x;
+        relativeY = n.y - parentNode.y;
+      }
+    }
+
     const rfNode: any = {
       id: n.id,
       type: n.type,
-      position: { x: n.x, y: n.y },
+      position: { x: relativeX, y: relativeY },
+      sourcePosition: 'right',
+      targetPosition: 'left',
       data: {
         label: n.label,
         filePath: n.filePath,

@@ -136,22 +136,14 @@ export default function Upload({ isOpen, onClose }: UploadProps) {
       >
         {/* Header */}
         <div className="px-8 pt-8 pb-4">
-          <h2 className="text-2xl font-bold tracking-tight text-white mb-1">Analyze Project</h2>
+          <h2 className="text-2xl font-bold tracking-tight text-white mb-4">Analyze Project</h2>
           <p className="text-white/50 text-sm">Upload a repository or provide a GitHub URL to start the visualization.</p>
         </div>
 
         {/* Content */}
-        <div className="px-8 pb-8 space-y-6">
+        <div className="px-8 pb-8 space-y-8">
           {/* Progress / Spinner Overlay */}
-          {isAnalyzing && (
-            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-[#0a0a0c] space-y-4 rounded-2xl">
-              <div className="w-12 h-12 border-4 border-[var(--primary)] border-t-transparent rounded-full animate-spin"></div>
-              <div className="text-center">
-                <p className="text-white font-medium">Analyzing architecture...</p>
-                <p className="text-white/40 text-xs">Extracting patterns and dependencies</p>
-              </div>
-            </div>
-          )}
+          {/* Progress / Spinner Overlay Removed - Using inline button loaders instead */ }
 
           {/* Drag & Drop Zone */}
           <div
@@ -181,7 +173,12 @@ export default function Upload({ isOpen, onClose }: UploadProps) {
                 </svg>
               </div>
               <div>
-                {selectedFile ? (
+                {isAnalyzing ? (
+                  <div className="flex flex-col items-center space-y-2">
+                    <div className="w-6 h-6 border-2 border-[var(--primary)] border-t-transparent rounded-full animate-spin"></div>
+                    <p className="text-white font-medium">Analyzing project...</p>
+                  </div>
+                ) : selectedFile ? (
                   <>
                     <p className="text-white font-medium">{selectedFile.name}</p>
                     <p className="text-white/30 text-xs">
@@ -198,14 +195,14 @@ export default function Upload({ isOpen, onClose }: UploadProps) {
             </div>
           </div>
 
-          <div className="relative flex items-center py-2">
+          <div className="relative flex items-center py-6">
             <div className="flex-grow border-t border-white/5"></div>
-            <span className="flex-shrink mx-4 text-white/20 text-[10px] font-bold uppercase tracking-widest">OR</span>
+            <span className="flex-shrink mx-4 text-white/20 text-[10px] font-bold uppercase tracking-widest leading-none">OR</span>
             <div className="flex-grow border-t border-white/5"></div>
           </div>
 
           {/* GitHub URL Input */}
-          <form onSubmit={handleAnalyzeUrl} className="space-y-3">
+          <form onSubmit={handleAnalyzeUrl} className="space-y-5">
             <div className="relative group">
               <div className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none text-white/40 group-focus-within:text-white transition-colors duration-300">
                 <svg className="w-5 h-5 drop-shadow-md" fill="currentColor" viewBox="0 0 24 24">
@@ -225,18 +222,31 @@ export default function Upload({ isOpen, onClose }: UploadProps) {
             <button 
               type="submit"
               disabled={isAnalyzing || !githubUrl.trim()}
-              style={{
-                backgroundColor: (isAnalyzing || !githubUrl.trim()) ? "rgba(255,255,255,0.05)" : "#4f46e5",
-                color: (isAnalyzing || !githubUrl.trim()) ? "rgba(255,255,255,0.4)" : "#ffffff",
-                borderColor: (isAnalyzing || !githubUrl.trim()) ? "rgba(255,255,255,0.1)" : "#6366f1",
-                boxShadow: (isAnalyzing || !githubUrl.trim()) ? "none" : "0 0 20px rgba(79,70,229,0.4)"
-              }}
-              className="w-full relative overflow-hidden font-bold flex flex-row items-center justify-center gap-3 py-2.5 rounded-xl transition-all duration-300 border active:scale-[0.98] disabled:cursor-not-allowed"
+              className={`w-full relative overflow-hidden font-extrabold tracking-wide flex flex-row items-center justify-center gap-3 py-3.5 rounded-xl transition-all duration-500 border active:scale-[0.98]
+                ${isAnalyzing || !githubUrl.trim()
+                  ? "bg-white/5 text-white/30 border-white/5 cursor-not-allowed"
+                  : "bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 text-white border-indigo-400/50 hover:border-indigo-300 hover:shadow-[0_0_40px_rgba(99,102,241,0.5)] hover:-translate-y-0.5"
+                }
+              `}
             >
-              <svg className="w-4 h-4 text-current opacity-80" fill="currentColor" viewBox="0 0 24 24">
-                <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.268 2.75 1.022A9.607 9.607 0 0112 6.82c.85.004 1.705.114 2.504.336 1.909-1.29 2.747-1.022 2.747-1.022.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.161 22 16.416 22 12c0-5.523-4.477-10-10-10z" />
-              </svg>
-              Analyze GitHub Repository
+              {/* Optional inner shine effect when button is active */}
+              {!(isAnalyzing || !githubUrl.trim()) && (
+                <div className="absolute inset-0 bg-gradient-to-t from-transparent to-white/10 pointer-events-none rounded-xl" />
+              )}
+              
+              {isAnalyzing ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                  <span className="opacity-80">Analyzing Repository...</span>
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4 text-white opacity-90 drop-shadow-md" fill="currentColor" viewBox="0 0 24 24">
+                    <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.268 2.75 1.022A9.607 9.607 0 0112 6.82c.85.004 1.705.114 2.504.336 1.909-1.29 2.747-1.022 2.747-1.022.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.161 22 16.416 22 12c0-5.523-4.477-10-10-10z" />
+                  </svg>
+                  <span>Analyze GitHub Repository</span>
+                </>
+              )}
             </button>
           </form>
 
@@ -249,7 +259,7 @@ export default function Upload({ isOpen, onClose }: UploadProps) {
         </div>
 
         {/* Footer */}
-        <div className="bg-[#101014] px-8 py-5 flex justify-between items-center text-[10px] text-white/30 font-bold uppercase tracking-widest border-t border-white/5">
+        <div className="bg-[#101014] px-8 py-8 flex justify-between items-center text-[10px] text-white/30 font-bold uppercase tracking-widest border-t border-white/5">
           <span>Supported: TypeScript, JavaScript</span>
           <button 
             onClick={onClose}

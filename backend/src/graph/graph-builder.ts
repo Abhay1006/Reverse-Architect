@@ -40,7 +40,7 @@ export function buildGraph(files: ParsedFile[]): ArchGraph {
       filePath: file.filePath,
       parentNode: parentNodeId,
       metadata: {
-        lineCount: 0,
+        lineCount: file.lineCount || 0,
         exportCount: file.classes.length + file.interfaces.length + file.functions.length
       },
       position: { x: 0, y: 0 }
@@ -56,7 +56,7 @@ export function buildGraph(files: ParsedFile[]): ArchGraph {
           filePath: file.filePath,
           parentNode: parentNodeId,
           metadata: {
-            lineCount: 0,
+            lineCount: table.lineCount || 0,
             exportCount: 0
           },
           position: { x: 0, y: 0 }
@@ -76,7 +76,7 @@ export function buildGraph(files: ParsedFile[]): ArchGraph {
         metadata: {
           properties: cls.properties.map(p => p.name),
           methods: cls.methods.map(m => m.name),
-          lineCount: 0,
+          lineCount: cls.lineCount || 0,
           exportCount: 0
         },
         position: { x: 0, y: 0 }
@@ -94,7 +94,7 @@ export function buildGraph(files: ParsedFile[]): ArchGraph {
         metadata: {
           properties: intf.properties.map(p => p.name),
           methods: intf.methods.map(m => m.name),
-          lineCount: 0,
+          lineCount: intf.lineCount || 0,
           exportCount: 0
         },
         position: { x: 0, y: 0 }
@@ -110,7 +110,7 @@ export function buildGraph(files: ParsedFile[]): ArchGraph {
         filePath: file.filePath,
         parentNode: parentNodeId,
         metadata: {
-          lineCount: 0,
+          lineCount: fn.lineCount || 0,
           exportCount: 0
         },
         position: { x: 0, y: 0 }

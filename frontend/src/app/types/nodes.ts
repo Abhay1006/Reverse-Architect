@@ -17,6 +17,7 @@ export type ClassNode = Node<CustomNodeData, "class">;
 export type InterfaceNode = Node<CustomNodeData, "interface">;
 export type FunctionNode = Node<CustomNodeData, "function">;
 export type FileNode = Node<CustomNodeData, "file">;
+export type DatabaseNodeType = Node<CustomNodeData, "database">;
 
 // Union type for all Atlas nodes
-export type AtlasNode = ClassNode | InterfaceNode | FunctionNode | FileNode;
+export type AtlasNode = ClassNode | InterfaceNode | FunctionNode | FileNode | DatabaseNodeType;

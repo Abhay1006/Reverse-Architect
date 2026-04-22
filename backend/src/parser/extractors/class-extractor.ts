@@ -49,6 +49,8 @@ export function extractClass(classNode: ClassDeclaration): ParsedClass {
 
   const decorators = classNode.getDecorators().map((dec) => dec.getName());
 
+  const lineCount = classNode.getEndLineNumber() - classNode.getStartLineNumber() + 1;
+
   return {
     kind: 'class',
     name,
@@ -59,5 +61,6 @@ export function extractClass(classNode: ClassDeclaration): ParsedClass {
     extends: extendsObj,
     implements: implementsObj,
     decorators,
+    lineCount,
   };
 }

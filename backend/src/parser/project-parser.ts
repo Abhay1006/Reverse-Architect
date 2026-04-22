@@ -80,7 +80,8 @@ export function parseDatabaseSchemas(projectPath: string): ParsedFile[] {
         tables.push({
           kind: 'database',
           name: match[1] || 'unknown_model',
-          columns: []
+          columns: [],
+          lineCount: 0
         });
       }
     } else if (file.endsWith('.sql')) {
@@ -90,7 +91,8 @@ export function parseDatabaseSchemas(projectPath: string): ParsedFile[] {
         tables.push({
           kind: 'database',
           name: match[1] || 'unknown_table',
-          columns: []
+          columns: [],
+          lineCount: 0
         });
       }
     }
@@ -104,7 +106,8 @@ export function parseDatabaseSchemas(projectPath: string): ParsedFile[] {
         classes: [],
         interfaces: [],
         functions: [],
-        databaseTables: tables
+        databaseTables: tables,
+        lineCount: content.split('\n').length
       });
     }
   }

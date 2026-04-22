@@ -4,8 +4,9 @@ import React, { memo } from "react";
 import { NodeProps } from "@xyflow/react";
 import BaseNode from "./BaseNode";
 import { useAtlasStore } from "../../store/atlas-store";
+import { DatabaseNodeType } from "../../types/nodes";
 
-const DatabaseNode = ({ data, selected, id }: NodeProps<any>) => {
+const DatabaseNode = ({ data, selected, id }: NodeProps<DatabaseNodeType>) => {
   const analysis = useAtlasStore((state) => state.analysisResults);
   const isGodObject = analysis?.godObjects.includes(id);
   const isDeadCode = analysis?.deadCode.includes(id);

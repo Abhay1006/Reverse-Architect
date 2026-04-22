@@ -36,6 +36,8 @@ export function extractInterface(interfaceNode: InterfaceDeclaration): ParsedInt
   // Interfaces can extend multiple other interfaces, e.g., `interface A extends B, C`
   const extendsArray = interfaceNode.getExtends().map((ext) => ext.getText());
 
+  const lineCount = interfaceNode.getEndLineNumber() - interfaceNode.getStartLineNumber() + 1;
+
   return {
     kind: 'interface',
     name,
@@ -43,5 +45,6 @@ export function extractInterface(interfaceNode: InterfaceDeclaration): ParsedInt
     properties,
     methods,
     extends: extendsArray,
+    lineCount,
   };
 }

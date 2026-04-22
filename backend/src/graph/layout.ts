@@ -80,14 +80,19 @@ export function computeLayout(graph: ArchGraph, options: LayoutOptions = {}): Po
   // 4. Map the computed coordinates back to our ArchNode structures
   const positionedNodes: PositionedNode[] = graph.nodes.map(node => {
     const pos = g.node(node.id);
-    const width = pos?.width || nodeWidth;
-    const height = pos?.height || nodeHeight;
-    // Dagre returns { x, y, width, height } for both individual items and compound groups
     
+    // Add 100px padding to logical Group bounding boxes (creates visual space)
+    const width = node.type === 'group' ? (pos?.width || 0) + 100 : (pos?.width || nodeWidth);
+    const height = node.type === 'group' ? (pos?.height || 0) + 100 : (pos?.height || nodeHeight);
+    
+    // Dagre outputs absolute center coordinates. React Flow needs top-left.
+    const absoluteX = (pos?.x || 0) - width / 2;
+    const absoluteY = (pos?.y || 0) - height / 2;
+
     const positioned: PositionedNode = {
       ...node,
-      x: pos?.x || 0,
-      y: pos?.y || 0,
+      x: absoluteX,
+      y: absoluteY,
       width,
       height,
     };

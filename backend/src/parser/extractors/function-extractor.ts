@@ -1,4 +1,4 @@
-import { FunctionDeclaration } from 'ts-morph';
+import { FunctionDeclaration, VariableDeclaration, ArrowFunction, SyntaxKind } from 'ts-morph';
 import type { ParsedFunction, ParsedParameter } from '../../../../shared/types.js';
 
 /**
@@ -16,11 +16,38 @@ export function extractFunction(functionNode: FunctionDeclaration): ParsedFuncti
     type: param.getTypeNode()?.getText() || param.getType().getText().replace(/import\([^)]+\)\./g, ''),
   }));
 
+  const lineCount = functionNode.getEndLineNumber() - functionNode.getStartLineNumber() + 1;
+
   return {
     kind: 'function',
     name,
     isExported,
     parameters,
     returnType: functionNode.getReturnTypeNode()?.getText() || functionNode.getReturnType().getText().replace(/import\([^)]+\)\./g, ''),
+    lineCount,
+  };
+}
+
+/**
+ * Extracts metadata from an ArrowFunction assigned to a VariableDeclaration.
+ */
+export function extractArrowFunction(varDecl: VariableDeclaration, arrowFunc: ArrowFunction): ParsedFunction {
+  const name = varDecl.getName();
+  const isExported = varDecl.isExported();
+
+  const parameters: ParsedParameter[] = arrowFunc.getParameters().map((param) => ({
+    name: param.getName(),
+    type: param.getTypeNode()?.getText() || param.getType().getText().replace(/import\([^)]+\)\./g, ''),
+  }));
+
+  const lineCount = arrowFunc.getEndLineNumber() - arrowFunc.getStartLineNumber() + 1;
+
+  return {
+    kind: 'function',
+    name,
+    isExported,
+    parameters,
+    returnType: arrowFunc.getReturnTypeNode()?.getText() || arrowFunc.getReturnType().getText().replace(/import\([^)]+\)\./g, ''),
+    lineCount,
   };
 }

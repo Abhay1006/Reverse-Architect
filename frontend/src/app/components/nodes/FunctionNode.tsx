@@ -10,6 +10,10 @@ const FunctionNode = ({ data, selected, id }: NodeProps<FunctionNodeType>) => {
   const analysis = useAtlasStore((state) => state.analysisResults);
   const isDeadCode = analysis?.deadCode.includes(id);
 
+  const fullPath = data.filePath as string;
+  const pathParts = fullPath.split('/');
+  const formattedPath = pathParts.slice(Math.max(0, pathParts.length - 3)).join('/');
+
   return (
     <BaseNode
       label={data.label as string}
@@ -23,7 +27,7 @@ const FunctionNode = ({ data, selected, id }: NodeProps<FunctionNodeType>) => {
     >
       <div className="flex items-center justify-between">
         <span className="text-xs font-mono text-accent">function</span>
-        <span className="text-[10px] text-white/30 truncate max-w-[100px]">{data.filePath as string}</span>
+        <span className="text-[10px] text-white/30 truncate" title={fullPath}>{formattedPath}</span>
       </div>
     </BaseNode>
   );

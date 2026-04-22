@@ -34,6 +34,7 @@ export interface ParsedClass {
   extends?: string | undefined;
   implements: string[];
   decorators: string[];
+  lineCount: number;
 }
 
 export interface ParsedInterface {
@@ -43,6 +44,7 @@ export interface ParsedInterface {
   properties: ParsedProperty[];
   methods: ParsedMethod[];
   extends: string[];
+  lineCount: number;
 }
 
 export interface ParsedFunction {
@@ -51,12 +53,14 @@ export interface ParsedFunction {
   isExported: boolean;
   parameters: ParsedParameter[];
   returnType: string;
+  lineCount: number;
 }
 
 export interface ParsedDatabase {
   kind: "database";
   name: string;
   columns: ParsedProperty[];
+  lineCount: number;
 }
 
 export interface ParsedImport {
@@ -77,6 +81,7 @@ export interface ParsedFile {
   interfaces: ParsedInterface[];
   functions: ParsedFunction[];
   databaseTables?: ParsedDatabase[];
+  lineCount: number;
 }
 
 // --- Graph Node ---
