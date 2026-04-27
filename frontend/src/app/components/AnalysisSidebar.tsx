@@ -1,88 +1,24 @@
 "use client";
 
 import React, { useMemo } from "react";
+import {
+  FileText,
+  BookOpen,
+  CirclePlus,
+  Braces,
+  TriangleAlert,
+  RefreshCw,
+  Ghost,
+  X,
+  ArrowRight,
+  Layers,
+} from "lucide-react";
 import { useAtlasStore } from "../store/atlas-store";
 
 interface AnalysisSidebarProps {
   isOpen: boolean;
   onClose: () => void;
 }
-
-/* ── tiny SVG icons (inline to avoid deps) ────────────────────────────── */
-
-const IconFile = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
-    <polyline points="14 2 14 8 20 8" />
-  </svg>
-);
-
-const IconClass = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="2" y="3" width="20" height="18" rx="2" />
-    <path d="M8 7h8M8 12h8M8 17h4" />
-  </svg>
-);
-
-const IconInterface = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="10" />
-    <path d="M8 12h8M12 8v8" />
-  </svg>
-);
-
-const IconFunction = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M10 3c-1.1 0-2 .9-2 2v4H5" />
-    <path d="M10 3c1.1 0 2 .9 2 2v4h3" />
-    <path d="M6 14c-1.1 0-2 .9-2 2s.9 2 2 2" />
-    <path d="M14 14c1.1 0 2 .9 2 2s-.9 2-2 2" />
-    <path d="M4 9h6M14 9h6" />
-  </svg>
-);
-
-const IconWarning = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-    <line x1="12" y1="9" x2="12" y2="13" />
-    <line x1="12" y1="17" x2="12.01" y2="17" />
-  </svg>
-);
-
-const IconCycle = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="23 4 23 10 17 10" />
-    <polyline points="1 20 1 14 7 14" />
-    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-  </svg>
-);
-
-const IconGhost = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M9 10h.01M15 10h.01M12 2a8 8 0 0 0-8 8v12l3-3 2 3 3-3 3 3 2-3 3 3V10a8 8 0 0 0-8-8z" />
-  </svg>
-);
-
-const IconX = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-  </svg>
-);
-
-const IconEdge = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="5" y1="12" x2="19" y2="12" />
-    <polyline points="12 5 19 12 12 19" />
-  </svg>
-);
-
-const IconPattern = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <polygon points="12 2 2 7 12 12 22 7 12 2" />
-    <polyline points="2 17 12 22 22 17" />
-    <polyline points="2 12 12 17 22 12" />
-  </svg>
-);
 
 /* ── stat card ────────────────────────────────────────────────────────── */
 
@@ -249,7 +185,7 @@ export default function AnalysisSidebar({ isOpen, onClose }: AnalysisSidebarProp
             <p className="analysis-subtitle">Architecture overview</p>
           </div>
           <button className="analysis-close" onClick={onClose}>
-            <IconX />
+            <X width={16} height={16} />
           </button>
         </div>
 
@@ -257,10 +193,10 @@ export default function AnalysisSidebar({ isOpen, onClose }: AnalysisSidebarProp
         <div className="analysis-section">
           <h3 className="analysis-section-title">Project Summary</h3>
           <div className="analysis-stat-grid">
-            <StatCard icon={<IconFile />} label="Files" value={stats.files} color="var(--file-bg)" />
-            <StatCard icon={<IconClass />} label="Classes" value={stats.classes} color="var(--class-bg)" />
-            <StatCard icon={<IconInterface />} label="Interfaces" value={stats.interfaces} color="var(--interface-bg)" />
-            <StatCard icon={<IconFunction />} label="Functions" value={stats.functions} color="var(--function-bg)" />
+            <StatCard icon={<FileText width={16} height={16} />} label="Files" value={stats.files} color="var(--file-bg)" />
+            <StatCard icon={<BookOpen width={16} height={16} />} label="Classes" value={stats.classes} color="var(--class-bg)" />
+            <StatCard icon={<CirclePlus width={16} height={16} />} label="Interfaces" value={stats.interfaces} color="var(--interface-bg)" />
+            <StatCard icon={<Braces width={16} height={16} />} label="Functions" value={stats.functions} color="var(--function-bg)" />
           </div>
 
           {/* Totals bar */}
@@ -295,7 +231,7 @@ export default function AnalysisSidebar({ isOpen, onClose }: AnalysisSidebarProp
 
           <div className="analysis-issue-list-container">
             <IssueRow
-              icon={<IconWarning />}
+              icon={<TriangleAlert width={14} height={14} />}
               label="God Objects"
               count={godObjectCount}
               color="var(--god-object)"
@@ -303,7 +239,7 @@ export default function AnalysisSidebar({ isOpen, onClose }: AnalysisSidebarProp
               onItemClick={panToNode}
             />
             <IssueRow
-              icon={<IconGhost />}
+              icon={<Ghost width={14} height={14} />}
               label="Dead Code"
               count={deadCodeCount}
               color="var(--dead-code)"
@@ -311,7 +247,7 @@ export default function AnalysisSidebar({ isOpen, onClose }: AnalysisSidebarProp
               onItemClick={panToNode}
             />
             <IssueRow
-              icon={<IconCycle />}
+              icon={<RefreshCw width={14} height={14} />}
               label="Circular Deps"
               count={cycleCount}
               color="#f59e0b"
@@ -325,7 +261,7 @@ export default function AnalysisSidebar({ isOpen, onClose }: AnalysisSidebarProp
               onItemClick={panToNode}
             />
             <IssueRow
-              icon={<IconPattern />}
+              icon={<Layers width={14} height={14} />}
               label="Patterns"
               count={patternCount}
               color="#8b5cf6"

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef } from "react";
+import { Upload as UploadIcon, GitBranch, Loader2 } from "lucide-react";
 import { useAtlasStore } from "../store/atlas-store";
 import {
   analyzeUpload,
@@ -141,10 +142,7 @@ export default function Upload({ isOpen, onClose }: UploadProps) {
         </div>
 
         {/* Content */}
-        <div className="px-8 pb-8 space-y-8">
-          {/* Progress / Spinner Overlay */}
-          {/* Progress / Spinner Overlay Removed - Using inline button loaders instead */}
-
+        <div className="px-8 pb-8 space-y-6">
           {/* Drag & Drop Zone */}
           <div
             onDragOver={handleDragOver}
@@ -168,14 +166,12 @@ export default function Upload({ isOpen, onClose }: UploadProps) {
 
             <div className="flex flex-col items-center text-center space-y-3">
               <div className={`p-3 rounded-full bg-white/5 group-hover:bg-white/10 transition-colors ${isDragging ? "text-[var(--primary)]" : "text-white/40"}`}>
-                <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                </svg>
+                <UploadIcon className="w-8 h-8" />
               </div>
               <div>
                 {isAnalyzing ? (
                   <div className="flex flex-col items-center space-y-2">
-                    <div className="w-6 h-6 border-2 border-[var(--primary)] border-t-transparent rounded-full animate-spin"></div>
+                    <Loader2 className="w-6 h-6 text-[var(--primary)] animate-spin" />
                     <p className="text-white font-medium">Analyzing project...</p>
                   </div>
                 ) : selectedFile ? (
@@ -195,55 +191,58 @@ export default function Upload({ isOpen, onClose }: UploadProps) {
             </div>
           </div>
 
-          <div className="relative flex items-center py-6">
+          <div className="relative flex items-center pt-8 pb-2">
             <div className="flex-grow border-t border-white/5"></div>
-            <span className="flex-shrink mx-4 text-white/20 text-[10px] font-bold uppercase tracking-widest leading-none">OR</span>
+            <span className="flex-shrink mx-4 text-white/20 text-[10px] font-bold uppercase tracking-[0.2em] leading-none">OR</span>
             <div className="flex-grow border-t border-white/5"></div>
           </div>
+          
+          {/* Explicit spacer to guarantee gap before input box */}
+          <div className="h-4"></div>
 
-          {/* GitHub URL Input */}
-          <form onSubmit={handleAnalyzeUrl} className="space-y-5">
+          {/* GitHub URL Input Form */}
+          <form onSubmit={handleAnalyzeUrl} className="flex flex-col" style={{ gap: "24px" }}>
             <div className="relative group">
-              <div className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none text-white/40 group-focus-within:text-white transition-colors duration-300">
-                <svg className="w-5 h-5 drop-shadow-md" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12" />
-                </svg>
-              </div>
               <input
                 type="text"
                 placeholder="https://github.com/username/repo"
                 value={githubUrl}
                 onChange={(e) => setGithubUrl(e.target.value)}
-                style={{ backgroundColor: "#17171a", color: "#ffffff" }}
-                className="w-full border border-white/20 rounded-xl py-3 pl-11 pr-4 font-medium text-sm placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/50 focus:border-[var(--primary)] transition-all shadow-inner"
+                style={{ backgroundColor: "#0f0f12", color: "#e2e2e2", caretColor: "#a5b4fc" }}
+                className="w-full border border-white/10 rounded-xl py-4 px-5 text-sm placeholder:text-white/20 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500/50 transition-all duration-300 shadow-[inset_0_2px_4px_rgba(0,0,0,0.3)] group-hover:border-white/20"
               />
+              {/* Subtle inner glow for the input box */}
+              <div className="absolute inset-0 rounded-xl bg-gradient-to-tr from-indigo-500/5 to-transparent pointer-events-none" />
             </div>
 
             <button
               type="submit"
               disabled={isAnalyzing || !githubUrl.trim()}
-              className={`w-full relative overflow-hidden font-extrabold tracking-wide flex flex-row items-center justify-center gap-3 py-3.5 rounded-xl transition-all duration-500 border active:scale-[0.98]
-                ${isAnalyzing || !githubUrl.trim()
-                  ? "bg-white/5 text-white/30 border-white/5 cursor-not-allowed"
-                  : "bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 text-white border-indigo-400/50 hover:border-indigo-300 hover:shadow-[0_0_40px_rgba(99,102,241,0.5)] hover:-translate-y-0.5"
-                }
-              `}
+              className="group relative w-full overflow-hidden rounded-xl py-3.5 px-6 font-semibold text-sm tracking-wide transition-all duration-300 flex items-center justify-center gap-3"
+              style={{
+                background: isAnalyzing || !githubUrl.trim()
+                  ? "rgba(255,255,255,0.03)"
+                  : "linear-gradient(135deg, #4f46e5, #7c3aed)",
+                color: isAnalyzing || !githubUrl.trim()
+                  ? "rgba(255,255,255,0.2)"
+                  : "#ffffff",
+                border: isAnalyzing || !githubUrl.trim()
+                  ? "1px solid rgba(255,255,255,0.05)"
+                  : "1px solid rgba(129,140,248,0.3)",
+                cursor: isAnalyzing || !githubUrl.trim() ? "not-allowed" : "pointer",
+              }}
             >
-              {/* Optional inner shine effect when button is active */}
-              {!(isAnalyzing || !githubUrl.trim()) && (
-                <div className="absolute inset-0 bg-gradient-to-t from-transparent to-white/10 pointer-events-none rounded-xl" />
-              )}
-
               {isAnalyzing ? (
                 <>
-                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                  <span className="opacity-80">Analyzing Repository...</span>
+                  <Loader2 className="w-4 h-4 animate-spin" style={{ color: "#a5b4fc" }} />
+                  <span style={{ color: "#c7d2fe" }}>Analyzing Repository...</span>
                 </>
               ) : (
                 <>
-                  <svg className="w-4 h-4 text-black opacity-90 drop-shadow-md" fill="currentColor" viewBox="0 0 24 24">
-                    <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.268 2.75 1.022A9.607 9.607 0 0112 6.82c.85.004 1.705.114 2.504.336 1.909-1.29 2.747-1.022 2.747-1.022.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.161 22 16.416 22 12c0-5.523-4.477-10-10-10z" />
-                  </svg>
+                  <GitBranch
+                    className="w-4 h-4"
+                    style={{ opacity: !githubUrl.trim() ? 0.2 : 1 }}
+                  />
                   <span>Analyze GitHub Repository</span>
                 </>
               )}
@@ -259,11 +258,11 @@ export default function Upload({ isOpen, onClose }: UploadProps) {
         </div>
 
         {/* Footer */}
-        <div className="bg-[#101014] px-8 py-8 flex justify-between items-center text-[10px] text-white/30 font-bold uppercase tracking-widest border-t border-white/5">
+        <div className="bg-[#101014] px-8 py-4 flex justify-between items-center text-[10px] text-white/30 font-bold uppercase tracking-widest border-t border-white/5">
           <span>Supported: TypeScript, JavaScript</span>
           <button
             onClick={onClose}
-            className="px-6 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/60 hover:text-white transition-all border border-white/5 hover:border-white/20 shadow-md"
+            className="px-4 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/60 hover:text-white transition-all border border-white/5 hover:border-white/20 text-xs"
           >
             Cancel
           </button>

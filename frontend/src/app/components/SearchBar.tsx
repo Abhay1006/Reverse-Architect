@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
+import { Search } from "lucide-react";
 import { useAtlasStore } from "../store/atlas-store";
 
 export default function SearchBar() {
@@ -113,9 +114,7 @@ export default function SearchBar() {
         className="app-btn app-btn--ghost group"
       >
         <div className="flex items-center gap-2">
-          <svg className="w-3.5 h-3.5 opacity-50 group-hover:opacity-100 transition-opacity" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
+          <Search className="w-3.5 h-3.5 opacity-50 group-hover:opacity-100 transition-opacity" />
           <span className="opacity-70 group-hover:opacity-100 transition-opacity">Search</span>
         </div>
         <div className="flex items-center gap-1 ml-1 opacity-30 group-hover:opacity-60 transition-opacity">
@@ -132,9 +131,7 @@ export default function SearchBar() {
             onClick={e => e.stopPropagation()}
           >
             <div className="spotlight-input-area">
-              <svg className="h-5 w-5 text-white/40 mr-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.0} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
+              <Search className="h-5 w-5 text-white/40 mr-5" />
               <input
                 ref={inputRef}
                 type="text"
@@ -153,7 +150,7 @@ export default function SearchBar() {
                 <div className="spotlight-section-title">Architecture Nodes</div>
                 {results.length === 0 ? (
                   <div className="py-12 text-center">
-                    <p className="text-white/40 text-sm">No results for "{localQuery}"</p>
+                    <p className="text-white/40 text-sm">No results for &quot;{localQuery}&quot;</p>
                   </div>
                 ) : (
                   results.map((n, index) => {

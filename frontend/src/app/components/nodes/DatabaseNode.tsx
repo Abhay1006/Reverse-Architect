@@ -2,6 +2,7 @@
 
 import React, { memo } from "react";
 import { NodeProps } from "@xyflow/react";
+import { Database } from "lucide-react";
 import BaseNode from "./BaseNode";
 import { useAtlasStore } from "../../store/atlas-store";
 import { DatabaseNodeType } from "../../types/nodes";
@@ -19,9 +20,7 @@ const DatabaseNode = ({ data, selected, id }: NodeProps<DatabaseNodeType>) => {
       selected={selected}
       status={status}
       headerColor="#10b981" // Emerald green
-      icon={
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/></svg>
-      }
+      icon={<Database width={16} height={16} />}
     >
       <div className="space-y-4">
         {/* Placeholder for future schema table columns rendering */}

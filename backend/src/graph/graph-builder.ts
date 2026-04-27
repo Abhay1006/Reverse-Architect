@@ -2,18 +2,55 @@ import * as path from 'path';
 import type { ArchGraph, ArchNode, ArchEdge, ParsedFile } from '../../../shared/types.js';
 
 /**
+ * Manually resolve an import when ts-morph fails (common for JS projects).
+ * Takes a relative module specifier and tries to match it against known file paths.
+ */
+function manualResolveImport(
+  importingFilePath: string,
+  moduleSpecifier: string,
+  fileMap: Map<string, ParsedFile>
+): string | undefined {
+  // Only handle relative imports
+  if (!moduleSpecifier.startsWith('.')) return undefined;
+
+  // Resolve relative to the importing file's directory
+  const importingDir = path.dirname(importingFilePath);
+  const resolved = path.normalize(path.join(importingDir, moduleSpecifier))
+    .split(path.sep).join('/'); // Normalize to forward slashes
+
+  // Try exact match first
+  if (fileMap.has(resolved)) return resolved;
+
+  // Try common extensions
+  const extensions = ['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs'];
+  for (const ext of extensions) {
+    const candidate = resolved + ext;
+    if (fileMap.has(candidate)) return candidate;
+  }
+
+  // Try index files (e.g., import from './utils' → './utils/index.js')
+  for (const ext of extensions) {
+    const candidate = resolved + '/index' + ext;
+    if (fileMap.has(candidate)) return candidate;
+  }
+
+  return undefined;
+}
+
+/**
  * Builds an ArchGraph from an array of ParsedFile objects.
  * Maps files and their internal entities (classes, interfaces, functions) to nodes,
  * and establishes edges based on imports and inheritance.
  * 
- * If entryFile is provided, it builds a dependency tree starting from that file
+ * If entryFiles are provided, it builds a dependency tree starting from those files
  * by recursively following import statements (BFS). Only reachable files are included.
+ * Multiple entry files allow monorepo support (e.g., backend + frontend).
  * 
  * @param files Array of parsed file data from the extractor
- * @param entryFile Optional relative path to the entry file to use as the root
+ * @param entryFiles Optional array of relative paths to entry files to seed BFS from
  * @returns A complete ArchGraph structure
  */
-export function buildGraph(files: ParsedFile[], entryFile?: string): ArchGraph {
+export function buildGraph(files: ParsedFile[], entryFiles?: string[]): ArchGraph {
   const nodes: ArchNode[] = [];
   const edges: ArchEdge[] = [];
   
@@ -25,20 +62,27 @@ export function buildGraph(files: ParsedFile[], entryFile?: string): ArchGraph {
 
   // --- Filter Files by Reachability (BFS) ---
   const reachableFiles = new Set<string>();
+  const validEntryFiles = (entryFiles || []).filter(f => fileMap.has(f));
   
-  if (entryFile && fileMap.has(entryFile)) {
-    // Tree mode: Follow imports from entry point
-    const queue = [entryFile];
-    reachableFiles.add(entryFile);
+  if (validEntryFiles.length > 0) {
+    // Tree mode: Follow imports from all entry points (supports monorepos)
+    const queue = [...validEntryFiles];
+    for (const ef of validEntryFiles) reachableFiles.add(ef);
 
     while (queue.length > 0) {
       const currentPath = queue.shift()!;
       const file = fileMap.get(currentPath)!;
 
       for (const imp of file.imports) {
-        if (imp.resolvedPath && fileMap.has(imp.resolvedPath) && !reachableFiles.has(imp.resolvedPath)) {
-          reachableFiles.add(imp.resolvedPath);
-          queue.push(imp.resolvedPath);
+        // Try ts-morph resolved path first, then manual fallback
+        let resolvedTarget = imp.resolvedPath;
+        if (!resolvedTarget && imp.moduleSpecifier.startsWith('.')) {
+          resolvedTarget = manualResolveImport(file.filePath, imp.moduleSpecifier, fileMap);
+        }
+
+        if (resolvedTarget && fileMap.has(resolvedTarget) && !reachableFiles.has(resolvedTarget)) {
+          reachableFiles.add(resolvedTarget);
+          queue.push(resolvedTarget);
         }
       }
     }
@@ -173,19 +217,31 @@ export function buildGraph(files: ParsedFile[], entryFile?: string): ArchGraph {
   }
 
   // --- Step 2: Edge Generation ---
+  const edgeIds = new Set<string>(); // Track edge IDs to prevent duplicates
+
   for (const file of files) {
     if (!reachableFiles.has(file.filePath)) continue;
 
     // 2.1 File-level Import Edges
     for (const imp of file.imports) {
-      if (imp.resolvedPath && reachableFiles.has(imp.resolvedPath)) {
-        edges.push({
-          id: `edge:import:${file.filePath}->${imp.resolvedPath}`,
-          source: getFileNodeId(file.filePath),
-          target: getFileNodeId(imp.resolvedPath),
-          type: 'import',
-          label: imp.moduleSpecifier
-        });
+      // Try ts-morph resolved path first, then manual fallback
+      let resolvedTarget = imp.resolvedPath;
+      if (!resolvedTarget && imp.moduleSpecifier.startsWith('.')) {
+        resolvedTarget = manualResolveImport(file.filePath, imp.moduleSpecifier, fileMap);
+      }
+
+      if (resolvedTarget && reachableFiles.has(resolvedTarget)) {
+        const edgeId = `edge:import:${file.filePath}->${resolvedTarget}`;
+        if (!edgeIds.has(edgeId)) {
+          edgeIds.add(edgeId);
+          edges.push({
+            id: edgeId,
+            source: getFileNodeId(file.filePath),
+            target: getFileNodeId(resolvedTarget),
+            type: 'import',
+            label: imp.moduleSpecifier
+          });
+        }
       }
     }
 

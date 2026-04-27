@@ -80,10 +80,11 @@ import { detectEntryPoint, detectAllEntryPoints } from './parser/entry-point.js'
 function analyzeProjectDir(projectPath: string) {
   // 0. Detect entry points (scanning root and subdirectories)
   const entryPoints = detectAllEntryPoints(projectPath);
-  const entryPoint = entryPoints.length > 0 ? entryPoints[0] : null;
-  
-  if (entryPoint) {
-    console.log(`Detected entry point: ${entryPoint.entryFile} (${entryPoint.framework})`);
+  if (entryPoints.length > 0) {
+    console.log(`Detected ${entryPoints.length} entry point(s):`);
+    for (const ep of entryPoints) {
+      console.log(`  - ${ep.entryFile} (${ep.framework})`);
+    }
   } else {
     console.log("No entry point detected.");
   }
@@ -134,8 +135,9 @@ function analyzeProjectDir(projectPath: string) {
   }
 
   // 3. Build the architecture graph
-  // If we found an entry point, build the graph rooted at that entry point
-  const graph = buildGraph(parsedFiles, entryPoint?.entryFile);
+  // Pass all entry points to support monorepo BFS from multiple roots
+  const entryFileList = entryPoints.map(ep => ep.entryFile);
+  const graph = buildGraph(parsedFiles, entryFileList.length > 0 ? entryFileList : undefined);
 
   // 4. Run god-object detection and populate analysis
   const godObjectHits = detectGodObjects(graph);
@@ -154,7 +156,7 @@ function analyzeProjectDir(projectPath: string) {
   // 8. Compute layout positions
   // Use TB (Top-to-Bottom) layout for trees, instead of LR
   const positioned = computeLayout(graph, {
-    direction: entryPoint ? 'TB' : 'LR',
+    direction: entryPoints.length > 0 ? 'TB' : 'LR',
     nodeWidth: 350,
     nodeHeight: 300,
     ranksep: 300,
@@ -196,7 +198,7 @@ function analyzeProjectDir(projectPath: string) {
         analysis: {
           isGodObject: graph.analysis.godObjects.includes(n.id),
           isDeadCode: graph.analysis.deadCode.includes(n.id),
-          isEntryPoint: entryPoint && n.filePath === entryPoint.entryFile && n.type === 'file',
+          isEntryPoint: entryPoints.some(ep => n.filePath === ep.entryFile) && n.type === 'file',
         },
       },
     };
@@ -228,7 +230,7 @@ function analyzeProjectDir(projectPath: string) {
     edges: initialEdges,
     godObjectDetails: godObjectHits,
     deadCodeDetails: deadCodeHits,
-    entryPoint: entryPoint,
+    entryPoint: entryPoints.length > 0 ? entryPoints[0] : null,
   };
 }
 

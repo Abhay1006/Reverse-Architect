@@ -1,29 +1,29 @@
 "use client";
 
 import React, { useMemo, useCallback } from "react";
+import {
+  FolderOpen,
+  Folder,
+  ChevronRight,
+  Zap,
+  FileText,
+  ListCollapse,
+} from "lucide-react";
 import { useAtlasStore, buildFolderTree, type FolderTreeNode } from "../store/atlas-store";
 
 // ── Icons ─────────────────────────────────────────────────────────────
 
 function FolderIcon({ isOpen }: { isOpen: boolean }) {
   return isOpen ? (
-    <svg className="ft-icon" viewBox="0 0 20 20" fill="currentColor">
-      <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v1H4a2 2 0 00-2 2v4l1.5-6A2 2 0 015.5 7H18v-1a2 2 0 00-2-2h-5l-2-2H4a2 2 0 00-2 2v8z" />
-    </svg>
+    <FolderOpen className="ft-icon" />
   ) : (
-    <svg className="ft-icon" viewBox="0 0 20 20" fill="currentColor">
-      <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
-    </svg>
+    <Folder className="ft-icon" />
   );
 }
 
 function FileIcon({ nodeType, isEntryPoint }: { nodeType?: string; isEntryPoint?: boolean }) {
   if (isEntryPoint) {
-    return (
-      <svg className="ft-icon" viewBox="0 0 20 20" fill="var(--primary)">
-        <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.381z" clipRule="evenodd" />
-      </svg>
-    );
+    return <Zap className="ft-icon" style={{ color: "var(--primary)" }} />;
   }
 
   const color =
@@ -35,30 +35,14 @@ function FileIcon({ nodeType, isEntryPoint }: { nodeType?: string; isEntryPoint?
           ? "var(--function-bg)"
           : "var(--file-bg)";
 
-  return (
-    <svg className="ft-icon" viewBox="0 0 20 20" fill={color}>
-      <path
-        fillRule="evenodd"
-        d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z"
-        clipRule="evenodd"
-      />
-    </svg>
-  );
+  return <FileText className="ft-icon" style={{ color }} />;
 }
 
 function ChevronIcon({ isOpen }: { isOpen: boolean }) {
   return (
-    <svg
+    <ChevronRight
       className={`ft-chevron ${isOpen ? "ft-chevron--open" : ""}`}
-      viewBox="0 0 20 20"
-      fill="currentColor"
-    >
-      <path
-        fillRule="evenodd"
-        d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
-        clipRule="evenodd"
-      />
-    </svg>
+    />
   );
 }
 
@@ -193,13 +177,7 @@ export default function FolderTree() {
             expandedFolders.forEach((path) => toggleFolder(path));
           }}
         >
-          <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor">
-            <path
-              fillRule="evenodd"
-              d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z"
-              clipRule="evenodd"
-            />
-          </svg>
+          <ListCollapse className="w-3.5 h-3.5" />
         </button>
       </div>
 

@@ -2,6 +2,7 @@
 
 import React, { memo } from "react";
 import { NodeProps } from "@xyflow/react";
+import { BookOpen } from "lucide-react";
 import BaseNode from "./BaseNode";
 import { useAtlasStore } from "../../store/atlas-store";
 import { ClassNode as ClassNodeType } from "../../types/nodes";
@@ -21,9 +22,7 @@ const ClassNode = ({ data, selected, id }: NodeProps<ClassNodeType>) => {
       selected={selected}
       status={status}
       headerColor="var(--class-bg)"
-      icon={
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3H7c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2Z"/><path d="M9 7h6"/><path d="M9 11h6"/><path d="M9 15h6"/></svg>
-      }
+      icon={<BookOpen width={16} height={16} />}
     >
       <div className="space-y-4">
         {/* Properties Section */}
