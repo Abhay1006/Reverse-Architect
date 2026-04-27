@@ -39,29 +39,44 @@ export function computeLayout(graph: ArchGraph, options: LayoutOptions = {}): Po
   // 1. Enable compound graphs for Sub-flow grouping bounds
   const g = new dagre.graphlib.Graph({ compound: true });
   
+  // Use more generous defaults to prevent overlap with large metadata nodes
+  const ranksep = options.ranksep ?? 300;
+  const nodesep = options.nodesep ?? 200;
+  const defaultNodeWidth = options.nodeWidth ?? 350;
+  const defaultNodeHeight = options.nodeHeight ?? 200;
+
   // Apply graph defaults and layout direction
   g.setGraph({
     rankdir: options.direction || 'TB',
-    ranksep: options.ranksep ?? 50,
-    nodesep: options.nodesep ?? 50,
+    ranksep,
+    nodesep,
   });
   
   // Required to tell dagre we are using a directed graph
   g.setDefaultEdgeLabel(() => ({}));
-
-  const nodeWidth = options.nodeWidth ?? 150;
-  const nodeHeight = options.nodeHeight ?? 50;
 
   // 1. Add all nodes to the dagre graph
   for (const node of graph.nodes) {
     if (node.type === 'group') {
       g.setNode(node.id, { label: node.label }); // Groups dynamically expand to fit children
     } else {
+      // Calculate dynamic height based on metadata (properties/methods)
+      const propCount = node.metadata?.properties?.length || 0;
+      const methodCount = node.metadata?.methods?.length || 0;
+      
+      // Heuristic: Header(60) + Content Padding(30) + Rows(propCount + methodCount) * 22
+      // This ensures that Dagre accounts for the actual size of the node in the UI.
+      const estimatedHeight = Math.max(
+        defaultNodeHeight,
+        90 + (propCount + methodCount) * 22
+      );
+
       g.setNode(node.id, { 
         label: node.label, 
-        width: nodeWidth, 
-        height: nodeHeight 
+        width: defaultNodeWidth, 
+        height: estimatedHeight 
       });
+
       // 1.5 Anchor children to parent borders
       if (node.parentNode) {
         g.setParent(node.id, node.parentNode);
@@ -81,9 +96,10 @@ export function computeLayout(graph: ArchGraph, options: LayoutOptions = {}): Po
   const positionedNodes: PositionedNode[] = graph.nodes.map(node => {
     const pos = g.node(node.id);
     
-    // Add 100px padding to logical Group bounding boxes (creates visual space)
-    const width = node.type === 'group' ? (pos?.width || 0) + 100 : (pos?.width || nodeWidth);
-    const height = node.type === 'group' ? (pos?.height || 0) + 100 : (pos?.height || nodeHeight);
+    // For groups, Dagre calculates width/height. We add padding.
+    // For regular nodes, we use the width/height calculated in step 1.
+    const width = node.type === 'group' ? (pos?.width || 0) + 120 : (pos?.width || defaultNodeWidth);
+    const height = node.type === 'group' ? (pos?.height || 0) + 120 : (pos?.height || defaultNodeHeight);
     
     // Dagre outputs absolute center coordinates. React Flow needs top-left.
     const absoluteX = (pos?.x || 0) - width / 2;
@@ -99,7 +115,7 @@ export function computeLayout(graph: ArchGraph, options: LayoutOptions = {}): Po
 
     if (node.type === 'group') {
       positioned.style = { 
-        ...node.style, 
+        ...node.style,
         width, 
         height 
       };

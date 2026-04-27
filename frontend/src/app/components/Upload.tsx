@@ -83,8 +83,8 @@ export default function Upload({ isOpen, onClose }: UploadProps) {
 
     try {
       const graph = await analyzeUpload(file);
-      const { nodes, edges, analysis, godObjectDetails, deadCodeDetails } = toStoreGraph(graph);
-      setGraph(nodes, edges, analysis, godObjectDetails, deadCodeDetails);
+      const { nodes, edges, analysis, godObjectDetails, deadCodeDetails, entryPoint } = toStoreGraph(graph);
+      setGraph(nodes, edges, analysis, godObjectDetails, deadCodeDetails, entryPoint);
       onClose();
     } catch (err) {
       if (err instanceof AtlasApiError) {
@@ -107,8 +107,8 @@ export default function Upload({ isOpen, onClose }: UploadProps) {
 
     try {
       const graph = await analyzeGithub(url);
-      const { nodes, edges, analysis, godObjectDetails, deadCodeDetails } = toStoreGraph(graph);
-      setGraph(nodes, edges, analysis, godObjectDetails, deadCodeDetails);
+      const { nodes, edges, analysis, godObjectDetails, deadCodeDetails, entryPoint } = toStoreGraph(graph);
+      setGraph(nodes, edges, analysis, godObjectDetails, deadCodeDetails, entryPoint);
       onClose();
     } catch (err) {
       if (err instanceof AtlasApiError) {
@@ -126,11 +126,11 @@ export default function Upload({ isOpen, onClose }: UploadProps) {
   };
 
   return (
-    <div 
+    <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300"
       onClick={onClose}
     >
-      <div 
+      <div
         className="relative w-full max-w-lg overflow-hidden bg-[var(--glass-bg)] border border-[var(--card-border)] rounded-2xl shadow-2xl animate-in zoom-in-95 duration-300"
         onClick={(e) => e.stopPropagation()}
       >
@@ -143,7 +143,7 @@ export default function Upload({ isOpen, onClose }: UploadProps) {
         {/* Content */}
         <div className="px-8 pb-8 space-y-8">
           {/* Progress / Spinner Overlay */}
-          {/* Progress / Spinner Overlay Removed - Using inline button loaders instead */ }
+          {/* Progress / Spinner Overlay Removed - Using inline button loaders instead */}
 
           {/* Drag & Drop Zone */}
           <div
@@ -153,19 +153,19 @@ export default function Upload({ isOpen, onClose }: UploadProps) {
             onClick={() => fileInputRef.current?.click()}
             className={`
               relative group cursor-pointer border-2 border-dashed rounded-xl p-10 transition-all duration-300
-              ${isDragging 
-                ? "border-[var(--primary)] bg-[var(--primary-glow)]" 
+              ${isDragging
+                ? "border-[var(--primary)] bg-[var(--primary-glow)]"
                 : "border-white/10 hover:border-white/20 hover:bg-white/5"}
             `}
           >
-            <input 
-              type="file" 
-              ref={fileInputRef} 
-              className="hidden" 
+            <input
+              type="file"
+              ref={fileInputRef}
+              className="hidden"
               accept=".zip"
               onChange={(e) => e.target.files && handleFileSelected(e.target.files[0])}
             />
-            
+
             <div className="flex flex-col items-center text-center space-y-3">
               <div className={`p-3 rounded-full bg-white/5 group-hover:bg-white/10 transition-colors ${isDragging ? "text-[var(--primary)]" : "text-white/40"}`}>
                 <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -218,8 +218,8 @@ export default function Upload({ isOpen, onClose }: UploadProps) {
                 className="w-full border border-white/20 rounded-xl py-3 pl-11 pr-4 font-medium text-sm placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/50 focus:border-[var(--primary)] transition-all shadow-inner"
               />
             </div>
-            
-            <button 
+
+            <button
               type="submit"
               disabled={isAnalyzing || !githubUrl.trim()}
               className={`w-full relative overflow-hidden font-extrabold tracking-wide flex flex-row items-center justify-center gap-3 py-3.5 rounded-xl transition-all duration-500 border active:scale-[0.98]
@@ -233,7 +233,7 @@ export default function Upload({ isOpen, onClose }: UploadProps) {
               {!(isAnalyzing || !githubUrl.trim()) && (
                 <div className="absolute inset-0 bg-gradient-to-t from-transparent to-white/10 pointer-events-none rounded-xl" />
               )}
-              
+
               {isAnalyzing ? (
                 <>
                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
@@ -241,7 +241,7 @@ export default function Upload({ isOpen, onClose }: UploadProps) {
                 </>
               ) : (
                 <>
-                  <svg className="w-4 h-4 text-white opacity-90 drop-shadow-md" fill="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 text-black opacity-90 drop-shadow-md" fill="currentColor" viewBox="0 0 24 24">
                     <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.268 2.75 1.022A9.607 9.607 0 0112 6.82c.85.004 1.705.114 2.504.336 1.909-1.29 2.747-1.022 2.747-1.022.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.161 22 16.416 22 12c0-5.523-4.477-10-10-10z" />
                   </svg>
                   <span>Analyze GitHub Repository</span>
@@ -261,7 +261,7 @@ export default function Upload({ isOpen, onClose }: UploadProps) {
         {/* Footer */}
         <div className="bg-[#101014] px-8 py-8 flex justify-between items-center text-[10px] text-white/30 font-bold uppercase tracking-widest border-t border-white/5">
           <span>Supported: TypeScript, JavaScript</span>
-          <button 
+          <button
             onClick={onClose}
             className="px-6 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/60 hover:text-white transition-all border border-white/5 hover:border-white/20 shadow-md"
           >

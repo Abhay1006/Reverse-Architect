@@ -59,6 +59,11 @@ const ClassNode = ({ data, selected, id }: NodeProps<ClassNodeType>) => {
           <span className="px-1.5 py-0.5 rounded bg-white/5 text-[10px] text-white/40">
             {data.metadata?.lineCount || 0} lines
           </span>
+          {data.metadata?.maxComplexity !== undefined && (
+            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${data.metadata.maxComplexity > 15 ? 'bg-red-500/20 text-red-400' : 'bg-green-500/10 text-green-400'}`}>
+              C:{data.metadata.maxComplexity}
+            </span>
+          )}
           {isGodObject && (
             <span className="px-1.5 py-0.5 rounded bg-red-500/20 text-[10px] text-red-400 font-bold">
               GOD OBJECT

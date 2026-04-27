@@ -71,17 +71,39 @@ app.use('/api/', apiLimiter);
 
 // ---------------------------------------------------------------------------
 
+import { detectEntryPoint, detectAllEntryPoints } from './parser/entry-point.js';
+
 /**
  * Core analysis function: parse project → build graph → layout → serialize.
  * Works on an already-extracted directory path.
  */
 function analyzeProjectDir(projectPath: string) {
+  // 0. Detect entry points (scanning root and subdirectories)
+  const entryPoints = detectAllEntryPoints(projectPath);
+  const entryPoint = entryPoints.length > 0 ? entryPoints[0] : null;
+  
+  if (entryPoint) {
+    console.log(`Detected entry point: ${entryPoint.entryFile} (${entryPoint.framework})`);
+  } else {
+    console.log("No entry point detected.");
+  }
+
   // 1. Parse project files and database schemas
   const sourceFiles = parseProject(projectPath);
   const dbFiles = parseDatabaseSchemas(projectPath);
 
+  // Helper: convert absolute file paths to paths relative to the project root
+  const toRelativePath = (absPath: string) => {
+    const rel = path.relative(projectPath, absPath);
+    // Normalize to forward slashes for consistency
+    return rel.split(path.sep).join('/');
+  };
+
   // 2. Extract entities from each source file
-  const parsedFiles: ParsedFile[] = [...dbFiles];
+  const parsedFiles: ParsedFile[] = dbFiles.map(f => ({
+    ...f,
+    filePath: toRelativePath(f.filePath),
+  }));
   for (const file of sourceFiles) {
     const classes = file.getClasses().map(extractClass);
     const interfaces = file.getInterfaces().map(extractInterface);
@@ -92,13 +114,17 @@ function analyzeProjectDir(projectPath: string) {
       .map(v => extractArrowFunction(v, v.getInitializerIfKind(SyntaxKind.ArrowFunction)!));
     functions.push(...arrowFunctions);
     
-    const imports = file.getImportDeclarations().map(extractImport);
+    const imports = file.getImportDeclarations().map(extractImport).map(imp => ({
+      ...imp,
+      // Fix import resolved path to be relative too!
+      resolvedPath: imp.resolvedPath ? toRelativePath(imp.resolvedPath) : undefined
+    }));
     const lineCount = file.getEndLineNumber() - file.getStartLineNumber() + 1;
 
     parsedFiles.push({
       kind: 'file',
       name: file.getBaseName(),
-      filePath: file.getFilePath(),
+      filePath: toRelativePath(file.getFilePath()),
       classes,
       interfaces,
       functions,
@@ -108,7 +134,8 @@ function analyzeProjectDir(projectPath: string) {
   }
 
   // 3. Build the architecture graph
-  const graph = buildGraph(parsedFiles);
+  // If we found an entry point, build the graph rooted at that entry point
+  const graph = buildGraph(parsedFiles, entryPoint?.entryFile);
 
   // 4. Run god-object detection and populate analysis
   const godObjectHits = detectGodObjects(graph);
@@ -125,14 +152,13 @@ function analyzeProjectDir(projectPath: string) {
   graph.analysis.patterns = detectPatterns(graph);
 
   // 8. Compute layout positions
-  // Use LR (Left-to-Right) layout and drastically increase dimensions 
-  // since custom React Flow nodes containing metadata are large.
+  // Use TB (Top-to-Bottom) layout for trees, instead of LR
   const positioned = computeLayout(graph, {
-    direction: 'LR',
+    direction: entryPoint ? 'TB' : 'LR',
     nodeWidth: 350,
     nodeHeight: 300,
-    ranksep: 250,
-    nodesep: 150,
+    ranksep: 300,
+    nodesep: 200,
   });
 
   // Create a quick lookup map for parent resolution
@@ -170,6 +196,7 @@ function analyzeProjectDir(projectPath: string) {
         analysis: {
           isGodObject: graph.analysis.godObjects.includes(n.id),
           isDeadCode: graph.analysis.deadCode.includes(n.id),
+          isEntryPoint: entryPoint && n.filePath === entryPoint.entryFile && n.type === 'file',
         },
       },
     };
@@ -201,6 +228,7 @@ function analyzeProjectDir(projectPath: string) {
     edges: initialEdges,
     godObjectDetails: godObjectHits,
     deadCodeDetails: deadCodeHits,
+    entryPoint: entryPoint,
   };
 }
 

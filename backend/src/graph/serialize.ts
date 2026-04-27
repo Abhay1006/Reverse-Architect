@@ -8,7 +8,7 @@ export interface ReactFlowNode {
   data: {
     label: string;
     filePath: string;
-    nodeType: "file" | "class" | "interface" | "function";
+    nodeType: "file" | "class" | "interface" | "function" | "database" | "group";
     metadata: any;
     width: number;
     height: number;

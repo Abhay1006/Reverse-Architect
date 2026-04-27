@@ -6,10 +6,14 @@ import type { ArchGraph, ArchNode, ArchEdge, ParsedFile } from '../../../shared/
  * Maps files and their internal entities (classes, interfaces, functions) to nodes,
  * and establishes edges based on imports and inheritance.
  * 
+ * If entryFile is provided, it builds a dependency tree starting from that file
+ * by recursively following import statements (BFS). Only reachable files are included.
+ * 
  * @param files Array of parsed file data from the extractor
+ * @param entryFile Optional relative path to the entry file to use as the root
  * @returns A complete ArchGraph structure
  */
-export function buildGraph(files: ParsedFile[]): ArchGraph {
+export function buildGraph(files: ParsedFile[], entryFile?: string): ArchGraph {
   const nodes: ArchNode[] = [];
   const edges: ArchEdge[] = [];
   
@@ -17,6 +21,32 @@ export function buildGraph(files: ParsedFile[]): ArchGraph {
   const fileMap = new Map<string, ParsedFile>();
   for (const file of files) {
     fileMap.set(file.filePath, file);
+  }
+
+  // --- Filter Files by Reachability (BFS) ---
+  const reachableFiles = new Set<string>();
+  
+  if (entryFile && fileMap.has(entryFile)) {
+    // Tree mode: Follow imports from entry point
+    const queue = [entryFile];
+    reachableFiles.add(entryFile);
+
+    while (queue.length > 0) {
+      const currentPath = queue.shift()!;
+      const file = fileMap.get(currentPath)!;
+
+      for (const imp of file.imports) {
+        if (imp.resolvedPath && fileMap.has(imp.resolvedPath) && !reachableFiles.has(imp.resolvedPath)) {
+          reachableFiles.add(imp.resolvedPath);
+          queue.push(imp.resolvedPath);
+        }
+      }
+    }
+  } else {
+    // Flat mode: All files are reachable
+    for (const file of files) {
+      reachableFiles.add(file.filePath);
+    }
   }
 
   // Helper to generate consistent Node IDs
@@ -28,6 +58,9 @@ export function buildGraph(files: ParsedFile[]): ArchGraph {
   const groupSet = new Set<string>();
 
   for (const file of files) {
+    // Only process reachable files
+    if (!reachableFiles.has(file.filePath)) continue;
+
     const parentDir = path.basename(path.dirname(file.filePath));
     groupSet.add(parentDir);
     const parentNodeId = getGroupNodeId(parentDir);
@@ -41,7 +74,12 @@ export function buildGraph(files: ParsedFile[]): ArchGraph {
       parentNode: parentNodeId,
       metadata: {
         lineCount: file.lineCount || 0,
-        exportCount: file.classes.length + file.interfaces.length + file.functions.length
+        exportCount: file.classes.length + file.interfaces.length + file.functions.length,
+        maxComplexity: Math.max(
+          0,
+          ...file.functions.map(f => f.complexity),
+          ...file.classes.map(c => Math.max(0, ...c.methods.map(m => m.complexity)))
+        )
       },
       position: { x: 0, y: 0 }
     });
@@ -57,13 +95,13 @@ export function buildGraph(files: ParsedFile[]): ArchGraph {
           parentNode: parentNodeId,
           metadata: {
             lineCount: table.lineCount || 0,
-            exportCount: 0
+            exportCount: 0,
+            maxComplexity: 0
           },
           position: { x: 0, y: 0 }
         });
       }
     }
-
 
     // 1.2 Add Entity Nodes (Classes)
     for (const cls of file.classes) {
@@ -77,7 +115,8 @@ export function buildGraph(files: ParsedFile[]): ArchGraph {
           properties: cls.properties.map(p => p.name),
           methods: cls.methods.map(m => m.name),
           lineCount: cls.lineCount || 0,
-          exportCount: 0
+          exportCount: 0,
+          maxComplexity: Math.max(0, ...cls.methods.map(m => m.complexity))
         },
         position: { x: 0, y: 0 }
       });
@@ -95,7 +134,8 @@ export function buildGraph(files: ParsedFile[]): ArchGraph {
           properties: intf.properties.map(p => p.name),
           methods: intf.methods.map(m => m.name),
           lineCount: intf.lineCount || 0,
-          exportCount: 0
+          exportCount: 0,
+          maxComplexity: 0
         },
         position: { x: 0, y: 0 }
       });
@@ -111,7 +151,8 @@ export function buildGraph(files: ParsedFile[]): ArchGraph {
         parentNode: parentNodeId,
         metadata: {
           lineCount: fn.lineCount || 0,
-          exportCount: 0
+          exportCount: 0,
+          maxComplexity: fn.complexity
         },
         position: { x: 0, y: 0 }
       });
@@ -126,16 +167,18 @@ export function buildGraph(files: ParsedFile[]): ArchGraph {
       label: group,
       type: 'group',
       filePath: '',
-      metadata: { lineCount: 0, exportCount: 0 },
+      metadata: { lineCount: 0, exportCount: 0, maxComplexity: 0 },
       position: { x: 0, y: 0 }
     });
   }
 
   // --- Step 2: Edge Generation ---
   for (const file of files) {
+    if (!reachableFiles.has(file.filePath)) continue;
+
     // 2.1 File-level Import Edges
     for (const imp of file.imports) {
-      if (imp.resolvedPath && fileMap.has(imp.resolvedPath)) {
+      if (imp.resolvedPath && reachableFiles.has(imp.resolvedPath)) {
         edges.push({
           id: `edge:import:${file.filePath}->${imp.resolvedPath}`,
           source: getFileNodeId(file.filePath),
@@ -159,7 +202,7 @@ export function buildGraph(files: ParsedFile[]): ArchGraph {
 
       // Look in imports
       for (const imp of sourceFile.imports) {
-        if (!imp.resolvedPath || !fileMap.has(imp.resolvedPath)) continue;
+        if (!imp.resolvedPath || !reachableFiles.has(imp.resolvedPath)) continue;
 
         const isNamedImport = imp.namedImports.includes(name);
         const isDefaultImport = imp.defaultImport === name;

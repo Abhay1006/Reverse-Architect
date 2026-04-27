@@ -5,13 +5,17 @@ import Canvas from "./components/Canvas";
 import Upload from "./components/Upload";
 import AnalysisSidebar from "./components/AnalysisSidebar";
 import SearchBar from "./components/SearchBar";
+import FolderTree from "./components/FolderTree";
+import Breadcrumb from "./components/Breadcrumb";
 import { useAtlasStore } from "./store/atlas-store";
 import { toPng } from "html-to-image";
 
 export default function Home() {
   const setGraph = useAtlasStore((state) => state.setGraph);
+  const nodes = useAtlasStore((state) => state.nodes);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isFolderTreeOpen, setIsFolderTreeOpen] = useState(true);
 
   // Initialize with Mock Data for demonstration
   useEffect(() => {
@@ -108,39 +112,66 @@ export default function Home() {
   };
 
   return (
-    <main className="w-full h-screen overflow-hidden relative">
-      {/* Header Overlay */}
-      <div className="absolute top-6 left-6 z-10 pointer-events-none">
-        <h1 className="text-2xl font-black tracking-tighter text-white/90">
-          ATLAS<span className="text-primary italic">.TS</span>
-        </h1>
-        <p className="text-[10px] text-white/30 uppercase tracking-[0.2em]">Architecture Intelligence</p>
-      </div>
+    <main className="app-layout">
+      {/* ── Folder Tree Sidebar ── */}
+      {isFolderTreeOpen && nodes.length > 0 && (
+        <aside className="app-sidebar">
+          <FolderTree />
+        </aside>
+      )}
 
-      {/* Floating Toolbar */}
-      <div className="absolute top-6 right-6 z-10 flex flex-wrap justify-end gap-2 items-center pointer-events-none max-w-[calc(100vw-3rem)]">
-        <SearchBar />
-        <button 
-          onClick={handleExportPng}
-          className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 text-white/80 hover:text-white text-xs font-bold rounded-lg backdrop-blur-md transition-all pointer-events-auto"
-        >
-          EXPORT PNG
-        </button>
-        <button 
-          onClick={() => setIsUploadOpen(true)}
-          className="px-4 py-2 bg-primary/20 hover:bg-primary/30 border border-primary/50 text-white hover:text-white text-xs font-bold rounded-lg backdrop-blur-md transition-all pointer-events-auto shadow-[0_0_15px_rgba(99,102,241,0.2)]"
-        >
-          RE-ANALYZE
-        </button>
-        <button 
-          onClick={() => setIsSidebarOpen(true)}
-          className="px-4 py-2 bg-primary/20 hover:bg-primary/30 border border-primary/50 text-white hover:text-white text-xs font-bold rounded-lg backdrop-blur-md transition-all pointer-events-auto shadow-[0_0_15px_rgba(99,102,241,0.2)]"
-        >
-          ANALYSIS
-        </button>
-      </div>
+      {/* ── Main Content ── */}
+      <div className="app-main">
+        {/* Header Bar */}
+        <header className="app-header">
+          <div className="app-header-left">
+            {/* Sidebar toggle */}
+            <button
+              className="app-sidebar-toggle"
+              onClick={() => setIsFolderTreeOpen(!isFolderTreeOpen)}
+              title={isFolderTreeOpen ? "Hide sidebar" : "Show sidebar"}
+            >
+              <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M3 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 10a1 1 0 011-1h6a1 1 0 110 2H4a1 1 0 01-1-1zM3 15a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
+              </svg>
+            </button>
 
-      <Canvas />
+            <h1 className="app-logo">
+              ATLAS<span className="app-logo-accent">.TS</span>
+            </h1>
+          </div>
+
+          <div className="app-header-right">
+            <SearchBar />
+            <button 
+              onClick={handleExportPng}
+              className="app-btn app-btn--ghost"
+            >
+              EXPORT PNG
+            </button>
+            <button 
+              onClick={() => setIsUploadOpen(true)}
+              className="app-btn app-btn--primary"
+            >
+              RE-ANALYZE
+            </button>
+            <button 
+              onClick={() => setIsSidebarOpen(true)}
+              className="app-btn app-btn--primary"
+            >
+              ANALYSIS
+            </button>
+          </div>
+        </header>
+
+        {/* Breadcrumb */}
+        {nodes.length > 0 && <Breadcrumb />}
+
+        {/* Canvas */}
+        <div className="app-canvas">
+          <Canvas />
+        </div>
+      </div>
 
       <Upload 
         isOpen={isUploadOpen} 

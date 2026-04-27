@@ -1,15 +1,41 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useAtlasStore } from "../store/atlas-store";
 
 export default function SearchBar() {
-  const { searchQuery, setSearchQuery, nodes, setSelectedNode } = useAtlasStore();
+  const { searchQuery, setSearchQuery, nodes, setSelectedNode, panToNode } = useAtlasStore();
   const [localQuery, setLocalQuery] = useState(searchQuery);
   const [showResults, setShowResults] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  const [selectedIndex, setSelectedIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const results = useMemo(() => {
+    if (!localQuery) return [];
+    const q = localQuery.toLowerCase();
+    return nodes
+      .filter((n) => {
+        const label = ((n.data?.label as string) || "").toLowerCase();
+        const id = n.id.toLowerCase();
+        const path = ((n.data?.filePath as string) || "").toLowerCase();
+        
+        return label.includes(q) || id.includes(q) || path.includes(q);
+      })
+      .sort((a, b) => {
+        // Priority: exact label match > label starts with > path contains
+        const aLabel = ((a.data?.label as string) || "").toLowerCase();
+        const bLabel = ((b.data?.label as string) || "").toLowerCase();
+        
+        if (aLabel === q) return -1;
+        if (bLabel === q) return 1;
+        if (aLabel.startsWith(q) && !bLabel.startsWith(q)) return -1;
+        if (!aLabel.startsWith(q) && bLabel.startsWith(q)) return 1;
+        return 0;
+      })
+      .slice(0, 10);
+  }, [nodes, localQuery]);
 
   // Toggle on Cmd+K
   useEffect(() => {
@@ -17,7 +43,12 @@ export default function SearchBar() {
       if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
         setIsOpen((open) => {
-          if (!open) { /* clear search on open */ setLocalQuery(""); setSearchQuery(""); setShowResults(false); }
+          if (!open) {
+            setLocalQuery("");
+            setSearchQuery("");
+            setShowResults(false);
+            setSelectedIndex(0);
+          }
           return !open;
         });
       }
@@ -28,6 +59,29 @@ export default function SearchBar() {
     document.addEventListener('keydown', down);
     return () => document.removeEventListener('keydown', down);
   }, [setSearchQuery]);
+
+  // Handle keyboard navigation for results
+  useEffect(() => {
+    if (!isOpen || !showResults) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSelectedIndex(prev => Math.min(prev + 1, results.length - 1));
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSelectedIndex(prev => Math.max(prev - 1, 0));
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (results[selectedIndex]) {
+          handleSelectNode(results[selectedIndex].id);
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, showResults, selectedIndex, results]);
 
   // Focus input automatically when opened
   useEffect(() => {
@@ -41,94 +95,123 @@ export default function SearchBar() {
     setLocalQuery(value);
     setSearchQuery(value); // Instantly filter canvas
     setShowResults(value.length > 0);
+    setSelectedIndex(0); // Reset selection on search
   };
 
   const handleSelectNode = (nodeId: string) => {
-    setSelectedNode(nodeId);
+    panToNode(nodeId);
     setIsOpen(false);
+    setLocalQuery("");
+    setSearchQuery("");
   };
-
-  const results = nodes.filter((n) => {
-    const label = (n.data?.label as string) || n.id;
-    return label.toLowerCase().includes(localQuery.toLowerCase());
-  }).slice(0, 10);
 
   return (
     <>
-      {/* Search Trigger Button (Rendered in Header) */}
-      <button 
+      {/* Search Trigger Button */}
+      <button
         onClick={() => setIsOpen(true)}
-        className="flex items-center gap-2 px-4 py-2 bg-[#17171a] hover:bg-[#1a1b1e] border border-white/10 text-white/60 hover:text-white text-xs font-bold rounded-lg transition-all pointer-events-auto hover:border-indigo-500/50 shadow-lg"
+        className="app-btn app-btn--ghost group"
       >
-        <svg className="w-4 h-4 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-        </svg>
-        <span>SEARCH</span>
-        <span className="ml-2 px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[9px] text-white/50 hidden md:block">⌘K</span>
+        <div className="flex items-center gap-2">
+          <svg className="w-3.5 h-3.5 opacity-50 group-hover:opacity-100 transition-opacity" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <span className="opacity-70 group-hover:opacity-100 transition-opacity">Search</span>
+        </div>
+        <div className="flex items-center gap-1 ml-1 opacity-30 group-hover:opacity-60 transition-opacity">
+          <span className="px-1 py-0.5 rounded bg-white/10 text-[9px] font-bold">⌘K</span>
+        </div>
       </button>
 
       {/* Spotlight Modal */}
       {isOpen && (
-        <div className="fixed inset-0 z-[100] flex items-start justify-center pt-[15vh] px-4 pointer-events-auto bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setIsOpen(false)}>
-          <div 
-            ref={containerRef} 
-            className="w-full max-w-2xl bg-[#111114] border border-white/10 rounded-2xl shadow-[0_0_100px_rgba(0,0,0,0.8)] overflow-hidden flex flex-col animate-in slide-in-from-top-4 duration-300 transform scale-100"
+        <div className="spotlight-backdrop" onClick={() => setIsOpen(false)}>
+          <div
+            ref={containerRef}
+            className="spotlight-container"
             onClick={e => e.stopPropagation()}
           >
-            {/* Massive Input Area */}
-            <div className="flex items-center px-6 py-5 border-b border-white/5">
-              <svg className="h-4 w-4 text-white/50 mr-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            <div className="spotlight-input-area">
+              <svg className="h-5 w-5 text-white/40 mr-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.0} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
               <input
                 ref={inputRef}
                 type="text"
                 value={localQuery}
                 onChange={handleChange}
-                // Inline styles force text white and background dark to defeat autofill CSS overrides
-                style={{ color: '#ffffff', backgroundColor: 'transparent' }}
-                className="w-full bg-transparent text-white text-xl placeholder-white/30 outline-none border-none focus:ring-0 appearance-none"
-                placeholder="Search architecture components..."
+                className="spotlight-input"
+                placeholder="Spotlight Search"
                 autoComplete="off"
                 spellCheck="false"
               />
             </div>
-            
-            {/* Dropdown Results */}
+
+            {/* Results */}
             {showResults && (
-              <div className="max-h-[50vh] overflow-y-auto bg-[#0a0a0c]/50 p-2">
+              <div className="spotlight-results">
+                <div className="spotlight-section-title">Architecture Nodes</div>
                 {results.length === 0 ? (
-                  <p className="text-center text-white/40 py-8 text-sm">No results found.</p>
+                  <div className="py-12 text-center">
+                    <p className="text-white/40 text-sm">No results for "{localQuery}"</p>
+                  </div>
                 ) : (
-                  results.map((n) => {
+                  results.map((n, index) => {
                     const label = (n.data?.label as string) || n.id;
-                    const typeColor = 
+                    const isSelected = index === selectedIndex;
+                    const typeColor =
                       n.type === 'class' ? 'var(--class-bg)' :
-                      n.type === 'interface' ? 'var(--interface-bg)' :
-                      n.type === 'function' ? 'var(--function-bg)' : 
-                      'var(--file-bg)';
-                    
+                        n.type === 'interface' ? 'var(--interface-bg)' :
+                          n.type === 'function' ? 'var(--function-bg)' :
+                            'var(--file-bg)';
+
                     return (
                       <button
                         key={n.id}
                         onClick={() => handleSelectNode(n.id)}
-                        className="w-full text-left px-4 py-4 rounded-xl group hover:bg-indigo-600/20 hover:pl-6 transition-all duration-300 flex items-center gap-4 border border-transparent hover:border-indigo-500/30 mb-1"
+                        onMouseEnter={() => setSelectedIndex(index)}
+                        className={`spotlight-result-item ${isSelected ? 'spotlight-result-item--selected' : ''}`}
                       >
-                        <span className="w-3 h-3 rounded-md shadow-[0_0_12px_currentColor] transition-all group-hover:scale-125" style={{ backgroundColor: typeColor, color: typeColor }}></span>
-                        <span className="text-lg font-medium text-white/80 group-hover:text-white truncate transition-colors">{label}</span>
-                        <span className="text-[11px] px-2 py-1 rounded bg-white/5 text-white/30 group-hover:text-indigo-200 group-hover:bg-indigo-500/20 font-bold uppercase tracking-wider ml-auto transition-colors border border-white/5">{n.type}</span>
+                        <div className="spotlight-result-icon">
+                          <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: typeColor }}></div>
+                        </div>
+
+                        <div className="spotlight-result-content">
+                          <span className="spotlight-result-label">{label}</span>
+                          <span className="spotlight-result-sublabel">{n.type?.toUpperCase()} Node</span>
+                        </div>
+
+                        {isSelected && (
+                          <div className="ml-auto text-white/50 text-[10px] font-bold pr-2">
+                            ↵
+                          </div>
+                        )}
                       </button>
                     );
                   })
                 )}
               </div>
             )}
-            
-            {/* Helper footer */}
+
+            {/* Footer */}
             {!showResults && (
-               <div className="px-6 py-4 bg-[#0a0a0c]/80 text-[11px] text-white/30 font-medium flex items-center gap-4 border-t border-white/5">
-                 <span>Type to search architecture nodes...</span>
-               </div>
+              <div className="spotlight-footer">
+                <div className="flex gap-4">
+                  <div className="flex items-center gap-1">
+                    <span className="spotlight-key">↑↓</span>
+                    <span>Navigate</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="spotlight-key">↵</span>
+                    <span>Open</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="spotlight-key">ESC</span>
+                    <span>Close</span>
+                  </div>
+                </div>
+                <div className="italic opacity-50">Atlas Search</div>
+              </div>
             )}
           </div>
         </div>

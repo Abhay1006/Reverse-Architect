@@ -10,7 +10,7 @@ interface BaseNodeProps {
   className?: string;
   headerColor?: string;
   selected?: boolean;
-  status?: "god" | "dead" | "default";
+  status?: "god" | "dead" | "entry" | "default";
 }
 
 const BaseNode = ({
@@ -30,12 +30,16 @@ const BaseNode = ({
     if (status === "dead") {
       return `linear-gradient(145deg, rgba(148, 163, 184, 0.15) 0%, rgba(15, 15, 20, 0.98) 120%)`;
     }
+    if (status === "entry") {
+      return `linear-gradient(145deg, rgba(99, 102, 241, 0.25) 0%, rgba(15, 15, 20, 0.98) 120%)`;
+    }
     return `linear-gradient(145deg, color-mix(in srgb, ${headerColor} 25%, transparent) 0%, rgba(15, 15, 20, 0.98) 120%)`;
   };
 
   const getBorderColor = () => {
     if (status === "god") return "rgba(239, 68, 68, 0.8)";
     if (status === "dead") return "rgba(148, 163, 184, 0.3)";
+    if (status === "entry") return "var(--primary)";
     return selected ? headerColor : "rgba(255, 255, 255, 0.1)";
   };
 
@@ -45,6 +49,7 @@ const BaseNode = ({
         relative min-w-[240px] rounded-2xl border backdrop-blur-3xl shadow-2xl transition-all duration-300
         ${status === "god" ? "god-object-pulse border-red-500/80" : ""}
         ${status === "dead" ? "opacity-60 border-dashed border-slate-500/50" : ""}
+        ${status === "entry" ? "shadow-[0_0_30px_rgba(99,102,241,0.3)]" : ""}
         ${className}
       `}
       style={{

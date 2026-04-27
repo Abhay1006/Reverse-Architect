@@ -118,12 +118,14 @@ function IssueRow({
   count,
   color,
   items,
+  onItemClick,
 }: {
   icon: React.ReactNode;
   label: string;
   count: number;
   color: string;
-  items: string[];
+  items: { id: string; label: string; sublabel?: string }[];
+  onItemClick?: (id: string) => void;
 }) {
   const [expanded, setExpanded] = React.useState(false);
 
@@ -150,9 +152,17 @@ function IssueRow({
       </button>
       {expanded && items.length > 0 && (
         <ul className="analysis-issue-list">
-          {items.map((item) => (
-            <li key={item} className="analysis-issue-item">
-              {item}
+          {items.map((item, idx) => (
+            <li 
+              key={`${item.id}-${idx}`} 
+              className="analysis-issue-item group flex justify-between items-center cursor-pointer hover:bg-white/5 px-2 py-1.5 rounded transition-colors"
+              onClick={() => onItemClick?.(item.id)}
+            >
+              <div className="flex flex-col">
+                <span className="text-sm text-white/80 group-hover:text-white transition-colors">{item.label}</span>
+                {item.sublabel && <span className="text-[10px] text-white/30">{item.sublabel}</span>}
+              </div>
+              <span className="opacity-0 group-hover:opacity-100 transition-opacity text-[10px] text-white/40 uppercase font-bold tracking-tighter">View</span>
             </li>
           ))}
         </ul>
@@ -168,6 +178,8 @@ export default function AnalysisSidebar({ isOpen, onClose }: AnalysisSidebarProp
   const edges = useAtlasStore((s) => s.edges);
   const analysis = useAtlasStore((s) => s.analysisResults);
   const godObjectDetails = useAtlasStore((s) => s.godObjectDetails);
+  const deadCodeDetails = useAtlasStore((s) => s.deadCodeDetails);
+  const panToNode = useAtlasStore((s) => s.panToNode);
 
   const stats = useMemo(() => {
     const files = nodes.filter((n) => n.type === "file").length;
@@ -186,34 +198,34 @@ export default function AnalysisSidebar({ isOpen, onClose }: AnalysisSidebarProp
   // Build god object display items with connection counts
   const godObjectItems = useMemo(() => {
     if (godObjectDetails && godObjectDetails.length > 0) {
-      return godObjectDetails.map(
-        (d) => `${d.label}  (${d.totalDegree} connections: ${d.inDegree} in, ${d.outDegree} out)`,
-      );
+      return godObjectDetails.map(d => ({
+        id: d.nodeId,
+        label: d.label,
+        sublabel: `${d.totalDegree} connections (${d.inDegree} in, ${d.outDegree} out)`
+      }));
     }
-    // Fallback: use analysis.godObjects IDs resolved to labels
-    return (analysis?.godObjects ?? []).map(nodeLabel);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return (analysis?.godObjects ?? []).map(id => ({
+      id,
+      label: nodeLabel(id)
+    }));
   }, [godObjectDetails, analysis, nodes]);
 
-  const godObjectCount =
-    godObjectDetails && godObjectDetails.length > 0
-      ? godObjectDetails.length
-      : analysis?.godObjects?.length ?? 0;
-  const deadCodeDetails = useAtlasStore((s) => s.deadCodeDetails);
-
-  // Build dead code display items with type and path
   const deadCodeItems = useMemo(() => {
     if (deadCodeDetails && deadCodeDetails.length > 0) {
-      return deadCodeDetails.map(
-        (d) => `[${d.nodeType}] ${d.label}  (${d.filePath})`,
-      );
+      return deadCodeDetails.map(d => ({
+        id: d.nodeId,
+        label: d.label,
+        sublabel: `[${d.nodeType}] ${d.filePath}`
+      }));
     }
-    // Fallback: use analysis.deadCode IDs resolved to labels
-    return (analysis?.deadCode ?? []).map(nodeLabel);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return (analysis?.deadCode ?? []).map(id => ({
+      id,
+      label: nodeLabel(id)
+    }));
   }, [deadCodeDetails, analysis, nodes]);
 
-  const deadCodeCount = deadCodeDetails?.length ?? analysis?.deadCode?.length ?? 0;
+  const godObjectCount = godObjectItems.length;
+  const deadCodeCount = deadCodeItems.length;
   const cycleCount = analysis?.cycles?.length ?? 0;
   const patternCount = analysis?.patterns?.length ?? 0;
 
@@ -288,6 +300,7 @@ export default function AnalysisSidebar({ isOpen, onClose }: AnalysisSidebarProp
               count={godObjectCount}
               color="var(--god-object)"
               items={godObjectItems}
+              onItemClick={panToNode}
             />
             <IssueRow
               icon={<IconGhost />}
@@ -295,6 +308,7 @@ export default function AnalysisSidebar({ isOpen, onClose }: AnalysisSidebarProp
               count={deadCodeCount}
               color="var(--dead-code)"
               items={deadCodeItems}
+              onItemClick={panToNode}
             />
             <IssueRow
               icon={<IconCycle />}
@@ -302,10 +316,13 @@ export default function AnalysisSidebar({ isOpen, onClose }: AnalysisSidebarProp
               count={cycleCount}
               color="#f59e0b"
               items={
-                (analysis?.cycles ?? []).map(
-                  (cycle, i) => `Cycle ${i + 1}: ${cycle.map(nodeLabel).join(" → ")}`,
-                )
+                (analysis?.cycles ?? []).map((cycle, i) => ({
+                  id: cycle[0], // Pan to first node in cycle
+                  label: `Cycle ${i + 1}`,
+                  sublabel: cycle.map(nodeLabel).join(" → ")
+                }))
               }
+              onItemClick={panToNode}
             />
             <IssueRow
               icon={<IconPattern />}
@@ -313,10 +330,13 @@ export default function AnalysisSidebar({ isOpen, onClose }: AnalysisSidebarProp
               count={patternCount}
               color="#8b5cf6"
               items={
-                (analysis?.patterns ?? []).map(
-                  (p) => `[${p.pattern.toUpperCase()}] ${nodeLabel(p.nodeId)} (${p.confidence} confidence)`
-                )
+                (analysis?.patterns ?? []).map(p => ({
+                  id: p.nodeId,
+                  label: nodeLabel(p.nodeId),
+                  sublabel: `[${p.pattern.toUpperCase()}] ${p.confidence} confidence`
+                }))
               }
+              onItemClick={panToNode}
             />
           </div>
         </div>

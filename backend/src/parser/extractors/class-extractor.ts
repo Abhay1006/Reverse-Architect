@@ -1,5 +1,6 @@
 import { ClassDeclaration, SyntaxKind } from 'ts-morph';
 import type { ParsedClass, ParsedProperty, ParsedMethod, ParsedParameter } from '../../../../shared/types.js';
+import { calculateComplexity } from '../../analyzers/complexity.js';
 
 /**
  * Extracts relevant metadata from a ts-morph ClassDeclaration.
@@ -39,6 +40,7 @@ export function extractClass(classNode: ClassDeclaration): ParsedClass {
       parameters,
       returnType: method.getReturnTypeNode()?.getText() || method.getReturnType().getText().replace(/import\([^)]+\)\./g, ''),
       visibility,
+      complexity: calculateComplexity(method),
     };
   });
 

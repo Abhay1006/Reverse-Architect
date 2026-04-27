@@ -6,6 +6,7 @@
 
 import type { AnalysisResult } from '../../../../shared/types';
 import type { Node, Edge } from '@xyflow/react';
+import type { AtlasNode } from '../types/nodes';
 
 // ---------------------------------------------------------------------------
 //  Types — mirrors backend serialize.ts ReactFlowGraph
@@ -22,6 +23,11 @@ export interface ReactFlowNodeData {
     exportCount?: number;
     width?: number;
     height?: number;
+  };
+  analysis?: {
+    isGodObject?: boolean;
+    isDeadCode?: boolean;
+    isEntryPoint?: boolean;
   };
   width: number;
   height: number;
@@ -44,6 +50,12 @@ export interface DeadCodeDetail {
   outDegree: number;
 }
 
+export interface EntryPoint {
+  entryFile: string;
+  framework: 'node' | 'nextjs' | 'vite' | 'express' | 'unknown';
+  packageName?: string;
+}
+
 export interface ReactFlowGraph {
   nodes: {
     id: string;
@@ -62,6 +74,7 @@ export interface ReactFlowGraph {
   analysis: AnalysisResult;
   godObjectDetails?: GodObjectDetail[];
   deadCodeDetails?: DeadCodeDetail[];
+  entryPoint?: EntryPoint;
 }
 
 // ---------------------------------------------------------------------------
@@ -157,20 +170,22 @@ export async function analyzeGithub(url: string): Promise<ReactFlowGraph> {
 // ---------------------------------------------------------------------------
 
 export function toStoreGraph(graph: ReactFlowGraph): {
-  nodes: Node[];
+  nodes: AtlasNode[];
   edges: Edge[];
   analysis: AnalysisResult;
   godObjectDetails: GodObjectDetail[];
   deadCodeDetails: DeadCodeDetail[];
+  entryPoint?: EntryPoint;
 } {
-  const nodes: Node[] = graph.nodes.map((n) => ({
+  const nodes: AtlasNode[] = graph.nodes.map((n) => ({
     id: n.id,
-    type: n.type,
+    type: n.type as any,
     position: n.position,
     data: {
       label: n.data.label,
       filePath: n.data.filePath,
       metadata: n.data.metadata,
+      analysis: n.data.analysis,
     },
   }));
 
@@ -189,5 +204,6 @@ export function toStoreGraph(graph: ReactFlowGraph): {
     analysis: graph.analysis,
     godObjectDetails: graph.godObjectDetails ?? [],
     deadCodeDetails: graph.deadCodeDetails ?? [],
+    entryPoint: graph.entryPoint,
   };
 }

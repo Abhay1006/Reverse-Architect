@@ -8,11 +8,31 @@ import {
   applyEdgeChanges,
 } from '@xyflow/react';
 import type { AnalysisResult } from '../../../../shared/types';
-import type { GodObjectDetail, DeadCodeDetail } from '../lib/atlas-api';
+import type { GodObjectDetail, DeadCodeDetail, EntryPoint } from '../lib/atlas-api';
+import type { AtlasNode } from '../types/nodes';
+
+// ── Folder Tree Types ─────────────────────────────────────────────────
+
+export interface FolderTreeNode {
+  name: string;
+  path: string;
+  isFolder: boolean;
+  children: FolderTreeNode[];
+  /** Number of graph nodes (files/entities) that live directly in this folder */
+  nodeCount: number;
+  /** Type of node if it's a file-level entry */
+  nodeType?: string;
+  /** The graph node ID, if this tree entry maps to a single graph node */
+  nodeId?: string;
+  /** Whether this file is the project entry point */
+  isEntryPoint?: boolean;
+}
+
+// ── Store Interface ───────────────────────────────────────────────────
 
 interface AtlasState {
   // --- Graph State ---
-  nodes: Node[];
+  nodes: AtlasNode[];
   edges: Edge[];
   analysisResults: AnalysisResult | null;
   godObjectDetails: GodObjectDetail[];
@@ -21,9 +41,14 @@ interface AtlasState {
   // --- UI State ---
   selectedNodeId: string | null;
   searchQuery: string;
+  focusPath: string;       // Current folder focus (e.g. "src/graph")
+  expandedFolders: Set<string>; // Track which folders are expanded in the tree
+  entryPoint: EntryPoint | null; // Detected project entry point
+  fitViewTrigger: number; // Increment to trigger fitView in component
+  panToNodeId: string | null; // Node to pan to
 
   // --- Actions ---
-  setGraph: (nodes: Node[], edges: Edge[], analysis: AnalysisResult, godObjectDetails?: GodObjectDetail[], deadCodeDetails?: DeadCodeDetail[]) => void;
+  setGraph: (nodes: AtlasNode[], edges: Edge[], analysis: AnalysisResult, godObjectDetails?: GodObjectDetail[], deadCodeDetails?: DeadCodeDetail[], entryPoint?: EntryPoint) => void;
   
   // React Flow required actions
   onNodesChange: OnNodesChange;
@@ -33,7 +58,108 @@ interface AtlasState {
   setSelectedNode: (nodeId: string | null) => void;
   setSearchQuery: (query: string) => void;
   highlightNeighbors: (nodeId: string | null) => void;
+  setFocusPath: (path: string) => void;
+  toggleFolder: (path: string) => void;
+  triggerFitView: () => void;
+  panToNode: (nodeId: string | null) => void;
 }
+
+// ── Helpers ───────────────────────────────────────────────────────────
+
+/**
+ * Build a folder tree structure from graph node file paths.
+ * This is a pure function used as a selector.
+ */
+export function buildFolderTree(nodes: AtlasNode[]): FolderTreeNode {
+  const root: FolderTreeNode = {
+    name: '/',
+    path: '',
+    isFolder: true,
+    children: [],
+    nodeCount: 0,
+  };
+
+  // Collect all unique file paths, ignoring group nodes
+  for (const node of nodes) {
+    const filePath = (node.data?.filePath as string) || '';
+    if (!filePath || node.type === 'group') continue;
+
+    // Normalize: strip leading slashes and common prefixes
+    const cleanPath = filePath.replace(/^\/+/, '');
+    const parts = cleanPath.split('/');
+
+    let current = root;
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      const isFile = i === parts.length - 1;
+      const currentPath = parts.slice(0, i + 1).join('/');
+
+      let child = current.children.find(c => c.name === part);
+      if (!child) {
+        child = {
+          name: part!,
+          path: currentPath,
+          isFolder: !isFile,
+          children: [],
+          nodeCount: 0,
+        };
+        current.children.push(child);
+      }
+
+      if (isFile) {
+        child.nodeType = node.type;
+        child.nodeId = node.id;
+        child.isFolder = false;
+        child.isEntryPoint = !!node.data?.analysis?.isEntryPoint;
+      }
+
+      current = child;
+    }
+  }
+
+  // Sort: folders first, then alphabetically
+  function sortTree(node: FolderTreeNode) {
+    node.children.sort((a, b) => {
+      if (a.isFolder && !b.isFolder) return -1;
+      if (!a.isFolder && b.isFolder) return 1;
+      return a.name.localeCompare(b.name);
+    });
+    for (const child of node.children) {
+      sortTree(child);
+    }
+    // Count direct non-folder children
+    node.nodeCount = node.children.filter(c => !c.isFolder).length;
+  }
+
+  sortTree(root);
+  return root;
+}
+
+/**
+ * Get the nodes visible at a given focus path level.
+ * Shows files and entities whose filePath starts with focusPath.
+ */
+export function getVisibleNodes(allNodes: AtlasNode[], focusPath: string): AtlasNode[] {
+  if (!focusPath) {
+    // Root level: show only "folder summary" nodes — we'll create virtual folder nodes
+    return allNodes.filter(n => n.type !== 'group');
+  }
+  return allNodes.filter(n => {
+    if (n.type === 'group') return false;
+    const fp = (n.data?.filePath as string) || '';
+    const cleanFp = fp.replace(/^\/+/, '');
+    return cleanFp.startsWith(focusPath);
+  });
+}
+
+/**
+ * Get edges that connect two visible nodes.
+ */
+export function getVisibleEdges(allEdges: Edge[], visibleNodeIds: Set<string>): Edge[] {
+  return allEdges.filter(e => visibleNodeIds.has(e.source) && visibleNodeIds.has(e.target));
+}
+
+// ── Store ─────────────────────────────────────────────────────────────
 
 export const useAtlasStore = create<AtlasState>((set, get) => ({
   nodes: [],
@@ -43,14 +169,28 @@ export const useAtlasStore = create<AtlasState>((set, get) => ({
   deadCodeDetails: [],
   selectedNodeId: null,
   searchQuery: '',
+  focusPath: '',
+  expandedFolders: new Set<string>(),
+  entryPoint: null,
+  fitViewTrigger: 0,
+  panToNodeId: null,
 
-  setGraph: (nodes, edges, analysisResults, godObjectDetails, deadCodeDetails) => {
-    set({ nodes, edges, analysisResults, godObjectDetails: godObjectDetails ?? [], deadCodeDetails: deadCodeDetails ?? [] });
+  setGraph: (nodes, edges, analysisResults, godObjectDetails, deadCodeDetails, entryPoint) => {
+    set({ 
+      nodes, 
+      edges, 
+      analysisResults, 
+      godObjectDetails: godObjectDetails ?? [], 
+      deadCodeDetails: deadCodeDetails ?? [],
+      entryPoint: entryPoint ?? null,
+      focusPath: '',  // Reset focus on new graph
+      expandedFolders: new Set<string>(),
+    });
   },
 
   onNodesChange: (changes) => {
     set({
-      nodes: applyNodeChanges(changes, get().nodes),
+      nodes: applyNodeChanges(changes, get().nodes) as AtlasNode[],
     });
   },
 
@@ -68,6 +208,22 @@ export const useAtlasStore = create<AtlasState>((set, get) => ({
 
   setSearchQuery: (query) => {
     set({ searchQuery: query });
+  },
+
+  setFocusPath: (path) => {
+    set({ focusPath: path, selectedNodeId: null });
+  },
+
+  toggleFolder: (path) => {
+    set(state => {
+      const next = new Set(state.expandedFolders);
+      if (next.has(path)) {
+        next.delete(path);
+      } else {
+        next.add(path);
+      }
+      return { expandedFolders: next };
+    });
   },
 
   highlightNeighbors: (nodeId) => {
@@ -108,5 +264,16 @@ export const useAtlasStore = create<AtlasState>((set, get) => ({
         };
       }),
     });
+  },
+
+  triggerFitView: () => {
+    set({ fitViewTrigger: get().fitViewTrigger + 1 });
+  },
+
+  panToNode: (nodeId) => {
+    set({ panToNodeId: nodeId });
+    if (nodeId) {
+      get().setSelectedNode(nodeId);
+    }
   },
 }));

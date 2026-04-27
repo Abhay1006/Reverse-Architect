@@ -36,7 +36,8 @@ function main() {
       classes,
       interfaces,
       functions,
-      imports
+      imports,
+      lineCount: file.getFullText().split('\n').length
     };
 
     parsedFiles.push(parsedFile);

@@ -22,6 +22,7 @@ export interface ParsedMethod {
   parameters: ParsedParameter[];
   returnType: string;
   visibility: "public" | "protected" | "private" | "unknown";
+  complexity: number;
 }
 
 export interface ParsedClass {
@@ -54,6 +55,7 @@ export interface ParsedFunction {
   parameters: ParsedParameter[];
   returnType: string;
   lineCount: number;
+  complexity: number;
 }
 
 export interface ParsedDatabase {
@@ -96,6 +98,7 @@ export interface ArchNode {
     methods?: string[];
     lineCount: number;
     exportCount: number;
+    maxComplexity: number;
   };
   position: { x: number; y: number };
   style?: Record<string, any>; // Used by React Flow for size overrides

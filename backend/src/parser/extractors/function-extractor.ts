@@ -1,5 +1,6 @@
 import { FunctionDeclaration, VariableDeclaration, ArrowFunction, SyntaxKind } from 'ts-morph';
 import type { ParsedFunction, ParsedParameter } from '../../../../shared/types.js';
+import { calculateComplexity } from '../../analyzers/complexity.js';
 
 /**
  * Extracts relevant metadata from a ts-morph FunctionDeclaration.
@@ -17,6 +18,7 @@ export function extractFunction(functionNode: FunctionDeclaration): ParsedFuncti
   }));
 
   const lineCount = functionNode.getEndLineNumber() - functionNode.getStartLineNumber() + 1;
+  const complexity = calculateComplexity(functionNode);
 
   return {
     kind: 'function',
@@ -25,6 +27,7 @@ export function extractFunction(functionNode: FunctionDeclaration): ParsedFuncti
     parameters,
     returnType: functionNode.getReturnTypeNode()?.getText() || functionNode.getReturnType().getText().replace(/import\([^)]+\)\./g, ''),
     lineCount,
+    complexity,
   };
 }
 
@@ -41,6 +44,7 @@ export function extractArrowFunction(varDecl: VariableDeclaration, arrowFunc: Ar
   }));
 
   const lineCount = arrowFunc.getEndLineNumber() - arrowFunc.getStartLineNumber() + 1;
+  const complexity = calculateComplexity(arrowFunc);
 
   return {
     kind: 'function',
@@ -49,5 +53,6 @@ export function extractArrowFunction(varDecl: VariableDeclaration, arrowFunc: Ar
     parameters,
     returnType: arrowFunc.getReturnTypeNode()?.getText() || arrowFunc.getReturnType().getText().replace(/import\([^)]+\)\./g, ''),
     lineCount,
+    complexity,
   };
 }
