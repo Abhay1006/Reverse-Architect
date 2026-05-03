@@ -40,14 +40,14 @@ export function computeLayout(graph: ArchGraph, options: LayoutOptions = {}): Po
   const g = new dagre.graphlib.Graph({ compound: true });
   
   // Use generous defaults to prevent overlap with large metadata nodes
-  const ranksep = options.ranksep ?? 400;
-  const nodesep = options.nodesep ?? 300;
+  const ranksep = options.ranksep ?? 100;
+  const nodesep = options.nodesep ?? 80;
   const defaultNodeWidth = options.nodeWidth ?? 350;
   const defaultNodeHeight = options.nodeHeight ?? 200;
 
   // Apply graph defaults and layout direction
   g.setGraph({
-    rankdir: options.direction || 'TB',
+    rankdir: options.direction || 'BT',
     ranksep,
     nodesep,
     edgesep: 100,    // Extra space between edges
@@ -59,84 +59,95 @@ export function computeLayout(graph: ArchGraph, options: LayoutOptions = {}): Po
   // Required to tell dagre we are using a directed graph
   g.setDefaultEdgeLabel(() => ({}));
 
-  // 1. Add all nodes to the dagre graph
-  // First, add all group nodes so they exist before we set them as parents
-  for (const node of graph.nodes) {
-    if (node.type === 'group') {
-      g.setNode(node.id, { label: node.label });
-    }
+  const topLevelNodes = graph.nodes.filter(n => !n.parentNode);
+  const topLevelIds = new Set(topLevelNodes.map(n => n.id));
+
+  // 1. Add top-level nodes to dagre
+  for (const node of topLevelNodes) {
+    const propCount = node.metadata?.properties?.length || 0;
+    const methodCount = node.metadata?.methods?.length || 0;
+    
+    // Base estimated height. We will expand this if it has children.
+    const estimatedHeight = Math.max(
+      defaultNodeHeight,
+      90 + (propCount + methodCount) * 22
+    );
+
+    g.setNode(node.id, { 
+      label: node.label, 
+      width: defaultNodeWidth, 
+      height: estimatedHeight 
+    });
   }
 
-  // Then, add all child nodes and set their parent relationships
-  for (const node of graph.nodes) {
-    if (node.type !== 'group') {
-      const propCount = node.metadata?.properties?.length || 0;
-      const methodCount = node.metadata?.methods?.length || 0;
-      
-      const estimatedHeight = Math.max(
-        defaultNodeHeight,
-        90 + (propCount + methodCount) * 22
-      );
-
-      g.setNode(node.id, { 
-        label: node.label, 
-        width: defaultNodeWidth, 
-        height: estimatedHeight 
-      });
-
-      if (node.parentNode) {
-        g.setParent(node.id, node.parentNode);
-      }
-    }
-  }
-
-  // 2. Add all edges to the dagre graph
+  // 2. Add edges only between top-level nodes
   for (const edge of graph.edges) {
-    g.setEdge(edge.source, edge.target);
+    if (topLevelIds.has(edge.source) && topLevelIds.has(edge.target)) {
+      g.setEdge(edge.source, edge.target);
+    }
   }
 
-  // 3. Let dagre calculate x/y geometries for every node
+  // 3. Let dagre calculate x/y geometries for top-level nodes
   dagre.layout(g);
 
-  // Debug DAGRE output
-  console.log(`Dagre laid out ${g.nodeCount()} nodes. Checking a few group sizes...`);
-  const groupNodeKeys = g.nodes().filter(id => id.startsWith('group:'));
-  for (const gid of groupNodeKeys) {
-    const p = g.node(gid);
-    console.log(`Group ${gid}: w=${p.width}, h=${p.height}, x=${p.x}, y=${p.y}`);
+  // 4. Map the computed coordinates back to our ArchNode structures
+  const positionedNodes: PositionedNode[] = [];
+  const parentHeights = new Map<string, number>();
+
+  // Helper to group children by parent
+  const childrenByParent = new Map<string, typeof graph.nodes>();
+  for (const node of graph.nodes) {
+    if (node.parentNode) {
+      if (!childrenByParent.has(node.parentNode)) {
+        childrenByParent.set(node.parentNode, []);
+      }
+      childrenByParent.get(node.parentNode)!.push(node);
+    }
   }
 
-  // 4. Map the computed coordinates back to our ArchNode structures
-  const positionedNodes: PositionedNode[] = graph.nodes.map(node => {
+  // Calculate parent dimensions based on children
+  for (const node of topLevelNodes) {
     const pos = g.node(node.id);
+    const children = childrenByParent.get(node.id) || [];
     
-    // For groups, Dagre calculates width/height. We add generous padding.
-    // For regular nodes, we use the width/height calculated in step 1.
-    const width = node.type === 'group' ? (pos?.width || 0) + 160 : (pos?.width || defaultNodeWidth);
-    const height = node.type === 'group' ? (pos?.height || 0) + 160 : (pos?.height || defaultNodeHeight);
+    // Calculate required height based on children stacking
+    // Header is ~80px. Each child gets ~60px vertical space.
+    const requiredHeight = Math.max(pos.height, 100 + (children.length * 60));
+    parentHeights.set(node.id, requiredHeight);
     
     // Dagre outputs absolute center coordinates. React Flow needs top-left.
-    const absoluteX = (pos?.x || 0) - width / 2;
-    const absoluteY = (pos?.y || 0) - height / 2;
+    const absoluteX = pos.x - defaultNodeWidth / 2;
+    const absoluteY = pos.y - requiredHeight / 2;
 
-    const positioned: PositionedNode = {
+    positionedNodes.push({
       ...node,
       x: absoluteX,
       y: absoluteY,
-      width,
-      height,
-    };
-
-    if (node.type === 'group') {
-      positioned.style = { 
+      width: defaultNodeWidth,
+      height: requiredHeight,
+      style: {
         ...node.style,
-        width, 
-        height 
-      };
-    }
+        width: defaultNodeWidth,
+        height: requiredHeight
+      }
+    });
+  }
 
-    return positioned;
-  });
+  // 5. Assign relative coordinates to children
+  for (const [parentId, children] of childrenByParent.entries()) {
+    let currentY = 80; // Start below the header
+    for (const child of children) {
+      // Child coordinates are mathematically relative to the parent for React Flow
+      positionedNodes.push({
+        ...child,
+        x: 20, // Indent inside parent
+        y: currentY,
+        width: defaultNodeWidth - 40,
+        height: 40, // Standard child height
+      });
+      currentY += 60;
+    }
+  }
 
   return {
     ...graph,

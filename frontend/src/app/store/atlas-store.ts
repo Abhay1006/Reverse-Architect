@@ -43,9 +43,11 @@ interface AtlasState {
   searchQuery: string;
   focusPath: string;       // Current folder focus (e.g. "src/graph")
   expandedFolders: Set<string>; // Track which folders are expanded in the tree
+  expandedFiles: Set<string>;   // Track which files are expanded to show internal functions
   entryPoint: EntryPoint | null; // Detected project entry point
   fitViewTrigger: number; // Increment to trigger fitView in component
   panToNodeId: string | null; // Node to pan to
+  focusedNodeId: string | null; // Node currently in isolated focus mode
 
   // --- Actions ---
   setGraph: (nodes: AtlasNode[], edges: Edge[], analysis: AnalysisResult, godObjectDetails?: GodObjectDetail[], deadCodeDetails?: DeadCodeDetail[], entryPoint?: EntryPoint) => void;
@@ -60,8 +62,10 @@ interface AtlasState {
   highlightNeighbors: (nodeId: string | null) => void;
   setFocusPath: (path: string) => void;
   toggleFolder: (path: string) => void;
+  toggleFileExpansion: (filePath: string) => void;
   triggerFitView: () => void;
   panToNode: (nodeId: string | null) => void;
+  setFocusedNode: (nodeId: string | null) => void;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────
@@ -139,27 +143,22 @@ export function buildFolderTree(nodes: AtlasNode[]): FolderTreeNode {
  * Get the nodes visible at a given focus path level.
  * Shows files and entities whose filePath starts with focusPath.
  */
-export function getVisibleNodes(allNodes: AtlasNode[], focusPath: string): AtlasNode[] {
-  if (!focusPath) {
-    // Root level: show everything
-    return allNodes;
-  }
-  
+export function getVisibleNodes(allNodes: AtlasNode[], focusPath: string, expandedFiles: Set<string>): AtlasNode[] {
   // When a specific folder is focused, we want to show:
   // 1. Files inside that folder
   // 2. Groups that contain those files
-  // 3. Entities inside those files
+  // 3. Entities inside those files ONLY IF the file is expanded
   
-  const cleanFocusPath = focusPath.replace(/^\/+/, '');
+  const cleanFocusPath = focusPath ? focusPath.replace(/^\/+/, '') : '';
   const visibleFilePaths = new Set<string>();
   const visibleGroupIds = new Set<string>();
   
   // First pass: identify visible files and their groups
   allNodes.forEach(n => {
-    if (n.type !== 'group' && n.data?.filePath) {
+    if (n.type === 'file' && n.data?.filePath) {
       const fp = n.data.filePath as string;
       const cleanFp = fp.replace(/^\/+/, '');
-      if (cleanFp.startsWith(cleanFocusPath)) {
+      if (!cleanFocusPath || cleanFp.startsWith(cleanFocusPath)) {
         visibleFilePaths.add(fp);
         if (n.parentId) visibleGroupIds.add(n.parentId);
       }
@@ -171,8 +170,17 @@ export function getVisibleNodes(allNodes: AtlasNode[], focusPath: string): Atlas
     if (n.type === 'group') {
       return visibleGroupIds.has(n.id);
     }
+    
     const fp = n.data?.filePath as string;
-    return fp && visibleFilePaths.has(fp);
+    if (!fp || !visibleFilePaths.has(fp)) return false;
+
+    if (n.type === 'file') {
+      return true;
+    }
+
+    // It's an entity node (function, class, interface, database)
+    // Only show it if its parent file is explicitly expanded
+    return expandedFiles.has(fp);
   });
 }
 
@@ -195,9 +203,11 @@ export const useAtlasStore = create<AtlasState>((set, get) => ({
   searchQuery: '',
   focusPath: '',
   expandedFolders: new Set<string>(),
+  expandedFiles: new Set<string>(),
   entryPoint: null,
   fitViewTrigger: 0,
   panToNodeId: null,
+  focusedNodeId: null,
 
   setGraph: (nodes, edges, analysisResults, godObjectDetails, deadCodeDetails, entryPoint) => {
     set({ 
@@ -209,6 +219,8 @@ export const useAtlasStore = create<AtlasState>((set, get) => ({
       entryPoint: entryPoint ?? null,
       focusPath: '',  // Reset focus on new graph
       expandedFolders: new Set<string>(),
+      expandedFiles: new Set<string>(),
+      focusedNodeId: null,
     });
   },
 
@@ -247,6 +259,18 @@ export const useAtlasStore = create<AtlasState>((set, get) => ({
         next.add(path);
       }
       return { expandedFolders: next };
+    });
+  },
+
+  toggleFileExpansion: (filePath) => {
+    set(state => {
+      const next = new Set(state.expandedFiles);
+      if (next.has(filePath)) {
+        next.delete(filePath);
+      } else {
+        next.add(filePath);
+      }
+      return { expandedFiles: next };
     });
   },
 
@@ -298,6 +322,13 @@ export const useAtlasStore = create<AtlasState>((set, get) => ({
     set({ panToNodeId: nodeId });
     if (nodeId) {
       get().setSelectedNode(nodeId);
+    }
+  },
+
+  setFocusedNode: (nodeId) => {
+    set({ focusedNodeId: nodeId });
+    if (nodeId) {
+      get().triggerFitView();
     }
   },
 }));

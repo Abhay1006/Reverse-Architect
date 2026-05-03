@@ -1,6 +1,22 @@
-import { FunctionDeclaration, VariableDeclaration, ArrowFunction, SyntaxKind } from 'ts-morph';
+import { FunctionDeclaration, VariableDeclaration, ArrowFunction, SyntaxKind, CallExpression } from 'ts-morph';
 import type { ParsedFunction, ParsedParameter } from '../../../../shared/types.js';
 import { calculateComplexity } from '../../analyzers/complexity.js';
+
+function getCalledFunctions(node: FunctionDeclaration | ArrowFunction): string[] {
+  const calledFunctions = new Set<string>();
+  const calls = node.getDescendantsOfKind(SyntaxKind.CallExpression);
+  for (const call of calls) {
+    const expr = call.getExpression();
+    // E.g. myFunc() -> 'myFunc', obj.myMethod() -> 'myMethod'
+    if (expr.getKind() === SyntaxKind.Identifier) {
+      calledFunctions.add(expr.getText());
+    } else if (expr.getKind() === SyntaxKind.PropertyAccessExpression) {
+      const parts = expr.getText().split('.');
+      calledFunctions.add(parts[parts.length - 1]);
+    }
+  }
+  return Array.from(calledFunctions);
+}
 
 /**
  * Extracts relevant metadata from a ts-morph FunctionDeclaration.
@@ -19,6 +35,7 @@ export function extractFunction(functionNode: FunctionDeclaration): ParsedFuncti
 
   const lineCount = functionNode.getEndLineNumber() - functionNode.getStartLineNumber() + 1;
   const complexity = calculateComplexity(functionNode);
+  const calledFunctions = getCalledFunctions(functionNode);
 
   return {
     kind: 'function',
@@ -28,6 +45,7 @@ export function extractFunction(functionNode: FunctionDeclaration): ParsedFuncti
     returnType: functionNode.getReturnTypeNode()?.getText() || functionNode.getReturnType().getText().replace(/import\([^)]+\)\./g, ''),
     lineCount,
     complexity,
+    calledFunctions,
   };
 }
 
@@ -45,6 +63,7 @@ export function extractArrowFunction(varDecl: VariableDeclaration, arrowFunc: Ar
 
   const lineCount = arrowFunc.getEndLineNumber() - arrowFunc.getStartLineNumber() + 1;
   const complexity = calculateComplexity(arrowFunc);
+  const calledFunctions = getCalledFunctions(arrowFunc);
 
   return {
     kind: 'function',
@@ -54,5 +73,6 @@ export function extractArrowFunction(varDecl: VariableDeclaration, arrowFunc: Ar
     returnType: arrowFunc.getReturnTypeNode()?.getText() || arrowFunc.getReturnType().getText().replace(/import\([^)]+\)\./g, ''),
     lineCount,
     complexity,
+    calledFunctions,
   };
 }

@@ -61,6 +61,10 @@ export interface ReactFlowGraph {
     id: string;
     type: string;
     position: { x: number; y: number };
+    width?: number;
+    height?: number;
+    parentId?: string;
+    style?: Record<string, any>;
     data: ReactFlowNodeData;
   }[];
   edges: {

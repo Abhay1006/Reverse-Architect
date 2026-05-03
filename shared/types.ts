@@ -23,6 +23,7 @@ export interface ParsedMethod {
   returnType: string;
   visibility: "public" | "protected" | "private" | "unknown";
   complexity: number;
+  calledFunctions?: string[];
 }
 
 export interface ParsedClass {
@@ -56,6 +57,7 @@ export interface ParsedFunction {
   returnType: string;
   lineCount: number;
   complexity: number;
+  calledFunctions?: string[];
 }
 
 export interface ParsedDatabase {
@@ -99,6 +101,7 @@ export interface ArchNode {
     lineCount: number;
     exportCount: number;
     maxComplexity: number;
+    importanceScore?: number;
   };
   position: { x: number; y: number };
   style?: Record<string, any>; // Used by React Flow for size overrides
@@ -110,7 +113,7 @@ export interface ArchEdge {
   source: string;
   target: string;
   label?: string;
-  type: "import" | "extends" | "implements";
+  type: "import" | "extends" | "implements" | "calls";
 }
 
 // --- Analysis Results ---

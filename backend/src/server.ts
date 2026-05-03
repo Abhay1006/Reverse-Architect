@@ -156,11 +156,7 @@ function analyzeProjectDir(projectPath: string) {
   // 8. Compute layout positions
   // Use TB (Top-to-Bottom) layout for trees, instead of LR
   const positioned = computeLayout(graph, {
-    direction: entryPoints.length > 0 ? 'TB' : 'LR',
-    nodeWidth: 350,
-    nodeHeight: 300,
-    ranksep: 400,
-    nodesep: 300,
+    direction: entryPoints.length > 0 ? 'BT' : 'LR',
   });
 
   // Create a quick lookup map for parent resolution

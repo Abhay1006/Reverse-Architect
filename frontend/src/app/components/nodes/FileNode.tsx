@@ -7,14 +7,18 @@ import { InsertDriveFile as FileTextIcon, Bolt as ZapIcon } from "@mui/icons-mat
 import BaseNode from "./BaseNode";
 import { FileNode as FileNodeType } from "../../types/nodes";
 
+import { useAtlasStore } from "../../store/atlas-store";
+
 const FileNode = ({ data, selected }: NodeProps<FileNodeType>) => {
   const fullPath = data.filePath as string;
   const pathParts = fullPath.split('/');
-  // Display at most the last 3 segments (e.g. dir/subdir/file.ts)
-  const formattedPath = pathParts.slice(Math.max(0, pathParts.length - 3)).join('/');
+  const expandedFiles = useAtlasStore(s => s.expandedFiles);
+  const isExpanded = expandedFiles.has(fullPath);
 
   const isEntryPoint = !!(data as any).analysis?.isEntryPoint;
   const status = isEntryPoint ? "entry" : "default";
+
+  const entities = (data.metadata as any)?.entities || [];
 
   return (
     <BaseNode
@@ -30,18 +34,64 @@ const FileNode = ({ data, selected }: NodeProps<FileNodeType>) => {
         )
       }
     >
-      <Typography
-        sx={{
-          fontSize: "0.625rem",
-          color: "rgba(255,255,255,0.4)",
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-        }}
-        title={fullPath}
-      >
-        {formattedPath}
-      </Typography>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+        <Typography
+          sx={{
+            fontSize: "0.625rem",
+            color: "rgba(255,255,255,0.4)",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+          title={fullPath}
+        >
+          {pathParts[pathParts.length - 1]}
+        </Typography>
+
+        {isExpanded && entities.length > 0 && (
+          <Box 
+            sx={{ 
+              mt: 1.5, 
+              pt: 1.5, 
+              borderTop: "1px solid rgba(255,255,255,0.1)",
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 0.75
+            }}
+          >
+            {entities.map((entity: any, i: number) => (
+              <Box 
+                key={`${entity.name}-${i}`}
+                sx={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: 1,
+                  px: 0.5,
+                  py: 0.25,
+                  borderRadius: 1,
+                  "&:hover": { bgcolor: "rgba(255,255,255,0.05)" }
+                }}
+              >
+                <Box 
+                  sx={{ 
+                    width: 4, 
+                    height: 4, 
+                    borderRadius: '50%', 
+                    bgcolor: entity.type === 'class' ? 'var(--class-bg)' : 
+                             entity.type === 'function' ? 'var(--function-bg)' : 'var(--interface-bg)'
+                  }} 
+                />
+                <Typography sx={{ fontSize: '0.625rem', color: 'rgba(255,255,255,0.8)', fontWeight: 600 }}>
+                  {entity.name}
+                </Typography>
+                <Typography sx={{ fontSize: '0.5rem', color: 'rgba(255,255,255,0.3)', ml: 'auto', textTransform: 'uppercase' }}>
+                  {entity.type}
+                </Typography>
+              </Box>
+            ))}
+          </Box>
+        )}
+      </Box>
     </BaseNode>
   );
 };

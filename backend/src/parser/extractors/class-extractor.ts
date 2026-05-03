@@ -35,12 +35,25 @@ export function extractClass(classNode: ClassDeclaration): ParsedClass {
       type: param.getTypeNode()?.getText() || param.getType().getText().replace(/import\([^)]+\)\./g, ''),
     }));
 
+    const calledFunctions = new Set<string>();
+    const calls = method.getDescendantsOfKind(SyntaxKind.CallExpression);
+    for (const call of calls) {
+      const expr = call.getExpression();
+      if (expr.getKind() === SyntaxKind.Identifier) {
+        calledFunctions.add(expr.getText());
+      } else if (expr.getKind() === SyntaxKind.PropertyAccessExpression) {
+        const parts = expr.getText().split('.');
+        calledFunctions.add(parts[parts.length - 1]);
+      }
+    }
+
     return {
       name: method.getName() || 'AnonymousMethod',
       parameters,
       returnType: method.getReturnTypeNode()?.getText() || method.getReturnType().getText().replace(/import\([^)]+\)\./g, ''),
       visibility,
       complexity: calculateComplexity(method),
+      calledFunctions: Array.from(calledFunctions),
     };
   });
 

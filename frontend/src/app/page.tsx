@@ -309,11 +309,13 @@ export default function Home() {
       </Box>
 
       <Upload isOpen={isUploadOpen} onClose={() => setIsUploadOpen(false)} />
-
-      <AnalysisSidebar
-        isOpen={isSidebarOpen}
-        onClose={() => setIsSidebarOpen(false)}
-      />
+      
+      {isSidebarOpen && (
+        <AnalysisSidebar
+          isOpen={isSidebarOpen}
+          onClose={() => setIsSidebarOpen(false)}
+        />
+      )}
     </Box>
   );
 }

@@ -99,17 +99,9 @@ export function buildGraph(files: ParsedFile[], entryFiles?: string[]): ArchGrap
   const getGroupNodeId = (groupName: string) => `group:${groupName}`;
 
   // --- Step 1: Node Generation ---
-  const groupSet = new Set<string>();
-
   for (const file of files) {
     // Only process reachable files
     if (!reachableFiles.has(file.filePath)) continue;
-
-    const parentDir = path.basename(path.dirname(file.filePath));
-    const isRoot = !parentDir || parentDir === '.';
-    const groupName = isRoot ? 'root' : parentDir;
-    groupSet.add(groupName);
-    const parentNodeId = getGroupNodeId(groupName);
 
     // 1.1 Add File Node
     nodes.push({
@@ -117,10 +109,14 @@ export function buildGraph(files: ParsedFile[], entryFiles?: string[]): ArchGrap
       label: file.name,
       type: 'file',
       filePath: file.filePath,
-      parentNode: parentNodeId,
       metadata: {
         lineCount: file.lineCount || 0,
         exportCount: file.classes.length + file.interfaces.length + file.functions.length,
+        entities: [
+          ...file.classes.map(c => ({ name: c.name, type: 'class' })),
+          ...file.functions.map(f => ({ name: f.name, type: 'function' })),
+          ...file.interfaces.map(i => ({ name: i.name, type: 'interface' }))
+        ],
         maxComplexity: Math.max(
           0,
           ...file.functions.map(f => f.complexity),
@@ -138,7 +134,7 @@ export function buildGraph(files: ParsedFile[], entryFiles?: string[]): ArchGrap
           label: table.name,
           type: 'database',
           filePath: file.filePath,
-          parentNode: parentNodeId,
+          parentNode: getFileNodeId(file.filePath),
           metadata: {
             lineCount: table.lineCount || 0,
             exportCount: 0,
@@ -156,7 +152,7 @@ export function buildGraph(files: ParsedFile[], entryFiles?: string[]): ArchGrap
         label: cls.name,
         type: 'class',
         filePath: file.filePath,
-        parentNode: parentNodeId,
+        parentNode: getFileNodeId(file.filePath),
         metadata: {
           properties: cls.properties.map(p => p.name),
           methods: cls.methods.map(m => m.name),
@@ -175,7 +171,7 @@ export function buildGraph(files: ParsedFile[], entryFiles?: string[]): ArchGrap
         label: intf.name,
         type: 'interface',
         filePath: file.filePath,
-        parentNode: parentNodeId,
+        parentNode: getFileNodeId(file.filePath),
         metadata: {
           properties: intf.properties.map(p => p.name),
           methods: intf.methods.map(m => m.name),
@@ -194,7 +190,7 @@ export function buildGraph(files: ParsedFile[], entryFiles?: string[]): ArchGrap
         label: fn.name,
         type: 'function',
         filePath: file.filePath,
-        parentNode: parentNodeId,
+        parentNode: getFileNodeId(file.filePath),
         metadata: {
           lineCount: fn.lineCount || 0,
           exportCount: 0,
@@ -203,22 +199,6 @@ export function buildGraph(files: ParsedFile[], entryFiles?: string[]): ArchGrap
         position: { x: 0, y: 0 }
       });
     }
-  }
-
-  // Generate the actual Group Nodes FIRST (React Flow requires parents before children)
-  for (const group of groupSet) {
-    const isRoot = !group || group === '.';
-    const label = isRoot ? 'root' : group;
-    const groupId = isRoot ? getGroupNodeId('root') : getGroupNodeId(group);
-    
-    nodes.unshift({
-      id: groupId,
-      label: label,
-      type: 'group',
-      filePath: '',
-      metadata: { lineCount: 0, exportCount: 0, maxComplexity: 0 },
-      position: { x: 0, y: 0 }
-    });
   }
 
   // --- Step 2: Edge Generation ---
@@ -260,6 +240,9 @@ export function buildGraph(files: ParsedFile[], entryFiles?: string[]): ArchGrap
 
       const sameFileInterface = sourceFile.interfaces.find(i => i.name === name);
       if (sameFileInterface) return getEntityNodeId(sourceFile.filePath, name);
+
+      const sameFileFunction = sourceFile.functions.find(f => f.name === name);
+      if (sameFileFunction) return getEntityNodeId(sourceFile.filePath, name);
 
       // Look in imports
       for (const imp of sourceFile.imports) {
@@ -321,6 +304,70 @@ export function buildGraph(files: ParsedFile[], entryFiles?: string[]): ArchGrap
           });
         }
       }
+    }
+
+    // 2.3 Entity-level Call Edges (Execution Flow)
+    const addCallEdges = (sourceId: string, calledNames: string[] | undefined) => {
+      if (!calledNames) return;
+      for (const calledName of calledNames) {
+        const targetId = resolveEntityNodeId(calledName, file);
+        if (targetId) {
+          const edgeId = `edge:calls:${sourceId}->${targetId}`;
+          if (!edgeIds.has(edgeId)) {
+            edgeIds.add(edgeId);
+            edges.push({
+              id: edgeId,
+              source: sourceId,
+              target: targetId,
+              type: 'calls',
+              label: 'calls'
+            });
+          }
+        }
+      }
+    };
+
+    for (const fn of file.functions) {
+      addCallEdges(getEntityNodeId(file.filePath, fn.name), fn.calledFunctions);
+    }
+    
+    for (const cls of file.classes) {
+      for (const method of cls.methods) {
+        // Here we map method calls from inside the class as originating from the class itself for simplicity at the graph level,
+        // unless we want to render method nodes. Since we render class nodes, we link calls from the class.
+        addCallEdges(getEntityNodeId(file.filePath, cls.name), method.calledFunctions);
+      }
+    }
+  }
+
+  // --- Step 3: Importance Scoring ---
+  // Calculate in-degree and out-degree for each file
+  const inDegreeMap = new Map<string, number>();
+  const outDegreeMap = new Map<string, number>();
+  
+  for (const edge of edges) {
+    if (edge.type === 'import') {
+      outDegreeMap.set(edge.source, (outDegreeMap.get(edge.source) || 0) + 1);
+      inDegreeMap.set(edge.target, (inDegreeMap.get(edge.target) || 0) + 1);
+    }
+  }
+
+  for (const node of nodes) {
+    if (node.type === 'file') {
+      const inDegree = inDegreeMap.get(node.id) || 0;
+      const outDegree = outDegreeMap.get(node.id) || 0;
+      
+      // Basic heuristic: heavily used files (high in-degree) are important core modules.
+      // Files that coordinate a lot (high out-degree) are important controllers.
+      // High complexity and export counts also boost importance.
+      let score = (inDegree * 3) + (outDegree * 1) + (node.metadata.exportCount * 0.5) + (node.metadata.maxComplexity * 0.2);
+      
+      // Bonus if it's an entry point or index file
+      if (node.filePath.endsWith('index.js') || node.filePath.endsWith('index.ts')) {
+        score += 5;
+      }
+      
+      node.metadata.importanceScore = Math.round(score * 10) / 10;
     }
   }
 

@@ -49,7 +49,8 @@ const BaseNode = ({
       className={className}
       sx={{
         position: "relative",
-        minWidth: 240,
+        width: "100%",
+        height: "100%",
         borderRadius: 4,
         border: "1px solid",
         backdropFilter: "blur(30px)",
