@@ -2,49 +2,30 @@
 
 import React, { useMemo, useCallback } from "react";
 import {
-  FolderOpen,
-  Folder,
-  ChevronRight,
-  Zap,
-  FileText,
-  ListCollapse,
-} from "lucide-react";
-import { useAtlasStore, buildFolderTree, type FolderTreeNode } from "../store/atlas-store";
-
-// ── Icons ─────────────────────────────────────────────────────────────
-
-function FolderIcon({ isOpen }: { isOpen: boolean }) {
-  return isOpen ? (
-    <FolderOpen className="ft-icon" />
-  ) : (
-    <Folder className="ft-icon" />
-  );
-}
-
-function FileIcon({ nodeType, isEntryPoint }: { nodeType?: string; isEntryPoint?: boolean }) {
-  if (isEntryPoint) {
-    return <Zap className="ft-icon" style={{ color: "var(--primary)" }} />;
-  }
-
-  const color =
-    nodeType === "class"
-      ? "var(--class-bg)"
-      : nodeType === "interface"
-        ? "var(--interface-bg)"
-        : nodeType === "function"
-          ? "var(--function-bg)"
-          : "var(--file-bg)";
-
-  return <FileText className="ft-icon" style={{ color }} />;
-}
-
-function ChevronIcon({ isOpen }: { isOpen: boolean }) {
-  return (
-    <ChevronRight
-      className={`ft-chevron ${isOpen ? "ft-chevron--open" : ""}`}
-    />
-  );
-}
+  Box,
+  Typography,
+  IconButton,
+  Tooltip,
+  List,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+  Chip,
+  Collapse,
+} from "@mui/material";
+import {
+  FolderOpen as FolderOpenIcon,
+  Folder as FolderIcon,
+  ChevronRight as ChevronRightIcon,
+  Bolt as EntryPointIcon,
+  InsertDriveFile as FileTextIcon,
+  UnfoldLess as CollapseAllIcon,
+} from "@mui/icons-material";
+import {
+  useAtlasStore,
+  buildFolderTree,
+  type FolderTreeNode,
+} from "../store/atlas-store";
 
 // ── Tree Node Component ───────────────────────────────────────────────
 
@@ -67,7 +48,8 @@ function TreeNode({
 }) {
   const isExpanded = expandedFolders.has(node.path);
   const isActive = focusPath === node.path;
-  const isInPath = focusPath.startsWith(node.path + "/") || focusPath === node.path;
+  const isInPath =
+    focusPath.startsWith(node.path + "/") || focusPath === node.path;
 
   const handleClick = useCallback(() => {
     if (node.isFolder) {
@@ -75,40 +57,127 @@ function TreeNode({
       onFocus(node.path);
     } else if (node.nodeId) {
       // For files: focus their parent dir and select the node
-      const parentPath = node.path.substring(0, node.path.lastIndexOf("/"));
+      const parentPath = node.path.substring(
+        0,
+        node.path.lastIndexOf("/")
+      );
       onFocus(parentPath || "");
       onSelectNode(node.nodeId);
     }
   }, [node, onToggle, onFocus, onSelectNode]);
 
+  const getFileColor = () => {
+    if (node.isEntryPoint) return "primary.main";
+    switch (node.nodeType) {
+      case "class":
+        return "var(--class-bg)";
+      case "interface":
+        return "var(--interface-bg)";
+      case "function":
+        return "var(--function-bg)";
+      default:
+        return "var(--file-bg)";
+    }
+  };
+
   return (
     <>
-      <button
-        className={`ft-node ${isActive ? "ft-node--active" : ""} ${isInPath ? "ft-node--in-path" : ""}`}
-        style={{ paddingLeft: `${12 + depth * 16}px` }}
+      <ListItemButton
         onClick={handleClick}
-        title={node.path}
+        selected={isActive}
+        sx={{
+          pl: `${12 + depth * 16}px`,
+          py: 0.5,
+          minHeight: 30,
+          gap: 0.5,
+          color: isInPath
+            ? "rgba(255,255,255,0.75)"
+            : "rgba(255,255,255,0.6)",
+          "&.Mui-selected": {
+            bgcolor: "rgba(99,102,241,0.12)",
+            color: "white",
+            "&:hover": {
+              bgcolor: "rgba(99,102,241,0.16)",
+            },
+          },
+          "&:hover": {
+            bgcolor: "rgba(255,255,255,0.04)",
+            color: "rgba(255,255,255,0.85)",
+          },
+          borderRadius: 0,
+        }}
       >
-        {node.isFolder && <ChevronIcon isOpen={isExpanded} />}
-        {!node.isFolder && <span className="ft-spacer" />}
-
+        {/* Chevron for folders */}
         {node.isFolder ? (
-          <FolderIcon isOpen={isExpanded} />
+          <ChevronRightIcon
+            sx={{
+              fontSize: 14,
+              color: "rgba(255,255,255,0.25)",
+              transition: "transform 0.15s ease",
+              transform: isExpanded ? "rotate(90deg)" : "none",
+              flexShrink: 0,
+            }}
+          />
         ) : (
-          <FileIcon nodeType={node.nodeType} isEntryPoint={node.isEntryPoint} />
+          <Box sx={{ width: 14, flexShrink: 0 }} />
         )}
 
-        <span className={`ft-label ${node.isEntryPoint ? "font-bold text-[var(--primary)]" : ""}`}>
-          {node.name}
-        </span>
+        {/* Icon */}
+        <ListItemIcon sx={{ minWidth: 24 }}>
+          {node.isFolder ? (
+            isExpanded ? (
+              <FolderOpenIcon sx={{ fontSize: 16 }} />
+            ) : (
+              <FolderIcon sx={{ fontSize: 16 }} />
+            )
+          ) : node.isEntryPoint ? (
+            <EntryPointIcon sx={{ fontSize: 16, color: "primary.main" }} />
+          ) : (
+            <FileTextIcon
+              sx={{ fontSize: 16, color: getFileColor() }}
+            />
+          )}
+        </ListItemIcon>
 
+        {/* Label */}
+        <ListItemText
+          primary={node.name}
+          slotProps={{
+            primary: {
+              sx: {
+                fontSize: "0.8125rem",
+                fontWeight: node.isEntryPoint ? 700 : 400,
+                color: node.isEntryPoint
+                  ? "primary.main"
+                  : "inherit",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              },
+            },
+          }}
+        />
+
+        {/* Badge for folder children count */}
         {node.isFolder && node.children.length > 0 && (
-          <span className="ft-badge">{node.children.length}</span>
+          <Chip
+            label={node.children.length}
+            size="small"
+            sx={{
+              height: 18,
+              fontSize: "0.625rem",
+              fontWeight: 600,
+              color: "rgba(255,255,255,0.25)",
+              bgcolor: "rgba(255,255,255,0.04)",
+              ml: "auto",
+            }}
+          />
         )}
-      </button>
+      </ListItemButton>
 
-      {node.isFolder && isExpanded && (
-        <div className="ft-children">
+      {/* Children */}
+      {node.isFolder && (
+        <Collapse in={isExpanded} timeout={150}>
           {node.children.map((child) => (
             <TreeNode
               key={child.path}
@@ -121,7 +190,7 @@ function TreeNode({
               onSelectNode={onSelectNode}
             />
           ))}
-        </div>
+        </Collapse>
       )}
     </>
   );
@@ -130,8 +199,14 @@ function TreeNode({
 // ── Main FolderTree Component ─────────────────────────────────────────
 
 export default function FolderTree() {
-  const { nodes, focusPath, expandedFolders, setFocusPath, toggleFolder, setSelectedNode } =
-    useAtlasStore();
+  const {
+    nodes,
+    focusPath,
+    expandedFolders,
+    setFocusPath,
+    toggleFolder,
+    setSelectedNode,
+  } = useAtlasStore();
 
   const tree = useMemo(() => buildFolderTree(nodes), [nodes]);
 
@@ -151,50 +226,132 @@ export default function FolderTree() {
 
   if (nodes.length === 0) {
     return (
-      <div className="ft-sidebar">
-        <div className="ft-header">
-          <span className="ft-header-title">Explorer</span>
-        </div>
-        <div className="ft-empty">
-          <p>No project loaded.</p>
-          <p className="ft-empty-sub">Analyze a repository to see its structure.</p>
-        </div>
-      </div>
+      <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            px: 2,
+            pt: 1.75,
+            pb: 1.25,
+            borderBottom: "1px solid rgba(255,255,255,0.1)",
+          }}
+        >
+          <Typography
+            sx={{
+              fontSize: "0.6875rem",
+              fontWeight: 700,
+              color: "rgba(255,255,255,0.4)",
+              textTransform: "uppercase",
+              letterSpacing: "0.1em",
+            }}
+          >
+            Explorer
+          </Typography>
+        </Box>
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            flex: 1,
+            p: 3,
+            textAlign: "center",
+            color: "rgba(255,255,255,0.2)",
+            fontSize: "0.8125rem",
+          }}
+        >
+          <Typography>No project loaded.</Typography>
+          <Typography
+            sx={{
+              fontSize: "0.6875rem",
+              color: "rgba(255,255,255,0.12)",
+              mt: 0.5,
+            }}
+          >
+            Analyze a repository to see its structure.
+          </Typography>
+        </Box>
+      </Box>
     );
   }
 
   return (
-    <div className="ft-sidebar">
-      <div className="ft-header">
-        <span className="ft-header-title">Explorer</span>
-        <button
-          className="ft-header-btn"
-          title="Collapse all"
-          onClick={() => {
-            // Reset to root
-            setFocusPath("");
-            // We need to clear expanded folders - use toggleFolder for each
-            expandedFolders.forEach((path) => toggleFolder(path));
+    <Box sx={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
+      {/* Header */}
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          px: 2,
+          pt: 1.75,
+          pb: 1.25,
+          borderBottom: "1px solid rgba(255,255,255,0.1)",
+          flexShrink: 0,
+        }}
+      >
+        <Typography
+          sx={{
+            fontSize: "0.6875rem",
+            fontWeight: 700,
+            color: "rgba(255,255,255,0.4)",
+            textTransform: "uppercase",
+            letterSpacing: "0.1em",
           }}
         >
-          <ListCollapse className="w-3.5 h-3.5" />
-        </button>
-      </div>
+          Explorer
+        </Typography>
+        <Tooltip title="Collapse all">
+          <IconButton
+            size="small"
+            onClick={() => {
+              // Reset to root
+              setFocusPath("");
+              // Clear expanded folders
+              expandedFolders.forEach((path) => toggleFolder(path));
+            }}
+            sx={{
+              color: "rgba(255,255,255,0.3)",
+              "&:hover": {
+                bgcolor: "rgba(255,255,255,0.06)",
+                color: "rgba(255,255,255,0.7)",
+              },
+            }}
+          >
+            <CollapseAllIcon sx={{ fontSize: 14 }} />
+          </IconButton>
+        </Tooltip>
+      </Box>
 
-      <div className="ft-tree">
-        {tree.children.map((child) => (
-          <TreeNode
-            key={child.path}
-            node={child}
-            depth={0}
-            expandedFolders={expandedFolders}
-            focusPath={focusPath}
-            onToggle={toggleFolder}
-            onFocus={handleFocus}
-            onSelectNode={handleSelectNode}
-          />
-        ))}
-      </div>
-    </div>
+      {/* Tree */}
+      <Box
+        sx={{
+          flex: 1,
+          overflowY: "auto",
+          overflowX: "hidden",
+          py: 0.75,
+          scrollbarWidth: "thin",
+          scrollbarColor: "rgba(255,255,255,0.06) transparent",
+        }}
+      >
+        <List disablePadding dense>
+          {tree.children.map((child) => (
+            <TreeNode
+              key={child.path}
+              node={child}
+              depth={0}
+              expandedFolders={expandedFolders}
+              focusPath={focusPath}
+              onToggle={toggleFolder}
+              onFocus={handleFocus}
+              onSelectNode={handleSelectNode}
+            />
+          ))}
+        </List>
+      </Box>
+    </Box>
   );
 }

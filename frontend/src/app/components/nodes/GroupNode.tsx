@@ -1,7 +1,8 @@
 "use client";
 
 import React, { memo } from "react";
-import { NodeProps, NodeResizer, Node } from "@xyflow/react";
+import { NodeProps, Node } from "@xyflow/react";
+import { Box, Typography, Chip } from "@mui/material";
 
 export type GroupNodeData = {
   label: string;
@@ -11,26 +12,76 @@ export type GroupNodeType = Node<GroupNodeData, "group">;
 
 const GroupNode = ({ data, selected }: NodeProps<GroupNodeType>) => {
   return (
-    <>
-      <div
-        className={`w-full h-full rounded-2xl border-2 transition-all duration-300 pointer-events-none flex flex-col overflow-hidden
-          ${selected ? "border-indigo-500 border-solid bg-indigo-500/5 shadow-[inset_0_0_50px_rgba(79,70,229,0.1)]" : "border-white/20 border-dashed bg-white/[0.01]"}
-        `}
+    <Box
+      sx={{
+        width: "100%",
+        height: "100%",
+        borderRadius: 4,
+        border: "2px",
+        borderStyle: selected ? "solid" : "dashed",
+        borderColor: selected ? "#6366f1" : "rgba(255,255,255,0.2)",
+        transition: "all 0.3s",
+        pointerEvents: "none",
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+        bgcolor: selected
+          ? "rgba(99,102,241,0.05)"
+          : "rgba(255,255,255,0.01)",
+        ...(selected && {
+          boxShadow: "inset 0 0 50px rgba(79,70,229,0.1)",
+        }),
+      }}
+    >
+      {/* Full-width header */}
+      <Box
+        sx={{
+          width: "100%",
+          px: 3,
+          py: 1.5,
+          borderBottom: "1px solid",
+          borderColor: selected
+            ? "rgba(99,102,241,0.5)"
+            : "rgba(255,255,255,0.1)",
+          backdropFilter: "blur(20px)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          bgcolor: selected
+            ? "rgba(99,102,241,0.2)"
+            : "rgba(255,255,255,0.1)",
+        }}
       >
-        {/* Full-width header */}
-        <div className={`w-full px-6 py-3 border-b backdrop-blur-xl flex items-center justify-between
-          ${selected ? "bg-indigo-500/20 border-indigo-500/50" : "bg-white/10 border-white/10"}
-        `}>
-          <div className="flex items-center gap-3">
-            <span className="opacity-80 text-lg">📁</span>
-            <span className="font-mono text-sm tracking-widest uppercase text-white/70 font-bold">
-              {data.label}
-            </span>
-          </div>
-          <span className="text-[10px] uppercase tracking-wider text-white/30 font-bold px-2 py-1 bg-black/40 rounded-md">Directory Module</span>
-        </div>
-      </div>
-    </>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+          <Typography sx={{ opacity: 0.8, fontSize: "1.125rem" }}>📁</Typography>
+          <Typography
+            sx={{
+              fontFamily: "monospace",
+              fontSize: "0.875rem",
+              letterSpacing: "0.1em",
+              textTransform: "uppercase",
+              color: "rgba(255,255,255,0.7)",
+              fontWeight: 700,
+            }}
+          >
+            {data.label}
+          </Typography>
+        </Box>
+        <Chip
+          label="Directory Module"
+          size="small"
+          sx={{
+            height: 22,
+            fontSize: "0.625rem",
+            fontWeight: 700,
+            textTransform: "uppercase",
+            letterSpacing: "0.05em",
+            bgcolor: "rgba(0,0,0,0.4)",
+            color: "rgba(255,255,255,0.3)",
+          }}
+        />
+      </Box>
+    </Box>
   );
 };
 

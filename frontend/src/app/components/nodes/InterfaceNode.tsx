@@ -2,7 +2,8 @@
 
 import React, { memo } from "react";
 import { NodeProps } from "@xyflow/react";
-import { Puzzle } from "lucide-react";
+import { Box, Typography, Chip } from "@mui/material";
+import { Extension as PuzzleIcon } from "@mui/icons-material";
 import BaseNode from "./BaseNode";
 import { useAtlasStore } from "../../store/atlas-store";
 import { InterfaceNode as InterfaceNodeType } from "../../types/nodes";
@@ -17,33 +18,48 @@ const InterfaceNode = ({ data, selected, id }: NodeProps<InterfaceNodeType>) => 
       selected={selected}
       status={isDeadCode ? "dead" : "default"}
       headerColor="var(--interface-bg)"
-      icon={<Puzzle width={16} height={16} />}
+      icon={<PuzzleIcon sx={{ fontSize: 16 }} />}
     >
-      <div className="space-y-3">
+      <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
         {data.metadata?.properties && (data.metadata.properties as string[]).length > 0 && (
-          <div>
-            <div className="mt-1 space-y-1">
+          <Box>
+            <Box sx={{ mt: 0.5, display: "flex", flexDirection: "column", gap: 0.5 }}>
               {(data.metadata.properties as string[]).map((prop, i) => (
-                <div key={i} className="text-xs text-secondary font-mono italic">
+                <Typography
+                  key={i}
+                  sx={{
+                    fontSize: "0.75rem",
+                    color: "var(--secondary)",
+                    fontFamily: "monospace",
+                    fontStyle: "italic",
+                  }}
+                >
                   {prop}
-                </div>
+                </Typography>
               ))}
-            </div>
-          </div>
+            </Box>
+          </Box>
         )}
         
         {data.metadata?.methods && (data.metadata.methods as string[]).length > 0 && (
-          <div className="pt-2 border-t border-white/5">
-            <div className="mt-1 space-y-1">
+          <Box sx={{ pt: 1, borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+            <Box sx={{ mt: 0.5, display: "flex", flexDirection: "column", gap: 0.5 }}>
               {(data.metadata.methods as string[]).map((method, i) => (
-                <div key={i} className="text-xs text-white/60 font-mono">
+                <Typography
+                  key={i}
+                  sx={{
+                    fontSize: "0.75rem",
+                    color: "rgba(255,255,255,0.6)",
+                    fontFamily: "monospace",
+                  }}
+                >
                   {method}()
-                </div>
+                </Typography>
               ))}
-            </div>
-          </div>
+            </Box>
+          </Box>
         )}
-      </div>
+      </Box>
     </BaseNode>
   );
 };

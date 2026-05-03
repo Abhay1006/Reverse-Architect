@@ -2,7 +2,8 @@
 
 import React, { memo } from "react";
 import { NodeProps } from "@xyflow/react";
-import { FileText, Zap } from "lucide-react";
+import { Box, Typography } from "@mui/material";
+import { InsertDriveFile as FileTextIcon, Bolt as ZapIcon } from "@mui/icons-material";
 import BaseNode from "./BaseNode";
 import { FileNode as FileNodeType } from "../../types/nodes";
 
@@ -23,15 +24,24 @@ const FileNode = ({ data, selected }: NodeProps<FileNodeType>) => {
       status={status}
       icon={
         isEntryPoint ? (
-          <Zap width={16} height={16} fill="currentColor" />
+          <ZapIcon sx={{ fontSize: 16 }} />
         ) : (
-          <FileText width={16} height={16} />
+          <FileTextIcon sx={{ fontSize: 16 }} />
         )
       }
     >
-      <div className="text-[10px] text-white/40 truncate" title={fullPath}>
+      <Typography
+        sx={{
+          fontSize: "0.625rem",
+          color: "rgba(255,255,255,0.4)",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}
+        title={fullPath}
+      >
         {formattedPath}
-      </div>
+      </Typography>
     </BaseNode>
   );
 };

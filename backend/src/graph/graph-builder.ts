@@ -106,8 +106,10 @@ export function buildGraph(files: ParsedFile[], entryFiles?: string[]): ArchGrap
     if (!reachableFiles.has(file.filePath)) continue;
 
     const parentDir = path.basename(path.dirname(file.filePath));
-    groupSet.add(parentDir);
-    const parentNodeId = getGroupNodeId(parentDir);
+    const isRoot = !parentDir || parentDir === '.';
+    const groupName = isRoot ? 'root' : parentDir;
+    groupSet.add(groupName);
+    const parentNodeId = getGroupNodeId(groupName);
 
     // 1.1 Add File Node
     nodes.push({
@@ -203,12 +205,15 @@ export function buildGraph(files: ParsedFile[], entryFiles?: string[]): ArchGrap
     }
   }
 
-  // Generate the actual Group Nodes
+  // Generate the actual Group Nodes FIRST (React Flow requires parents before children)
   for (const group of groupSet) {
-    if (!group || group === '.') continue; // Skip empty/root if anomalies occur
-    nodes.push({
-      id: getGroupNodeId(group),
-      label: group,
+    const isRoot = !group || group === '.';
+    const label = isRoot ? 'root' : group;
+    const groupId = isRoot ? getGroupNodeId('root') : getGroupNodeId(group);
+    
+    nodes.unshift({
+      id: groupId,
+      label: label,
       type: 'group',
       filePath: '',
       metadata: { lineCount: 0, exportCount: 0, maxComplexity: 0 },

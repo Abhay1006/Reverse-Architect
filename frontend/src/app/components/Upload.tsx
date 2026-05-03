@@ -1,31 +1,70 @@
 "use client";
 
 import React, { useState, useRef } from "react";
-import { Upload as UploadIcon, GitBranch, Loader2 } from "lucide-react";
-import { useAtlasStore } from "../store/atlas-store";
 import {
-  analyzeUpload,
-  analyzeGithub,
-  toStoreGraph,
-  AtlasApiError,
-} from "../lib/atlas-api";
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  TextField,
+  Typography,
+  Box,
+  Alert,
+  CircularProgress,
+  InputAdornment,
+  IconButton,
+  Chip,
+} from "@mui/material";
+import {
+  CloudUpload as UploadIcon,
+  GitHub as GitHubIcon,
+  Close as CloseIcon,
+} from "@mui/icons-material";
+import { useFormik } from "formik";
+import * as Yup from "yup";
+import { useUploadAnalysis, useGithubAnalysis, getAnalysisErrorMessage } from "../hooks/useAnalysis";
 
 interface UploadProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
+const githubUrlSchema = Yup.object({
+  githubUrl: Yup.string()
+    .url("Please enter a valid URL")
+    .matches(
+      /github\.com\/[\w.-]+\/[\w.-]+/,
+      "Must be a valid GitHub repository URL (e.g. https://github.com/user/repo)"
+    )
+    .required("GitHub URL is required"),
+});
+
 export default function Upload({ isOpen, onClose }: UploadProps) {
   const [isDragging, setIsDragging] = useState(false);
-  const [githubUrl, setGithubUrl] = useState("");
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const setGraph = useAtlasStore((state) => state.setGraph);
+  const uploadMutation = useUploadAnalysis();
+  const githubMutation = useGithubAnalysis();
 
-  if (!isOpen) return null;
+  const isAnalyzing = uploadMutation.isPending || githubMutation.isPending;
+
+  // Formik for GitHub URL form
+  const formik = useFormik({
+    initialValues: { githubUrl: "" },
+    validationSchema: githubUrlSchema,
+    onSubmit: (values) => {
+      setFileError(null);
+      githubMutation.mutate(values.githubUrl, {
+        onSuccess: () => {
+          formik.resetForm();
+          onClose();
+        },
+      });
+    },
+  });
 
   // ── Drag & Drop handlers ──────────────────────────────────────────────
 
@@ -52,222 +91,266 @@ export default function Upload({ isOpen, onClose }: UploadProps) {
 
   const handleFileSelected = (file: File) => {
     if (!file.name.endsWith(".zip")) {
-      setError("Please upload a .zip file.");
+      setFileError("Please upload a .zip file.");
       return;
     }
-    setError(null);
+    setFileError(null);
     setSelectedFile(file);
-    runUploadAnalysis(file);
+    uploadMutation.mutate(file, {
+      onSuccess: () => {
+        setSelectedFile(null);
+        onClose();
+      },
+    });
   };
 
-  // ── GitHub URL submission ─────────────────────────────────────────────
-
-  const handleAnalyzeUrl = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!githubUrl.trim()) {
-      setError("Please enter a GitHub URL.");
-      return;
-    }
-    if (!githubUrl.includes("github.com")) {
-      setError("Invalid GitHub URL.");
-      return;
-    }
-    setError(null);
-    runGithubAnalysis(githubUrl);
-  };
-
-  // ── Real API integration ──────────────────────────────────────────────
-
-  const runUploadAnalysis = async (file: File) => {
-    setIsAnalyzing(true);
-    setError(null);
-
-    try {
-      const graph = await analyzeUpload(file);
-      const { nodes, edges, analysis, godObjectDetails, deadCodeDetails, entryPoint } = toStoreGraph(graph);
-      setGraph(nodes, edges, analysis, godObjectDetails, deadCodeDetails, entryPoint);
-      onClose();
-    } catch (err) {
-      if (err instanceof AtlasApiError) {
-        setError(err.details ? `${err.message}: ${err.details}` : err.message);
-      } else {
-        setError(
-          err instanceof Error
-            ? err.message
-            : "An unexpected error occurred during upload analysis.",
-        );
-      }
-    } finally {
-      setIsAnalyzing(false);
-    }
-  };
-
-  const runGithubAnalysis = async (url: string) => {
-    setIsAnalyzing(true);
-    setError(null);
-
-    try {
-      const graph = await analyzeGithub(url);
-      const { nodes, edges, analysis, godObjectDetails, deadCodeDetails, entryPoint } = toStoreGraph(graph);
-      setGraph(nodes, edges, analysis, godObjectDetails, deadCodeDetails, entryPoint);
-      onClose();
-    } catch (err) {
-      if (err instanceof AtlasApiError) {
-        setError(err.details ? `${err.message}: ${err.details}` : err.message);
-      } else {
-        setError(
-          err instanceof Error
-            ? err.message
-            : "An unexpected error occurred during GitHub analysis.",
-        );
-      }
-    } finally {
-      setIsAnalyzing(false);
-    }
-  };
+  const errorMessage =
+    fileError ||
+    (uploadMutation.isError
+      ? getAnalysisErrorMessage(uploadMutation.error)
+      : null) ||
+    (githubMutation.isError
+      ? getAnalysisErrorMessage(githubMutation.error)
+      : null);
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300"
-      onClick={onClose}
+    <Dialog
+      open={isOpen}
+      onClose={isAnalyzing ? undefined : onClose}
+      maxWidth="sm"
+      fullWidth
+      slotProps={{
+        backdrop: {
+          sx: { backdropFilter: "blur(8px)", background: "rgba(0,0,0,0.6)" },
+        },
+      }}
     >
-      <div
-        className="relative w-full max-w-lg overflow-hidden bg-[var(--glass-bg)] border border-[var(--card-border)] rounded-2xl shadow-2xl animate-in zoom-in-95 duration-300"
-        onClick={(e) => e.stopPropagation()}
+      {/* Header */}
+      <DialogTitle
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          pb: 0.5,
+        }}
       >
-        {/* Header */}
-        <div className="px-8 pt-8 pb-4">
-          <h2 className="text-2xl font-bold tracking-tight text-white mb-4">Analyze Project</h2>
-          <p className="text-white/50 text-sm">Upload a repository or provide a GitHub URL to start the visualization.</p>
-        </div>
+        <Box>
+          <Typography variant="h6" sx={{ fontSize: "1.25rem", letterSpacing: "-0.01em" }}>
+            Analyze Project
+          </Typography>
+          <Typography variant="caption" sx={{ color: "text.secondary", fontSize: "0.75rem" }}>
+            Upload a repository or provide a GitHub URL to start visualization
+          </Typography>
+        </Box>
+        <IconButton onClick={onClose} disabled={isAnalyzing} size="small" sx={{ color: "text.secondary" }}>
+          <CloseIcon fontSize="small" />
+        </IconButton>
+      </DialogTitle>
 
-        {/* Content */}
-        <div className="px-8 pb-8 space-y-6">
-          {/* Drag & Drop Zone */}
-          <div
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-            onClick={() => fileInputRef.current?.click()}
-            className={`
-              relative group cursor-pointer border-2 border-dashed rounded-xl p-10 transition-all duration-300
-              ${isDragging
-                ? "border-[var(--primary)] bg-[var(--primary-glow)]"
-                : "border-white/10 hover:border-white/20 hover:bg-white/5"}
-            `}
+      {/* Content */}
+      <DialogContent sx={{ pt: 2 }}>
+        {/* Drag & Drop Zone */}
+        <Box
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          onClick={() => !isAnalyzing && fileInputRef.current?.click()}
+          sx={{
+            position: "relative",
+            cursor: isAnalyzing ? "default" : "pointer",
+            border: "2px dashed",
+            borderColor: isDragging
+              ? "primary.main"
+              : "rgba(255,255,255,0.1)",
+            borderRadius: 3,
+            p: 5,
+            textAlign: "center",
+            transition: "all 0.3s",
+            background: isDragging
+              ? "rgba(99,102,241,0.08)"
+              : "rgba(255,255,255,0.02)",
+            "&:hover": {
+              borderColor: "rgba(255,255,255,0.2)",
+              background: "rgba(255,255,255,0.04)",
+            },
+          }}
+        >
+          <input
+            type="file"
+            ref={fileInputRef}
+            style={{ display: "none" }}
+            accept=".zip"
+            onChange={(e) =>
+              e.target.files && handleFileSelected(e.target.files[0])
+            }
+          />
+
+          {uploadMutation.isPending ? (
+            <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1.5 }}>
+              <CircularProgress size={28} sx={{ color: "primary.main" }} />
+              <Typography variant="body2" color="text.primary" fontWeight={500}>
+                Analyzing project...
+              </Typography>
+            </Box>
+          ) : selectedFile ? (
+            <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
+              <UploadIcon sx={{ fontSize: 32, color: "primary.main" }} />
+              <Typography variant="body2" color="text.primary" fontWeight={500}>
+                {selectedFile.name}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                {(selectedFile.size / 1024).toFixed(1)} KB — click to change
+              </Typography>
+            </Box>
+          ) : (
+            <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
+              <Box
+                sx={{
+                  p: 1.5,
+                  borderRadius: "50%",
+                  background: isDragging
+                    ? "rgba(99,102,241,0.15)"
+                    : "rgba(255,255,255,0.05)",
+                  transition: "all 0.3s",
+                  color: isDragging ? "primary.main" : "text.secondary",
+                }}
+              >
+                <UploadIcon sx={{ fontSize: 32 }} />
+              </Box>
+              <Typography variant="body2" color="text.primary" fontWeight={500}>
+                Drop .zip project here
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                or click to browse local files
+              </Typography>
+            </Box>
+          )}
+        </Box>
+
+        {/* Divider */}
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            my: 3,
+          }}
+        >
+          <Box sx={{ flex: 1, borderTop: "1px solid rgba(255,255,255,0.06)" }} />
+          <Typography
+            sx={{
+              mx: 2,
+              color: "rgba(255,255,255,0.2)",
+              fontSize: "0.625rem",
+              fontWeight: 700,
+              textTransform: "uppercase",
+              letterSpacing: "0.2em",
+            }}
           >
-            <input
-              type="file"
-              ref={fileInputRef}
-              className="hidden"
-              accept=".zip"
-              onChange={(e) => e.target.files && handleFileSelected(e.target.files[0])}
-            />
+            OR
+          </Typography>
+          <Box sx={{ flex: 1, borderTop: "1px solid rgba(255,255,255,0.06)" }} />
+        </Box>
 
-            <div className="flex flex-col items-center text-center space-y-3">
-              <div className={`p-3 rounded-full bg-white/5 group-hover:bg-white/10 transition-colors ${isDragging ? "text-[var(--primary)]" : "text-white/40"}`}>
-                <UploadIcon className="w-8 h-8" />
-              </div>
-              <div>
-                {isAnalyzing ? (
-                  <div className="flex flex-col items-center space-y-2">
-                    <Loader2 className="w-6 h-6 text-[var(--primary)] animate-spin" />
-                    <p className="text-white font-medium">Analyzing project...</p>
-                  </div>
-                ) : selectedFile ? (
-                  <>
-                    <p className="text-white font-medium">{selectedFile.name}</p>
-                    <p className="text-white/30 text-xs">
-                      {(selectedFile.size / 1024).toFixed(1)} KB — click to change
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-white font-medium">Drop .zip project here</p>
-                    <p className="text-white/30 text-xs">or click to browse local files</p>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
+        {/* GitHub URL Form (Formik) */}
+        <form onSubmit={formik.handleSubmit}>
+          <TextField
+            id="githubUrl"
+            name="githubUrl"
+            fullWidth
+            placeholder="https://github.com/username/repo"
+            value={formik.values.githubUrl}
+            onChange={formik.handleChange}
+            onBlur={formik.handleBlur}
+            error={formik.touched.githubUrl && Boolean(formik.errors.githubUrl)}
+            helperText={formik.touched.githubUrl && formik.errors.githubUrl}
+            disabled={isAnalyzing}
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <GitHubIcon sx={{ color: "text.secondary", fontSize: 20 }} />
+                  </InputAdornment>
+                ),
+              },
+            }}
+            sx={{ mb: 2.5 }}
+          />
 
-          <div className="relative flex items-center pt-8 pb-2">
-            <div className="flex-grow border-t border-white/5"></div>
-            <span className="flex-shrink mx-4 text-white/20 text-[10px] font-bold uppercase tracking-[0.2em] leading-none">OR</span>
-            <div className="flex-grow border-t border-white/5"></div>
-          </div>
-          
-          {/* Explicit spacer to guarantee gap before input box */}
-          <div className="h-4"></div>
-
-          {/* GitHub URL Input Form */}
-          <form onSubmit={handleAnalyzeUrl} className="flex flex-col" style={{ gap: "24px" }}>
-            <div className="relative group">
-              <input
-                type="text"
-                placeholder="https://github.com/username/repo"
-                value={githubUrl}
-                onChange={(e) => setGithubUrl(e.target.value)}
-                style={{ backgroundColor: "#0f0f12", color: "#e2e2e2", caretColor: "#a5b4fc" }}
-                className="w-full border border-white/10 rounded-xl py-4 px-5 text-sm placeholder:text-white/20 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500/50 transition-all duration-300 shadow-[inset_0_2px_4px_rgba(0,0,0,0.3)] group-hover:border-white/20"
-              />
-              {/* Subtle inner glow for the input box */}
-              <div className="absolute inset-0 rounded-xl bg-gradient-to-tr from-indigo-500/5 to-transparent pointer-events-none" />
-            </div>
-
-            <button
-              type="submit"
-              disabled={isAnalyzing || !githubUrl.trim()}
-              className="group relative w-full overflow-hidden rounded-xl py-3.5 px-6 font-semibold text-sm tracking-wide transition-all duration-300 flex items-center justify-center gap-3"
-              style={{
-                background: isAnalyzing || !githubUrl.trim()
+          <Button
+            type="submit"
+            fullWidth
+            variant="contained"
+            disabled={isAnalyzing || !formik.values.githubUrl.trim()}
+            sx={{
+              py: 1.5,
+              borderRadius: 3,
+              fontSize: "0.8125rem",
+              fontWeight: 600,
+              background:
+                isAnalyzing || !formik.values.githubUrl.trim()
                   ? "rgba(255,255,255,0.03)"
                   : "linear-gradient(135deg, #4f46e5, #7c3aed)",
-                color: isAnalyzing || !githubUrl.trim()
-                  ? "rgba(255,255,255,0.2)"
-                  : "#ffffff",
-                border: isAnalyzing || !githubUrl.trim()
-                  ? "1px solid rgba(255,255,255,0.05)"
-                  : "1px solid rgba(129,140,248,0.3)",
-                cursor: isAnalyzing || !githubUrl.trim() ? "not-allowed" : "pointer",
-              }}
-            >
-              {isAnalyzing ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" style={{ color: "#a5b4fc" }} />
-                  <span style={{ color: "#c7d2fe" }}>Analyzing Repository...</span>
-                </>
+              "&:hover": {
+                background: "linear-gradient(135deg, #4338ca, #6d28d9)",
+              },
+              "&.Mui-disabled": {
+                color: "rgba(255,255,255,0.2)",
+                background: "rgba(255,255,255,0.03)",
+              },
+            }}
+            startIcon={
+              githubMutation.isPending ? (
+                <CircularProgress size={16} sx={{ color: "rgba(165,180,252,1)" }} />
               ) : (
-                <>
-                  <GitBranch
-                    className="w-4 h-4"
-                    style={{ opacity: !githubUrl.trim() ? 0.2 : 1 }}
-                  />
-                  <span>Analyze GitHub Repository</span>
-                </>
-              )}
-            </button>
-          </form>
-
-          {/* Error Message */}
-          {error && (
-            <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg animate-in slide-in-from-top-2 duration-200">
-              <p className="text-red-400 text-xs text-center">{error}</p>
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="bg-[#101014] px-8 py-4 flex justify-between items-center text-[10px] text-white/30 font-bold uppercase tracking-widest border-t border-white/5">
-          <span>Supported: TypeScript, JavaScript</span>
-          <button
-            onClick={onClose}
-            className="px-4 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/60 hover:text-white transition-all border border-white/5 hover:border-white/20 text-xs"
+                <GitHubIcon sx={{ fontSize: 18 }} />
+              )
+            }
           >
-            Cancel
-          </button>
-        </div>
-      </div>
-    </div>
+            {githubMutation.isPending
+              ? "Analyzing Repository..."
+              : "Analyze GitHub Repository"}
+          </Button>
+        </form>
+
+        {/* Error Message */}
+        {errorMessage && (
+          <Alert
+            severity="error"
+            sx={{ mt: 2, borderRadius: 2 }}
+            onClose={() => {
+              setFileError(null);
+              uploadMutation.reset();
+              githubMutation.reset();
+            }}
+          >
+            {errorMessage}
+          </Alert>
+        )}
+      </DialogContent>
+
+      {/* Footer */}
+      <DialogActions
+        sx={{
+          px: 3,
+          py: 1.5,
+          borderTop: "1px solid rgba(255,255,255,0.05)",
+          justifyContent: "space-between",
+          background: "rgba(16,16,20,0.8)",
+        }}
+      >
+        <Box sx={{ display: "flex", gap: 1 }}>
+          <Chip label="TypeScript" size="small" variant="outlined" sx={{ fontSize: "0.625rem", height: 20 }} />
+          <Chip label="JavaScript" size="small" variant="outlined" sx={{ fontSize: "0.625rem", height: 20 }} />
+        </Box>
+        <Button
+          onClick={onClose}
+          disabled={isAnalyzing}
+          size="small"
+          sx={{ color: "text.secondary", fontSize: "0.6875rem" }}
+        >
+          Cancel
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
 }

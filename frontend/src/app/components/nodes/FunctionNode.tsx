@@ -2,7 +2,8 @@
 
 import React, { memo } from "react";
 import { NodeProps } from "@xyflow/react";
-import { Braces } from "lucide-react";
+import { Box, Typography, Chip } from "@mui/material";
+import { Functions as BracesIcon } from "@mui/icons-material";
 import BaseNode from "./BaseNode";
 import { useAtlasStore } from "../../store/atlas-store";
 import { FunctionNode as FunctionNodeType } from "../../types/nodes";
@@ -22,19 +23,51 @@ const FunctionNode = ({ data, selected, id }: NodeProps<FunctionNodeType>) => {
       status={isDeadCode ? "dead" : "default"}
       headerColor="var(--function-bg)"
       className="min-w-[180px]"
-      icon={<Braces width={16} height={16} />}
+      icon={<BracesIcon sx={{ fontSize: 16 }} />}
     >
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-mono text-accent">function</span>
+      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <Typography
+            sx={{
+              fontSize: "0.75rem",
+              fontFamily: "monospace",
+              color: "var(--accent)",
+            }}
+          >
+            function
+          </Typography>
           {data.metadata?.maxComplexity !== undefined && (
-            <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${data.metadata.maxComplexity > 10 ? 'bg-red-500/20 text-red-400' : 'bg-green-500/10 text-green-400'}`}>
-              C:{data.metadata.maxComplexity}
-            </span>
+            <Chip
+              label={`C:${data.metadata.maxComplexity}`}
+              size="small"
+              sx={{
+                height: 18,
+                fontSize: "0.625rem",
+                fontWeight: 700,
+                borderRadius: "9px",
+                bgcolor: (data.metadata.maxComplexity as number) > 10
+                  ? "rgba(239,68,68,0.2)"
+                  : "rgba(34,197,94,0.1)",
+                color: (data.metadata.maxComplexity as number) > 10
+                  ? "#f87171"
+                  : "#4ade80",
+              }}
+            />
           )}
-        </div>
-        <span className="text-[10px] text-white/30 truncate" title={fullPath}>{formattedPath}</span>
-      </div>
+        </Box>
+        <Typography
+          sx={{
+            fontSize: "0.625rem",
+            color: "rgba(255,255,255,0.3)",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+          title={fullPath}
+        >
+          {formattedPath}
+        </Typography>
+      </Box>
     </BaseNode>
   );
 };

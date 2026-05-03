@@ -2,17 +2,32 @@
 
 import React, { useMemo } from "react";
 import {
-  FileText,
-  BookOpen,
-  CirclePlus,
-  Braces,
-  TriangleAlert,
-  RefreshCw,
-  Ghost,
-  X,
-  ArrowRight,
-  Layers,
-} from "lucide-react";
+  Drawer,
+  Box,
+  Typography,
+  IconButton,
+  Chip,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  List,
+  ListItemButton,
+  ListItemText,
+  Badge,
+  Divider,
+} from "@mui/material";
+import {
+  Close as CloseIcon,
+  ExpandMore as ExpandMoreIcon,
+  InsertDriveFile as FileIcon,
+  Class as ClassIcon,
+  Extension as InterfaceIcon,
+  Functions as FunctionsIcon,
+  Warning as WarningIcon,
+  VisibilityOff as DeadCodeIcon,
+  Autorenew as CycleIcon,
+  Layers as PatternsIcon,
+} from "@mui/icons-material";
 import { useAtlasStore } from "../store/atlas-store";
 
 interface AnalysisSidebarProps {
@@ -20,7 +35,7 @@ interface AnalysisSidebarProps {
   onClose: () => void;
 }
 
-/* ── stat card ────────────────────────────────────────────────────────── */
+/* ── Stat Card ─────────────────────────────────────────────────────────── */
 
 function StatCard({
   icon,
@@ -34,21 +49,67 @@ function StatCard({
   color: string;
 }) {
   return (
-    <div style={{ "--stat-color": color } as React.CSSProperties} className="analysis-stat-card">
-      <div className="analysis-stat-icon" style={{ color }}>
+    <Box
+      sx={{
+        display: "flex",
+        alignItems: "center",
+        gap: 1.25,
+        p: "10px 12px",
+        background: "rgba(255,255,255,0.03)",
+        border: "1px solid rgba(255,255,255,0.05)",
+        borderRadius: 2.5,
+        transition: "all 0.2s",
+        "&:hover": {
+          background: "rgba(255,255,255,0.05)",
+          borderColor: "rgba(255,255,255,0.08)",
+        },
+      }}
+    >
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: 32,
+          height: 32,
+          borderRadius: 2,
+          background: `color-mix(in srgb, ${color} 12%, transparent)`,
+          color: color,
+          flexShrink: 0,
+        }}
+      >
         {icon}
-      </div>
-      <div className="analysis-stat-text">
-        <span className="analysis-stat-value">{value}</span>
-        <span className="analysis-stat-label">{label}</span>
-      </div>
-    </div>
+      </Box>
+      <Box sx={{ display: "flex", flexDirection: "column" }}>
+        <Typography
+          sx={{
+            fontSize: 18,
+            fontWeight: 700,
+            color: "rgba(255,255,255,0.9)",
+            lineHeight: 1,
+            letterSpacing: "-0.02em",
+          }}
+        >
+          {value}
+        </Typography>
+        <Typography
+          sx={{
+            fontSize: "0.625rem",
+            fontWeight: 500,
+            color: "rgba(255,255,255,0.35)",
+            mt: 0.25,
+          }}
+        >
+          {label}
+        </Typography>
+      </Box>
+    </Box>
   );
 }
 
-/* ── issue row ────────────────────────────────────────────────────────── */
+/* ── Issue Accordion ──────────────────────────────────────────────────── */
 
-function IssueRow({
+function IssueAccordion({
   icon,
   label,
   count,
@@ -63,53 +124,128 @@ function IssueRow({
   items: { id: string; label: string; sublabel?: string }[];
   onItemClick?: (id: string) => void;
 }) {
-  const [expanded, setExpanded] = React.useState(false);
-
   return (
-    <div className="analysis-issue-row">
-      <button
-        className="analysis-issue-header"
-        onClick={() => count > 0 && setExpanded(!expanded)}
-        style={{ cursor: count > 0 ? "pointer" : "default" }}
-      >
-        <div className="analysis-issue-left">
-          <span style={{ color }}>{icon}</span>
-          <span className="analysis-issue-label">{label}</span>
-        </div>
-        <span
-          className="analysis-issue-badge"
-          style={{
-            background: count > 0 ? color : "rgba(255,255,255,0.05)",
-            color: count > 0 ? "#fff" : "rgba(255,255,255,0.3)",
-          }}
-        >
-          {count}
-        </span>
-      </button>
-      {expanded && items.length > 0 && (
-        <ul className="analysis-issue-list">
-          {items.map((item, idx) => (
-            <li 
-              key={`${item.id}-${idx}`} 
-              className="analysis-issue-item group flex justify-between items-center cursor-pointer hover:bg-white/5 px-2 py-1.5 rounded transition-colors"
-              onClick={() => onItemClick?.(item.id)}
-            >
-              <div className="flex flex-col">
-                <span className="text-sm text-white/80 group-hover:text-white transition-colors">{item.label}</span>
-                {item.sublabel && <span className="text-[10px] text-white/30">{item.sublabel}</span>}
-              </div>
-              <span className="opacity-0 group-hover:opacity-100 transition-opacity text-[10px] text-white/40 uppercase font-bold tracking-tighter">View</span>
-            </li>
-          ))}
-        </ul>
+    <Accordion disabled={count === 0} disableGutters>
+      <AccordionSummary expandIcon={count > 0 ? <ExpandMoreIcon sx={{ fontSize: 18, color: "text.secondary" }} /> : undefined}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, flex: 1 }}>
+          <Box sx={{ color, display: "flex", alignItems: "center" }}>{icon}</Box>
+          <Typography sx={{ fontSize: "0.75rem", fontWeight: 500, color: "rgba(255,255,255,0.7)" }}>
+            {label}
+          </Typography>
+          <Box sx={{ ml: "auto", mr: 1 }}>
+            <Chip
+              label={count}
+              size="small"
+              sx={{
+                height: 20,
+                fontSize: "0.625rem",
+                fontWeight: 700,
+                bgcolor: count > 0 ? color : "rgba(255,255,255,0.05)",
+                color: count > 0 ? "#fff" : "rgba(255,255,255,0.3)",
+                minWidth: 28,
+              }}
+            />
+          </Box>
+        </Box>
+      </AccordionSummary>
+      {items.length > 0 && (
+        <AccordionDetails sx={{ pt: 0, px: 1, pb: 1 }}>
+          <List dense disablePadding>
+            {items.map((item, idx) => (
+              <ListItemButton
+                key={`${item.id}-${idx}`}
+                onClick={() => onItemClick?.(item.id)}
+                sx={{
+                  borderRadius: 1.5,
+                  py: 0.75,
+                  px: 1.5,
+                  "&:hover": { background: "rgba(255,255,255,0.05)" },
+                }}
+              >
+                <ListItemText
+                  primary={
+                    <Typography sx={{ fontSize: "0.8125rem", color: "rgba(255,255,255,0.8)" }}>
+                      {item.label}
+                    </Typography>
+                  }
+                  secondary={
+                    item.sublabel ? (
+                      <Typography sx={{ fontSize: "0.625rem", color: "rgba(255,255,255,0.3)" }}>
+                        {item.sublabel}
+                      </Typography>
+                    ) : undefined
+                  }
+                />
+                <Typography
+                  sx={{
+                    fontSize: "0.625rem",
+                    fontWeight: 700,
+                    color: "rgba(255,255,255,0.4)",
+                    textTransform: "uppercase",
+                    opacity: 0,
+                    transition: "opacity 0.15s",
+                    ".MuiListItemButton-root:hover &": { opacity: 1 },
+                  }}
+                >
+                  View
+                </Typography>
+              </ListItemButton>
+            ))}
+          </List>
+        </AccordionDetails>
       )}
-    </div>
+    </Accordion>
   );
 }
 
-/* ── main sidebar ─────────────────────────────────────────────────────── */
+/* ── Edge Stat ────────────────────────────────────────────────────────── */
 
-export default function AnalysisSidebar({ isOpen, onClose }: AnalysisSidebarProps) {
+function EdgeStat({
+  label,
+  count,
+  color,
+}: {
+  label: string;
+  count: number;
+  color: string;
+}) {
+  return (
+    <Box
+      sx={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        p: "6px 10px",
+        background: "rgba(255,255,255,0.02)",
+        borderRadius: 2,
+      }}
+    >
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+        <Box
+          sx={{
+            width: 8,
+            height: 8,
+            borderRadius: "50%",
+            background: color,
+          }}
+        />
+        <Typography sx={{ fontSize: "0.75rem", fontWeight: 500, color: "rgba(255,255,255,0.6)" }}>
+          {label}
+        </Typography>
+      </Box>
+      <Typography sx={{ fontSize: "0.75rem", fontWeight: 700, color: "rgba(255,255,255,0.7)" }}>
+        {count}
+      </Typography>
+    </Box>
+  );
+}
+
+/* ── Main Sidebar ─────────────────────────────────────────────────────── */
+
+export default function AnalysisSidebar({
+  isOpen,
+  onClose,
+}: AnalysisSidebarProps) {
   const nodes = useAtlasStore((s) => s.nodes);
   const edges = useAtlasStore((s) => s.edges);
   const analysis = useAtlasStore((s) => s.analysisResults);
@@ -122,7 +258,14 @@ export default function AnalysisSidebar({ isOpen, onClose }: AnalysisSidebarProp
     const classes = nodes.filter((n) => n.type === "class").length;
     const interfaces = nodes.filter((n) => n.type === "interface").length;
     const functions = nodes.filter((n) => n.type === "function").length;
-    return { files, classes, interfaces, functions, total: nodes.length, edges: edges.length };
+    return {
+      files,
+      classes,
+      interfaces,
+      functions,
+      total: nodes.length,
+      edges: edges.length,
+    };
   }, [nodes, edges]);
 
   // Resolve node IDs to labels for display
@@ -134,29 +277,29 @@ export default function AnalysisSidebar({ isOpen, onClose }: AnalysisSidebarProp
   // Build god object display items with connection counts
   const godObjectItems = useMemo(() => {
     if (godObjectDetails && godObjectDetails.length > 0) {
-      return godObjectDetails.map(d => ({
+      return godObjectDetails.map((d) => ({
         id: d.nodeId,
         label: d.label,
-        sublabel: `${d.totalDegree} connections (${d.inDegree} in, ${d.outDegree} out)`
+        sublabel: `${d.totalDegree} connections (${d.inDegree} in, ${d.outDegree} out)`,
       }));
     }
-    return (analysis?.godObjects ?? []).map(id => ({
+    return (analysis?.godObjects ?? []).map((id) => ({
       id,
-      label: nodeLabel(id)
+      label: nodeLabel(id),
     }));
   }, [godObjectDetails, analysis, nodes]);
 
   const deadCodeItems = useMemo(() => {
     if (deadCodeDetails && deadCodeDetails.length > 0) {
-      return deadCodeDetails.map(d => ({
+      return deadCodeDetails.map((d) => ({
         id: d.nodeId,
         label: d.label,
-        sublabel: `[${d.nodeType}] ${d.filePath}`
+        sublabel: `[${d.nodeType}] ${d.filePath}`,
       }));
     }
-    return (analysis?.deadCode ?? []).map(id => ({
+    return (analysis?.deadCode ?? []).map((id) => ({
       id,
-      label: nodeLabel(id)
+      label: nodeLabel(id),
     }));
   }, [deadCodeDetails, analysis, nodes]);
 
@@ -164,155 +307,276 @@ export default function AnalysisSidebar({ isOpen, onClose }: AnalysisSidebarProp
   const deadCodeCount = deadCodeItems.length;
   const cycleCount = analysis?.cycles?.length ?? 0;
   const patternCount = analysis?.patterns?.length ?? 0;
-
-  const totalIssues = godObjectCount + deadCodeCount + cycleCount + patternCount;
+  const totalIssues =
+    godObjectCount + deadCodeCount + cycleCount + patternCount;
 
   return (
-    <>
-      {/* Backdrop */}
-      {isOpen && (
-        <div className="analysis-backdrop" onClick={onClose} />
-      )}
-
-      {/* Panel */}
-      <aside
-        className={`analysis-sidebar ${isOpen ? "analysis-sidebar--open" : ""}`}
+    <Drawer
+      anchor="right"
+      open={isOpen}
+      onClose={onClose}
+      slotProps={{
+        backdrop: {
+          sx: {
+            backdropFilter: "blur(2px)",
+            background: "rgba(0,0,0,0.3)",
+          },
+        },
+      }}
+      PaperProps={{
+        sx: { width: 360, maxWidth: "100vw" },
+      }}
+    >
+      {/* ── Header ─────────────────────────────────────── */}
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          px: 2.5,
+          pt: 3,
+          pb: 2,
+          borderBottom: "1px solid rgba(255,255,255,0.1)",
+        }}
       >
-        {/* ── Header ───────────────────────────────────────── */}
-        <div className="analysis-header">
-          <div>
-            <h2 className="analysis-title">Analysis</h2>
-            <p className="analysis-subtitle">Architecture overview</p>
-          </div>
-          <button className="analysis-close" onClick={onClose}>
-            <X width={16} height={16} />
-          </button>
-        </div>
+        <Box>
+          <Typography
+            sx={{
+              fontSize: 15,
+              fontWeight: 700,
+              color: "rgba(255,255,255,0.92)",
+              letterSpacing: "-0.01em",
+            }}
+          >
+            Analysis
+          </Typography>
+          <Typography variant="subtitle2" sx={{ mt: 0.25 }}>
+            Architecture overview
+          </Typography>
+        </Box>
+        <IconButton onClick={onClose} size="small" sx={{ color: "text.secondary" }}>
+          <CloseIcon fontSize="small" />
+        </IconButton>
+      </Box>
 
-        {/* ── Project Summary ──────────────────────────────── */}
-        <div className="analysis-section">
-          <h3 className="analysis-section-title">Project Summary</h3>
-          <div className="analysis-stat-grid">
-            <StatCard icon={<FileText width={16} height={16} />} label="Files" value={stats.files} color="var(--file-bg)" />
-            <StatCard icon={<BookOpen width={16} height={16} />} label="Classes" value={stats.classes} color="var(--class-bg)" />
-            <StatCard icon={<CirclePlus width={16} height={16} />} label="Interfaces" value={stats.interfaces} color="var(--interface-bg)" />
-            <StatCard icon={<Braces width={16} height={16} />} label="Functions" value={stats.functions} color="var(--function-bg)" />
-          </div>
+      {/* ── Project Summary ────────────────────────────── */}
+      <Box sx={{ px: 2.5, py: 2, borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
+        <Typography variant="subtitle2" sx={{ mb: 1.5 }}>
+          Project Summary
+        </Typography>
+        <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1 }}>
+          <StatCard
+            icon={<FileIcon sx={{ fontSize: 16 }} />}
+            label="Files"
+            value={stats.files}
+            color="var(--file-bg)"
+          />
+          <StatCard
+            icon={<ClassIcon sx={{ fontSize: 16 }} />}
+            label="Classes"
+            value={stats.classes}
+            color="var(--class-bg)"
+          />
+          <StatCard
+            icon={<InterfaceIcon sx={{ fontSize: 16 }} />}
+            label="Interfaces"
+            value={stats.interfaces}
+            color="var(--interface-bg)"
+          />
+          <StatCard
+            icon={<FunctionsIcon sx={{ fontSize: 16 }} />}
+            label="Functions"
+            value={stats.functions}
+            color="var(--function-bg)"
+          />
+        </Box>
 
-          {/* Totals bar */}
-          <div className="analysis-totals">
-            <div className="analysis-totals-item">
-              <span className="analysis-totals-value">{stats.total}</span>
-              <span className="analysis-totals-label">Nodes</span>
-            </div>
-            <div className="analysis-totals-divider" />
-            <div className="analysis-totals-item">
-              <span className="analysis-totals-value">{stats.edges}</span>
-              <span className="analysis-totals-label">Edges</span>
-            </div>
-            <div className="analysis-totals-divider" />
-            <div className="analysis-totals-item">
-              <span className="analysis-totals-value">{patternCount}</span>
-              <span className="analysis-totals-label">Patterns</span>
-            </div>
-          </div>
-        </div>
+        {/* Totals bar */}
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            mt: 1.25,
+            p: "10px 0",
+            background: "rgba(255,255,255,0.02)",
+            border: "1px solid rgba(255,255,255,0.04)",
+            borderRadius: 2.5,
+          }}
+        >
+          {[
+            { value: stats.total, label: "Nodes" },
+            { value: stats.edges, label: "Edges" },
+            { value: patternCount, label: "Patterns" },
+          ].map((item, i) => (
+            <React.Fragment key={item.label}>
+              {i > 0 && (
+                <Box
+                  sx={{
+                    width: 1,
+                    height: 24,
+                    background: "rgba(255,255,255,0.06)",
+                  }}
+                />
+              )}
+              <Box
+                sx={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  flex: 1,
+                }}
+              >
+                <Typography
+                  sx={{
+                    fontSize: 14,
+                    fontWeight: 700,
+                    color: "rgba(255,255,255,0.8)",
+                    lineHeight: 1,
+                  }}
+                >
+                  {item.value}
+                </Typography>
+                <Typography
+                  sx={{
+                    fontSize: "0.5625rem",
+                    fontWeight: 500,
+                    color: "rgba(255,255,255,0.25)",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.08em",
+                    mt: 0.375,
+                  }}
+                >
+                  {item.label}
+                </Typography>
+              </Box>
+            </React.Fragment>
+          ))}
+        </Box>
+      </Box>
 
-        {/* ── Issues ───────────────────────────────────────── */}
-        <div className="analysis-section">
-          <div className="analysis-issues-header">
-            <h3 className="analysis-section-title">Issues</h3>
-            {totalIssues > 0 ? (
-              <span className="analysis-issues-total">{totalIssues} found</span>
-            ) : (
-              <span className="analysis-issues-clean">✓ Clean</span>
-            )}
-          </div>
+      {/* ── Issues ─────────────────────────────────────── */}
+      <Box sx={{ px: 2.5, py: 2, borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            mb: 1.5,
+          }}
+        >
+          <Typography variant="subtitle2">Issues</Typography>
+          {totalIssues > 0 ? (
+            <Chip
+              label={`${totalIssues} found`}
+              size="small"
+              sx={{
+                height: 20,
+                fontSize: "0.625rem",
+                fontWeight: 600,
+                color: "var(--god-object)",
+                bgcolor: "rgba(239,68,68,0.1)",
+                border: "1px solid rgba(239,68,68,0.15)",
+              }}
+            />
+          ) : (
+            <Chip
+              label="✓ Clean"
+              size="small"
+              sx={{
+                height: 20,
+                fontSize: "0.625rem",
+                fontWeight: 600,
+                color: "#22c55e",
+                bgcolor: "rgba(34,197,94,0.1)",
+                border: "1px solid rgba(34,197,94,0.15)",
+              }}
+            />
+          )}
+        </Box>
 
-          <div className="analysis-issue-list-container">
-            <IssueRow
-              icon={<TriangleAlert width={14} height={14} />}
-              label="God Objects"
-              count={godObjectCount}
-              color="var(--god-object)"
-              items={godObjectItems}
-              onItemClick={panToNode}
-            />
-            <IssueRow
-              icon={<Ghost width={14} height={14} />}
-              label="Dead Code"
-              count={deadCodeCount}
-              color="var(--dead-code)"
-              items={deadCodeItems}
-              onItemClick={panToNode}
-            />
-            <IssueRow
-              icon={<RefreshCw width={14} height={14} />}
-              label="Circular Deps"
-              count={cycleCount}
-              color="#f59e0b"
-              items={
-                (analysis?.cycles ?? []).map((cycle, i) => ({
-                  id: cycle[0], // Pan to first node in cycle
-                  label: `Cycle ${i + 1}`,
-                  sublabel: cycle.map(nodeLabel).join(" → ")
-                }))
-              }
-              onItemClick={panToNode}
-            />
-            <IssueRow
-              icon={<Layers width={14} height={14} />}
-              label="Patterns"
-              count={patternCount}
-              color="#8b5cf6"
-              items={
-                (analysis?.patterns ?? []).map(p => ({
-                  id: p.nodeId,
-                  label: nodeLabel(p.nodeId),
-                  sublabel: `[${p.pattern.toUpperCase()}] ${p.confidence} confidence`
-                }))
-              }
-              onItemClick={panToNode}
-            />
-          </div>
-        </div>
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
+          <IssueAccordion
+            icon={<WarningIcon sx={{ fontSize: 14 }} />}
+            label="God Objects"
+            count={godObjectCount}
+            color="var(--god-object)"
+            items={godObjectItems}
+            onItemClick={panToNode}
+          />
+          <IssueAccordion
+            icon={<DeadCodeIcon sx={{ fontSize: 14 }} />}
+            label="Dead Code"
+            count={deadCodeCount}
+            color="var(--dead-code)"
+            items={deadCodeItems}
+            onItemClick={panToNode}
+          />
+          <IssueAccordion
+            icon={<CycleIcon sx={{ fontSize: 14 }} />}
+            label="Circular Deps"
+            count={cycleCount}
+            color="#f59e0b"
+            items={(analysis?.cycles ?? []).map((cycle, i) => ({
+              id: cycle[0],
+              label: `Cycle ${i + 1}`,
+              sublabel: cycle.map(nodeLabel).join(" → "),
+            }))}
+            onItemClick={panToNode}
+          />
+          <IssueAccordion
+            icon={<PatternsIcon sx={{ fontSize: 14 }} />}
+            label="Patterns"
+            count={patternCount}
+            color="#8b5cf6"
+            items={(analysis?.patterns ?? []).map((p) => ({
+              id: p.nodeId,
+              label: nodeLabel(p.nodeId),
+              sublabel: `[${p.pattern.toUpperCase()}] ${p.confidence} confidence`,
+            }))}
+            onItemClick={panToNode}
+          />
+        </Box>
+      </Box>
 
-        {/* ── Edge Breakdown ───────────────────────────────── */}
-        <div className="analysis-section">
-          <h3 className="analysis-section-title">Connections</h3>
-          <div className="analysis-edge-breakdown">
-            <EdgeStat
-              label="Imports"
-              count={edges.filter((e) => e.label === "uses" || e.type === "import" || (!e.label && !e.type)).length}
-              color="var(--primary)"
-            />
-            <EdgeStat
-              label="Extends"
-              count={edges.filter((e) => e.label === "extends" || e.type === "extends").length}
-              color="var(--secondary)"
-            />
-            <EdgeStat
-              label="Implements"
-              count={edges.filter((e) => e.label === "implements" || e.type === "implements").length}
-              color="var(--accent)"
-            />
-          </div>
-        </div>
-      </aside>
-    </>
-  );
-}
-
-/* ── edge stat mini component ─────────────────────────────────────────── */
-
-function EdgeStat({ label, count, color }: { label: string; count: number; color: string }) {
-  return (
-    <div className="analysis-edge-row">
-      <div className="analysis-edge-left">
-        <span className="analysis-edge-dot" style={{ background: color }} />
-        <span className="analysis-edge-label">{label}</span>
-      </div>
-      <span className="analysis-edge-count">{count}</span>
-    </div>
+      {/* ── Edge Breakdown ─────────────────────────────── */}
+      <Box sx={{ px: 2.5, py: 2 }}>
+        <Typography variant="subtitle2" sx={{ mb: 1.5 }}>
+          Connections
+        </Typography>
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 0.75 }}>
+          <EdgeStat
+            label="Imports"
+            count={
+              edges.filter(
+                (e) =>
+                  e.label === "uses" ||
+                  e.type === "import" ||
+                  (!e.label && !e.type)
+              ).length
+            }
+            color="var(--primary)"
+          />
+          <EdgeStat
+            label="Extends"
+            count={
+              edges.filter(
+                (e) => e.label === "extends" || e.type === "extends"
+              ).length
+            }
+            color="var(--secondary)"
+          />
+          <EdgeStat
+            label="Implements"
+            count={
+              edges.filter(
+                (e) => e.label === "implements" || e.type === "implements"
+              ).length
+            }
+            color="var(--accent)"
+          />
+        </Box>
+      </Box>
+    </Drawer>
   );
 }

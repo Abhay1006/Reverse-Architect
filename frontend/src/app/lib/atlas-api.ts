@@ -181,6 +181,10 @@ export function toStoreGraph(graph: ReactFlowGraph): {
     id: n.id,
     type: n.type as any,
     position: n.position,
+    ...(n.width ? { width: n.width } : {}),
+    ...(n.height ? { height: n.height } : {}),
+    ...(n.parentId ? { parentId: n.parentId } : {}),
+    ...(n.style ? { style: n.style } : {}),
     data: {
       label: n.data.label,
       filePath: n.data.filePath,

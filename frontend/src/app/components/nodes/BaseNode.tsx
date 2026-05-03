@@ -1,7 +1,8 @@
 "use client";
 
 import React, { memo, ReactNode } from "react";
-import { Handle, Position, NodeProps } from "@xyflow/react";
+import { Handle, Position } from "@xyflow/react";
+import { Box, Typography, Chip } from "@mui/material";
 
 interface BaseNodeProps {
   label: string;
@@ -44,43 +45,81 @@ const BaseNode = ({
   };
 
   return (
-    <div
-      className={`
-        relative min-w-[240px] rounded-2xl border backdrop-blur-3xl shadow-2xl transition-all duration-300
-        ${status === "god" ? "god-object-pulse border-red-500/80" : ""}
-        ${status === "dead" ? "opacity-60 border-dashed border-slate-500/50" : ""}
-        ${status === "entry" ? "shadow-[0_0_30px_rgba(99,102,241,0.3)]" : ""}
-        ${className}
-      `}
-      style={{
+    <Box
+      className={className}
+      sx={{
+        position: "relative",
+        minWidth: 240,
+        borderRadius: 4,
+        border: "1px solid",
+        backdropFilter: "blur(30px)",
+        boxShadow: selected
+          ? `0 0 25px color-mix(in srgb, ${headerColor} 40%, transparent)`
+          : "0 10px 40px rgba(0,0,0,0.6)",
+        transition: "all 0.3s",
+        transform: selected ? "translateY(-2px)" : "none",
         background: getBackgroundStyle(),
         borderColor: getBorderColor(),
-        boxShadow: selected ? `0 0 25px color-mix(in srgb, ${headerColor} 40%, transparent)` : "0 10px 40px rgba(0,0,0,0.6)",
-        transform: selected ? "translateY(-2px)" : "none",
+        ...(status === "god" && {
+          animation: "pulse-red 2s infinite",
+          borderWidth: 2,
+          borderColor: "var(--god-object)",
+        }),
+        ...(status === "dead" && {
+          opacity: 0.6,
+          borderStyle: "dashed",
+          borderColor: "rgba(148,163,184,0.5)",
+        }),
+        ...(status === "entry" && {
+          boxShadow: "0 0 30px rgba(99,102,241,0.3)",
+        }),
       }}
     >
       {/* Node Header */}
-      <div 
-        className="flex items-center gap-3 px-4 py-3 border-b border-white/5"
-        style={{ 
-           background: `color-mix(in srgb, ${status === 'god' ? '#ef4444' : headerColor} 15%, transparent)`,
-           borderTopLeftRadius: '1rem',
-           borderTopRightRadius: '1rem'
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          gap: 1.5,
+          px: 2,
+          py: 1.5,
+          borderBottom: "1px solid rgba(255,255,255,0.05)",
+          background: `color-mix(in srgb, ${status === 'god' ? '#ef4444' : headerColor} 15%, transparent)`,
+          borderTopLeftRadius: 16,
+          borderTopRightRadius: 16,
         }}
       >
-        <div 
-          className="p-1.5 rounded-lg text-white"
-          style={{ backgroundColor: headerColor }}
+        <Box
+          sx={{
+            p: 0.75,
+            borderRadius: 2,
+            color: "white",
+            bgcolor: headerColor,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
         >
           {icon}
-        </div>
-        <h3 className="text-sm font-semibold text-white/90 truncate">{label}</h3>
-      </div>
+        </Box>
+        <Typography
+          sx={{
+            fontSize: "0.875rem",
+            fontWeight: 600,
+            color: "rgba(255,255,255,0.9)",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {label}
+        </Typography>
+      </Box>
 
       {/* Node Content */}
-      <div className="px-4 py-3 min-h-[40px]">
+      <Box sx={{ px: 2, py: 1.5, minHeight: 40 }}>
         {children}
-      </div>
+      </Box>
 
       {/* Connection Handles */}
       <Handle
@@ -93,7 +132,7 @@ const BaseNode = ({
         position={Position.Right}
         className="!w-2.5 !h-2.5 !bg-primary !border-2 !border-[#17171a]"
       />
-    </div>
+    </Box>
   );
 };
 

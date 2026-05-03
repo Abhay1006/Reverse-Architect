@@ -2,7 +2,8 @@
 
 import React, { memo } from "react";
 import { NodeProps } from "@xyflow/react";
-import { BookOpen } from "lucide-react";
+import { Box, Typography, Chip } from "@mui/material";
+import { Class as BookOpenIcon } from "@mui/icons-material";
 import BaseNode from "./BaseNode";
 import { useAtlasStore } from "../../store/atlas-store";
 import { ClassNode as ClassNodeType } from "../../types/nodes";
@@ -22,64 +23,151 @@ const ClassNode = ({ data, selected, id }: NodeProps<ClassNodeType>) => {
       selected={selected}
       status={status}
       headerColor="var(--class-bg)"
-      icon={<BookOpen width={16} height={16} />}
+      icon={<BookOpenIcon sx={{ fontSize: 16 }} />}
     >
-      <div className="space-y-4">
+      <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
         {/* Properties Section */}
         {data.metadata?.properties && (data.metadata.properties as string[]).length > 0 && (
-          <div>
-            <span className="text-[10px] uppercase tracking-wider text-white/40 font-bold">Properties</span>
-            <div className="mt-1 space-y-1">
+          <Box>
+            <Typography
+              sx={{
+                fontSize: "0.625rem",
+                textTransform: "uppercase",
+                letterSpacing: "0.1em",
+                color: "rgba(255,255,255,0.4)",
+                fontWeight: 700,
+              }}
+            >
+              Properties
+            </Typography>
+            <Box sx={{ mt: 0.5, display: "flex", flexDirection: "column", gap: 0.5 }}>
               {(data.metadata.properties as string[]).map((prop, i) => (
-                <div key={i} className="text-xs text-white/70 font-mono py-0.5 border-l border-white/10 pl-2">
+                <Typography
+                  key={i}
+                  sx={{
+                    fontSize: "0.75rem",
+                    color: "rgba(255,255,255,0.7)",
+                    fontFamily: "monospace",
+                    py: 0.25,
+                    borderLeft: "2px solid rgba(255,255,255,0.1)",
+                    pl: 1,
+                  }}
+                >
                   {prop}
-                </div>
+                </Typography>
               ))}
-            </div>
-          </div>
+            </Box>
+          </Box>
         )}
 
         {/* Methods Section */}
         {data.metadata?.methods && (data.metadata.methods as string[]).length > 0 && (
-          <div>
-            <span className="text-[10px] uppercase tracking-wider text-white/40 font-bold">Methods</span>
-            <div className="mt-1 space-y-1">
+          <Box>
+            <Typography
+              sx={{
+                fontSize: "0.625rem",
+                textTransform: "uppercase",
+                letterSpacing: "0.1em",
+                color: "rgba(255,255,255,0.4)",
+                fontWeight: 700,
+              }}
+            >
+              Methods
+            </Typography>
+            <Box sx={{ mt: 0.5, display: "flex", flexDirection: "column", gap: 0.5 }}>
               {(data.metadata.methods as string[]).map((method, i) => (
-                <div key={i} className="text-xs text-white/70 font-mono py-0.5 border-l border-white/10 pl-2">
+                <Typography
+                  key={i}
+                  sx={{
+                    fontSize: "0.75rem",
+                    color: "rgba(255,255,255,0.7)",
+                    fontFamily: "monospace",
+                    py: 0.25,
+                    borderLeft: "2px solid rgba(255,255,255,0.1)",
+                    pl: 1,
+                  }}
+                >
                   {method}()
-                </div>
+                </Typography>
               ))}
-            </div>
-          </div>
+            </Box>
+          </Box>
         )}
 
         {/* Info badges */}
-        <div className="flex flex-wrap gap-2 pt-2 border-t border-white/5">
-          <span className="px-1.5 py-0.5 rounded bg-white/5 text-[10px] text-white/40">
-            {data.metadata?.lineCount || 0} lines
-          </span>
+        <Box
+          sx={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 0.75,
+            pt: 1,
+            borderTop: "1px solid rgba(255,255,255,0.05)",
+          }}
+        >
+          <Chip
+            label={`${data.metadata?.lineCount || 0} lines`}
+            size="small"
+            sx={{
+              height: 20,
+              fontSize: "0.625rem",
+              bgcolor: "rgba(255,255,255,0.05)",
+              color: "rgba(255,255,255,0.4)",
+            }}
+          />
           {data.metadata?.maxComplexity !== undefined && (
-            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${data.metadata.maxComplexity > 15 ? 'bg-red-500/20 text-red-400' : 'bg-green-500/10 text-green-400'}`}>
-              C:{data.metadata.maxComplexity}
-            </span>
+            <Chip
+              label={`C:${data.metadata.maxComplexity}`}
+              size="small"
+              sx={{
+                height: 20,
+                fontSize: "0.625rem",
+                fontWeight: 700,
+                bgcolor: (data.metadata.maxComplexity as number) > 15
+                  ? "rgba(239,68,68,0.2)"
+                  : "rgba(34,197,94,0.1)",
+                color: (data.metadata.maxComplexity as number) > 15
+                  ? "#f87171"
+                  : "#4ade80",
+              }}
+            />
           )}
           {isGodObject && (
-            <span className="px-1.5 py-0.5 rounded bg-red-500/20 text-[10px] text-red-400 font-bold">
-              GOD OBJECT
-            </span>
+            <Chip
+              label="GOD OBJECT"
+              size="small"
+              color="error"
+              sx={{
+                height: 20,
+                fontSize: "0.625rem",
+                fontWeight: 700,
+              }}
+            />
           )}
           {nodePatterns.map((match, i) => {
-            let colorClass = "bg-blue-500/20 text-blue-400";
-            if (match.pattern === "factory") colorClass = "bg-purple-500/20 text-purple-400";
-            if (match.pattern === "singleton") colorClass = "bg-teal-500/20 text-teal-400";
+            const chipColor =
+              match.pattern === "factory"
+                ? { bgcolor: "rgba(168,85,247,0.2)", color: "#c084fc" }
+                : match.pattern === "singleton"
+                  ? { bgcolor: "rgba(20,184,166,0.2)", color: "#2dd4bf" }
+                  : { bgcolor: "rgba(59,130,246,0.2)", color: "#60a5fa" };
+
             return (
-              <span key={i} className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${colorClass}`}>
-                {match.pattern} ({match.confidence})
-              </span>
+              <Chip
+                key={i}
+                label={`${match.pattern} (${match.confidence})`}
+                size="small"
+                sx={{
+                  height: 20,
+                  fontSize: "0.625rem",
+                  fontWeight: 700,
+                  textTransform: "uppercase",
+                  ...chipColor,
+                }}
+              />
             );
           })}
-        </div>
-      </div>
+        </Box>
+      </Box>
     </BaseNode>
   );
 };

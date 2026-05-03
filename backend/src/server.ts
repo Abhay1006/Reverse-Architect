@@ -159,8 +159,8 @@ function analyzeProjectDir(projectPath: string) {
     direction: entryPoints.length > 0 ? 'TB' : 'LR',
     nodeWidth: 350,
     nodeHeight: 300,
-    ranksep: 300,
-    nodesep: 200,
+    ranksep: 400,
+    nodesep: 300,
   });
 
   // Create a quick lookup map for parent resolution
@@ -191,6 +191,9 @@ function analyzeProjectDir(projectPath: string) {
       position: { x: relativeX, y: relativeY },
       sourcePosition: 'right',
       targetPosition: 'left',
+      ...(n.width ? { width: n.width } : {}),
+      ...(n.height ? { height: n.height } : {}),
+      ...(n.parentNode ? { parentId: n.parentNode } : {}),
       data: {
         label: n.label,
         filePath: n.filePath,

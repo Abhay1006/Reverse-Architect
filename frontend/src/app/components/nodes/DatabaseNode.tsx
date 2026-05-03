@@ -2,7 +2,8 @@
 
 import React, { memo } from "react";
 import { NodeProps } from "@xyflow/react";
-import { Database } from "lucide-react";
+import { Box, Typography, Chip } from "@mui/material";
+import { Storage as DatabaseIcon } from "@mui/icons-material";
 import BaseNode from "./BaseNode";
 import { useAtlasStore } from "../../store/atlas-store";
 import { DatabaseNodeType } from "../../types/nodes";
@@ -20,16 +21,26 @@ const DatabaseNode = ({ data, selected, id }: NodeProps<DatabaseNodeType>) => {
       selected={selected}
       status={status}
       headerColor="#10b981" // Emerald green
-      icon={<Database width={16} height={16} />}
+      icon={<DatabaseIcon sx={{ fontSize: 16 }} />}
     >
-      <div className="space-y-4">
+      <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
         {/* Placeholder for future schema table columns rendering */}
-        <div className="flex flex-wrap gap-2 pt-2">
-          <span className="px-2 py-1 rounded bg-white/5 text-[10px] text-[#10b981] font-bold uppercase tracking-wider">
-            Table Model
-          </span>
-        </div>
-      </div>
+        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, pt: 1 }}>
+          <Chip
+            label="Table Model"
+            size="small"
+            sx={{
+              height: 20,
+              fontSize: "0.625rem",
+              fontWeight: 700,
+              textTransform: "uppercase",
+              letterSpacing: "0.05em",
+              bgcolor: "rgba(255,255,255,0.05)",
+              color: "#10b981",
+            }}
+          />
+        </Box>
+      </Box>
     </BaseNode>
   );
 };

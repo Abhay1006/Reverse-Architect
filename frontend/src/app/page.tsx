@@ -1,7 +1,23 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Menu } from "lucide-react";
+import React, { useState } from "react";
+import {
+  AppBar,
+  Toolbar,
+  Box,
+  Button,
+  IconButton,
+  Typography,
+  Tooltip,
+} from "@mui/material";
+import {
+  Menu as MenuIcon,
+  FileDownload as ExportIcon,
+  Refresh as ReAnalyzeIcon,
+  Analytics as AnalysisIcon,
+  Architecture as AtlasIcon,
+} from "@mui/icons-material";
+import { toPng } from "html-to-image";
 import Canvas from "./components/Canvas";
 import Upload from "./components/Upload";
 import AnalysisSidebar from "./components/AnalysisSidebar";
@@ -9,178 +25,295 @@ import SearchBar from "./components/SearchBar";
 import FolderTree from "./components/FolderTree";
 import Breadcrumb from "./components/Breadcrumb";
 import { useAtlasStore } from "./store/atlas-store";
-import { toPng } from "html-to-image";
 
 export default function Home() {
-  const setGraph = useAtlasStore((state) => state.setGraph);
   const nodes = useAtlasStore((state) => state.nodes);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isFolderTreeOpen, setIsFolderTreeOpen] = useState(true);
 
-  // Initialize with Mock Data for demonstration
-  useEffect(() => {
-    const mockNodes = [
-      {
-        id: "1",
-        type: "class",
-        position: { x: 100, y: 100 },
-        data: {
-          label: "ProjectParser",
-          filePath: "src/parser/project-parser.ts",
-          metadata: {
-            properties: ["project: Project", "options: ParserOptions"],
-            methods: ["parseProject", "getSourceFiles"],
-            lineCount: 250,
-          },
-        },
-      },
-      {
-        id: "2",
-        type: "class",
-        position: { x: 500, y: 150 },
-        data: {
-          label: "ClassExtractor",
-          filePath: "src/parser/extractors/class-extractor.ts",
-          metadata: {
-            properties: ["checker: TypeChecker"],
-            methods: ["extract", "getProperties", "getMethods"],
-            lineCount: 450,
-          },
-        },
-      },
-      {
-        id: "3",
-        type: "interface",
-        position: { x: 300, y: 400 },
-        data: {
-          label: "ArchNode",
-          filePath: "shared/types.ts",
-          metadata: {
-            properties: ["id: string", "label: string", "type: EntityKind"],
-            methods: [],
-            lineCount: 50,
-          },
-        },
-      },
-      {
-        id: "4",
-        type: "function",
-        position: { x: 600, y: 450 },
-        data: {
-          label: "computeLayout",
-          filePath: "src/graph/layout.ts",
-          metadata: {
-            lineCount: 120,
-          },
-        },
-      },
-    ];
-
-    const mockEdges = [
-      { id: "e1-2", source: "1", target: "2", animated: true, label: "uses" },
-      { id: "e2-3", source: "2", target: "3", label: "implements" },
-      { id: "e1-4", source: "1", target: "4", animated: true, label: "calls" },
-    ];
-
-    const mockAnalysis = {
-      godObjects: ["2"], // ClassExtractor is a "god object" for demo
-      deadCode: ["4"],   // computeLayout is "dead code" for demo
-      cycles: [],
-      patterns: [],
-    };
-
-    setGraph(mockNodes as any, mockEdges as any, mockAnalysis as any);
-  }, [setGraph]);
-
   const handleExportPng = () => {
-    const el = document.querySelector('.react-flow') as HTMLElement;
+    const el = document.querySelector(".react-flow") as HTMLElement;
     if (!el) return;
-    
-    toPng(el, { 
-      backgroundColor: '#0a0a0c',
+
+    toPng(el, {
+      backgroundColor: "#0a0a0c",
       pixelRatio: 2, // High resolution output
     })
-    .then((dataUrl) => {
-      const a = document.createElement('a');
-      a.setAttribute('download', `atlas-architecture-${Date.now()}.png`);
-      a.setAttribute('href', dataUrl);
-      a.click();
-    })
-    .catch((err) => {
-      console.error("Failed to export image", err);
-    });
+      .then((dataUrl) => {
+        const a = document.createElement("a");
+        a.setAttribute("download", `atlas-architecture-${Date.now()}.png`);
+        a.setAttribute("href", dataUrl);
+        a.click();
+      })
+      .catch((err) => {
+        console.error("Failed to export image", err);
+      });
   };
 
   return (
-    <main className="app-layout">
+    <Box component="main" sx={{ display: "flex", width: "100vw", height: "100vh", overflow: "hidden", bgcolor: "background.default" }}>
       {/* ── Folder Tree Sidebar ── */}
       {isFolderTreeOpen && nodes.length > 0 && (
-        <aside className="app-sidebar">
+        <Box
+          component="aside"
+          sx={{
+            width: 260,
+            minWidth: 260,
+            height: "100vh",
+            borderRight: "1px solid rgba(255,255,255,0.1)",
+            background: "rgba(12,12,15,0.95)",
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+            flexShrink: 0,
+          }}
+        >
           <FolderTree />
-        </aside>
+        </Box>
       )}
 
       {/* ── Main Content ── */}
-      <div className="app-main">
+      <Box sx={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
         {/* Header Bar */}
-        <header className="app-header">
-          <div className="app-header-left">
-            {/* Sidebar toggle */}
-            <button
-              className="app-sidebar-toggle"
-              onClick={() => setIsFolderTreeOpen(!isFolderTreeOpen)}
-              title={isFolderTreeOpen ? "Hide sidebar" : "Show sidebar"}
-            >
-              <Menu className="w-[18px] h-[18px]" />
-            </button>
+        <AppBar
+          position="static"
+          elevation={0}
+          sx={{
+            background: "rgba(12,12,15,0.8)",
+            backdropFilter: "blur(12px)",
+            borderBottom: "1px solid rgba(255,255,255,0.1)",
+          }}
+        >
+          <Toolbar
+            variant="dense"
+            sx={{
+              gap: 1.5,
+              px: 2.5,
+              minHeight: 48,
+            }}
+          >
+            {/* Left side */}
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+              <Tooltip title={isFolderTreeOpen ? "Hide sidebar" : "Show sidebar"}>
+                <IconButton
+                  onClick={() => setIsFolderTreeOpen(!isFolderTreeOpen)}
+                  size="small"
+                  sx={{
+                    color: "text.secondary",
+                    bgcolor: "rgba(255,255,255,0.04)",
+                    borderRadius: 2,
+                    "&:hover": {
+                      bgcolor: "rgba(255,255,255,0.08)",
+                      color: "text.primary",
+                    },
+                  }}
+                >
+                  <MenuIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
 
-            <h1 className="app-logo">
-              ATLAS<span className="app-logo-accent">.TS</span>
-            </h1>
-          </div>
+              <Typography
+                variant="h6"
+                sx={{
+                  fontSize: 18,
+                  fontWeight: 900,
+                  letterSpacing: "-0.05em",
+                  color: "rgba(255,255,255,0.9)",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                ATLAS
+                <Box
+                  component="span"
+                  sx={{
+                    color: "primary.main",
+                    fontStyle: "italic",
+                  }}
+                >
+                  .TS
+                </Box>
+              </Typography>
+            </Box>
 
-          <div className="app-header-right">
-            <SearchBar />
-            <button 
-              onClick={handleExportPng}
-              className="app-btn app-btn--ghost"
-            >
-              EXPORT PNG
-            </button>
-            <button 
-              onClick={() => setIsUploadOpen(true)}
-              className="app-btn app-btn--primary"
-            >
-              RE-ANALYZE
-            </button>
-            <button 
-              onClick={() => setIsSidebarOpen(true)}
-              className="app-btn app-btn--primary"
-            >
-              ANALYSIS
-            </button>
-          </div>
-        </header>
+            {/* Spacer */}
+            <Box sx={{ flex: 1 }} />
+
+            {/* Right side */}
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <SearchBar />
+
+              <Button
+                onClick={handleExportPng}
+                size="small"
+                variant="outlined"
+                startIcon={<ExportIcon sx={{ fontSize: 14 }} />}
+                sx={{
+                  color: "text.secondary",
+                  borderColor: "rgba(255,255,255,0.1)",
+                  fontSize: "0.6875rem",
+                  "&:hover": {
+                    borderColor: "rgba(255,255,255,0.2)",
+                    color: "text.primary",
+                    background: "rgba(255,255,255,0.04)",
+                  },
+                }}
+              >
+                Export
+              </Button>
+
+              <Button
+                onClick={() => setIsUploadOpen(true)}
+                size="small"
+                variant="contained"
+                startIcon={<ReAnalyzeIcon sx={{ fontSize: 14 }} />}
+                sx={{
+                  background: "rgba(99,102,241,0.15)",
+                  border: "1px solid rgba(99,102,241,0.3)",
+                  color: "rgba(255,255,255,0.9)",
+                  fontSize: "0.6875rem",
+                  boxShadow: "0 0 12px rgba(99,102,241,0.1)",
+                  "&:hover": {
+                    background: "rgba(99,102,241,0.25)",
+                    borderColor: "rgba(99,102,241,0.5)",
+                    color: "white",
+                  },
+                }}
+              >
+                Analyze
+              </Button>
+
+              <Button
+                onClick={() => setIsSidebarOpen(true)}
+                size="small"
+                variant="contained"
+                startIcon={<AnalysisIcon sx={{ fontSize: 14 }} />}
+                sx={{
+                  background: "rgba(99,102,241,0.15)",
+                  border: "1px solid rgba(99,102,241,0.3)",
+                  color: "rgba(255,255,255,0.9)",
+                  fontSize: "0.6875rem",
+                  boxShadow: "0 0 12px rgba(99,102,241,0.1)",
+                  "&:hover": {
+                    background: "rgba(99,102,241,0.25)",
+                    borderColor: "rgba(99,102,241,0.5)",
+                    color: "white",
+                  },
+                }}
+              >
+                Analysis
+              </Button>
+            </Box>
+          </Toolbar>
+        </AppBar>
 
         {/* Breadcrumb */}
         {nodes.length > 0 && <Breadcrumb />}
 
-        {/* Canvas */}
-        <div className="app-canvas">
-          <Canvas />
-        </div>
-      </div>
+        {/* Canvas / Empty State */}
+        <Box sx={{ flex: 1, position: "relative", overflow: "hidden" }}>
+          {nodes.length === 0 ? (
+            /* ── Empty State ── */
+            <Box
+              sx={{
+                position: "absolute",
+                inset: 0,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 3,
+              }}
+            >
+              <Box
+                sx={{
+                  p: 3,
+                  borderRadius: "50%",
+                  background:
+                    "linear-gradient(135deg, rgba(99,102,241,0.15), rgba(168,85,247,0.1))",
+                  border: "1px solid rgba(99,102,241,0.2)",
+                  animation: "pulse-glow 3s ease-in-out infinite",
+                  "@keyframes pulse-glow": {
+                    "0%, 100%": {
+                      boxShadow: "0 0 30px rgba(99,102,241,0.15)",
+                    },
+                    "50%": {
+                      boxShadow: "0 0 50px rgba(99,102,241,0.25)",
+                    },
+                  },
+                }}
+              >
+                <AtlasIcon
+                  sx={{
+                    fontSize: 48,
+                    color: "primary.main",
+                    opacity: 0.7,
+                  }}
+                />
+              </Box>
 
-      <Upload 
-        isOpen={isUploadOpen} 
-        onClose={() => setIsUploadOpen(false)} 
-      />
+              <Box sx={{ textAlign: "center", maxWidth: 400 }}>
+                <Typography
+                  variant="h5"
+                  sx={{
+                    fontWeight: 700,
+                    letterSpacing: "-0.02em",
+                    color: "rgba(255,255,255,0.7)",
+                    mb: 1,
+                  }}
+                >
+                  Visualize Your Architecture
+                </Typography>
+                <Typography
+                  sx={{
+                    color: "rgba(255,255,255,0.3)",
+                    fontSize: "0.875rem",
+                    lineHeight: 1.6,
+                  }}
+                >
+                  Upload a .zip file or provide a GitHub URL to reverse-engineer
+                  and explore your project's TypeScript architecture.
+                </Typography>
+              </Box>
+
+              <Button
+                variant="contained"
+                onClick={() => setIsUploadOpen(true)}
+                startIcon={<ReAnalyzeIcon />}
+                sx={{
+                  mt: 1,
+                  px: 4,
+                  py: 1.5,
+                  borderRadius: 3,
+                  fontSize: "0.875rem",
+                  fontWeight: 600,
+                  background:
+                    "linear-gradient(135deg, #4f46e5, #7c3aed)",
+                  boxShadow:
+                    "0 8px 32px rgba(99,102,241,0.3)",
+                  "&:hover": {
+                    background:
+                      "linear-gradient(135deg, #4338ca, #6d28d9)",
+                    boxShadow:
+                      "0 12px 40px rgba(99,102,241,0.4)",
+                  },
+                }}
+              >
+                Analyze a Project
+              </Button>
+            </Box>
+          ) : (
+            <Canvas />
+          )}
+        </Box>
+      </Box>
+
+      <Upload isOpen={isUploadOpen} onClose={() => setIsUploadOpen(false)} />
 
       <AnalysisSidebar
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
       />
-    </main>
+    </Box>
   );
 }

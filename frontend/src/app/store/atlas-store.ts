@@ -141,14 +141,38 @@ export function buildFolderTree(nodes: AtlasNode[]): FolderTreeNode {
  */
 export function getVisibleNodes(allNodes: AtlasNode[], focusPath: string): AtlasNode[] {
   if (!focusPath) {
-    // Root level: show only "folder summary" nodes — we'll create virtual folder nodes
-    return allNodes.filter(n => n.type !== 'group');
+    // Root level: show everything
+    return allNodes;
   }
+  
+  // When a specific folder is focused, we want to show:
+  // 1. Files inside that folder
+  // 2. Groups that contain those files
+  // 3. Entities inside those files
+  
+  const cleanFocusPath = focusPath.replace(/^\/+/, '');
+  const visibleFilePaths = new Set<string>();
+  const visibleGroupIds = new Set<string>();
+  
+  // First pass: identify visible files and their groups
+  allNodes.forEach(n => {
+    if (n.type !== 'group' && n.data?.filePath) {
+      const fp = n.data.filePath as string;
+      const cleanFp = fp.replace(/^\/+/, '');
+      if (cleanFp.startsWith(cleanFocusPath)) {
+        visibleFilePaths.add(fp);
+        if (n.parentId) visibleGroupIds.add(n.parentId);
+      }
+    }
+  });
+  
+  // Second pass: filter nodes
   return allNodes.filter(n => {
-    if (n.type === 'group') return false;
-    const fp = (n.data?.filePath as string) || '';
-    const cleanFp = fp.replace(/^\/+/, '');
-    return cleanFp.startsWith(focusPath);
+    if (n.type === 'group') {
+      return visibleGroupIds.has(n.id);
+    }
+    const fp = n.data?.filePath as string;
+    return fp && visibleFilePaths.has(fp);
   });
 }
 

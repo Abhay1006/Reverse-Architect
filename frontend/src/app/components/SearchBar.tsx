@@ -1,16 +1,26 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
-import { Search } from "lucide-react";
+import {
+  Dialog,
+  Box,
+  Typography,
+  InputBase,
+  List,
+  ListItemButton,
+  Chip,
+  Button,
+} from "@mui/material";
+import { Search as SearchIcon } from "@mui/icons-material";
 import { useAtlasStore } from "../store/atlas-store";
 
 export default function SearchBar() {
-  const { searchQuery, setSearchQuery, nodes, setSelectedNode, panToNode } = useAtlasStore();
+  const { searchQuery, setSearchQuery, nodes, setSelectedNode, panToNode } =
+    useAtlasStore();
   const [localQuery, setLocalQuery] = useState(searchQuery);
   const [showResults, setShowResults] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const results = useMemo(() => {
@@ -21,14 +31,14 @@ export default function SearchBar() {
         const label = ((n.data?.label as string) || "").toLowerCase();
         const id = n.id.toLowerCase();
         const path = ((n.data?.filePath as string) || "").toLowerCase();
-        
+
         return label.includes(q) || id.includes(q) || path.includes(q);
       })
       .sort((a, b) => {
         // Priority: exact label match > label starts with > path contains
         const aLabel = ((a.data?.label as string) || "").toLowerCase();
         const bLabel = ((b.data?.label as string) || "").toLowerCase();
-        
+
         if (aLabel === q) return -1;
         if (bLabel === q) return 1;
         if (aLabel.startsWith(q) && !bLabel.startsWith(q)) return -1;
@@ -41,7 +51,7 @@ export default function SearchBar() {
   // Toggle on Cmd+K
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
-      if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
+      if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
         setIsOpen((open) => {
           if (!open) {
@@ -53,12 +63,12 @@ export default function SearchBar() {
           return !open;
         });
       }
-      if (e.key === 'Escape') {
+      if (e.key === "Escape") {
         setIsOpen(false);
       }
     };
-    document.addEventListener('keydown', down);
-    return () => document.removeEventListener('keydown', down);
+    document.addEventListener("keydown", down);
+    return () => document.removeEventListener("keydown", down);
   }, [setSearchQuery]);
 
   // Handle keyboard navigation for results
@@ -66,13 +76,13 @@ export default function SearchBar() {
     if (!isOpen || !showResults) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowDown') {
+      if (e.key === "ArrowDown") {
         e.preventDefault();
-        setSelectedIndex(prev => Math.min(prev + 1, results.length - 1));
-      } else if (e.key === 'ArrowUp') {
+        setSelectedIndex((prev) => Math.min(prev + 1, results.length - 1));
+      } else if (e.key === "ArrowUp") {
         e.preventDefault();
-        setSelectedIndex(prev => Math.max(prev - 1, 0));
-      } else if (e.key === 'Enter') {
+        setSelectedIndex((prev) => Math.max(prev - 1, 0));
+      } else if (e.key === "Enter") {
         e.preventDefault();
         if (results[selectedIndex]) {
           handleSelectNode(results[selectedIndex].id);
@@ -80,14 +90,14 @@ export default function SearchBar() {
       }
     };
 
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
   }, [isOpen, showResults, selectedIndex, results]);
 
   // Focus input automatically when opened
   useEffect(() => {
     if (isOpen && inputRef.current) {
-      inputRef.current.focus();
+      setTimeout(() => inputRef.current?.focus(), 100);
     }
   }, [isOpen]);
 
@@ -106,113 +116,271 @@ export default function SearchBar() {
     setSearchQuery("");
   };
 
+  const typeColorMap: Record<string, string> = {
+    class: "var(--class-bg)",
+    interface: "var(--interface-bg)",
+    function: "var(--function-bg)",
+    file: "var(--file-bg)",
+    database: "#10b981",
+  };
+
   return (
     <>
       {/* Search Trigger Button */}
-      <button
+      <Button
         onClick={() => setIsOpen(true)}
-        className="app-btn app-btn--ghost group"
+        size="small"
+        variant="outlined"
+        startIcon={<SearchIcon sx={{ fontSize: 14, opacity: 0.5 }} />}
+        sx={{
+          color: "text.secondary",
+          borderColor: "rgba(255,255,255,0.1)",
+          fontSize: "0.6875rem",
+          "&:hover": {
+            borderColor: "rgba(255,255,255,0.2)",
+            color: "text.primary",
+            background: "rgba(255,255,255,0.04)",
+          },
+        }}
       >
-        <div className="flex items-center gap-2">
-          <Search className="w-3.5 h-3.5 opacity-50 group-hover:opacity-100 transition-opacity" />
-          <span className="opacity-70 group-hover:opacity-100 transition-opacity">Search</span>
-        </div>
-        <div className="flex items-center gap-1 ml-1 opacity-30 group-hover:opacity-60 transition-opacity">
-          <span className="px-1 py-0.5 rounded bg-white/10 text-[9px] font-bold">⌘K</span>
-        </div>
-      </button>
+        Search
+        <Chip
+          label="⌘K"
+          size="small"
+          sx={{
+            ml: 0.5,
+            height: 18,
+            fontSize: "0.5625rem",
+            fontWeight: 700,
+            bgcolor: "rgba(255,255,255,0.08)",
+            color: "text.secondary",
+          }}
+        />
+      </Button>
 
       {/* Spotlight Modal */}
-      {isOpen && (
-        <div className="spotlight-backdrop" onClick={() => setIsOpen(false)}>
-          <div
-            ref={containerRef}
-            className="spotlight-container"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="spotlight-input-area">
-              <Search className="h-5 w-5 text-white/40 mr-5" />
-              <input
-                ref={inputRef}
-                type="text"
-                value={localQuery}
-                onChange={handleChange}
-                className="spotlight-input"
-                placeholder="Spotlight Search"
-                autoComplete="off"
-                spellCheck="false"
-              />
-            </div>
+      <Dialog
+        open={isOpen}
+        onClose={() => setIsOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        slotProps={{
+          backdrop: {
+            sx: {
+              backdropFilter: "blur(8px)",
+              background: "rgba(0,0,0,0.4)",
+            },
+          },
+        }}
+        PaperProps={{
+          sx: {
+            mt: "15vh",
+            alignSelf: "flex-start",
+            background: "rgba(30,30,35,0.8)",
+            backdropFilter: "blur(50px) saturate(210%)",
+            border: "1px solid rgba(255,255,255,0.18)",
+            borderRadius: 4.5,
+            boxShadow:
+              "0 40px 120px rgba(0,0,0,0.8), 0 0 0 1px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(255,255,255,0.05)",
+            overflow: "hidden",
+          },
+        }}
+      >
+        {/* Input Area */}
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            px: 3.5,
+            py: 2.75,
+            borderBottom: "1px solid rgba(255,255,255,0.1)",
+          }}
+        >
+          <SearchIcon sx={{ fontSize: 20, color: "rgba(255,255,255,0.4)", mr: 2 }} />
+          <InputBase
+            inputRef={inputRef}
+            value={localQuery}
+            onChange={handleChange}
+            placeholder="Spotlight Search"
+            autoComplete="off"
+            spellCheck="false"
+            fullWidth
+            sx={{
+              fontSize: 28,
+              fontWeight: 300,
+              letterSpacing: "-0.02em",
+              color: "white",
+              "& input::placeholder": {
+                color: "rgba(255,255,255,0.25)",
+                opacity: 1,
+              },
+            }}
+          />
+        </Box>
 
-            {/* Results */}
-            {showResults && (
-              <div className="spotlight-results">
-                <div className="spotlight-section-title">Architecture Nodes</div>
-                {results.length === 0 ? (
-                  <div className="py-12 text-center">
-                    <p className="text-white/40 text-sm">No results for &quot;{localQuery}&quot;</p>
-                  </div>
-                ) : (
-                  results.map((n, index) => {
-                    const label = (n.data?.label as string) || n.id;
-                    const isSelected = index === selectedIndex;
-                    const typeColor =
-                      n.type === 'class' ? 'var(--class-bg)' :
-                        n.type === 'interface' ? 'var(--interface-bg)' :
-                          n.type === 'function' ? 'var(--function-bg)' :
-                            'var(--file-bg)';
+        {/* Results */}
+        {showResults && (
+          <Box sx={{ maxHeight: 420, overflowY: "auto", p: 1 }}>
+            <Typography
+              sx={{
+                px: 1.5,
+                pt: 1,
+                pb: 0.5,
+                fontSize: "0.6875rem",
+                fontWeight: 600,
+                color: "rgba(255,255,255,0.3)",
+                textTransform: "uppercase",
+                letterSpacing: "0.05em",
+              }}
+            >
+              Architecture Nodes
+            </Typography>
+            {results.length === 0 ? (
+              <Box sx={{ py: 6, textAlign: "center" }}>
+                <Typography sx={{ color: "rgba(255,255,255,0.4)", fontSize: "0.875rem" }}>
+                  No results for &quot;{localQuery}&quot;
+                </Typography>
+              </Box>
+            ) : (
+              <List disablePadding>
+                {results.map((n, index) => {
+                  const label = (n.data?.label as string) || n.id;
+                  const isSelected = index === selectedIndex;
+                  const typeColor = typeColorMap[n.type || "file"] || "var(--file-bg)";
 
-                    return (
-                      <button
-                        key={n.id}
-                        onClick={() => handleSelectNode(n.id)}
-                        onMouseEnter={() => setSelectedIndex(index)}
-                        className={`spotlight-result-item ${isSelected ? 'spotlight-result-item--selected' : ''}`}
+                  return (
+                    <ListItemButton
+                      key={n.id}
+                      onClick={() => handleSelectNode(n.id)}
+                      onMouseEnter={() => setSelectedIndex(index)}
+                      selected={isSelected}
+                      sx={{
+                        borderRadius: 2.5,
+                        py: 1,
+                        px: 1.5,
+                        gap: 1.5,
+                        "&.Mui-selected": {
+                          background: "var(--primary)",
+                          boxShadow: "0 4px 12px rgba(99,102,241,0.3)",
+                          "&:hover": {
+                            background: "var(--primary)",
+                          },
+                        },
+                      }}
+                    >
+                      {/* Type indicator */}
+                      <Box
+                        sx={{
+                          width: 36,
+                          height: 36,
+                          borderRadius: 2,
+                          background: isSelected
+                            ? "rgba(255,255,255,0.2)"
+                            : "rgba(255,255,255,0.08)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          flexShrink: 0,
+                        }}
                       >
-                        <div className="spotlight-result-icon">
-                          <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: typeColor }}></div>
-                        </div>
+                        <Box
+                          sx={{
+                            width: 12,
+                            height: 12,
+                            borderRadius: 0.5,
+                            background: typeColor,
+                          }}
+                        />
+                      </Box>
 
-                        <div className="spotlight-result-content">
-                          <span className="spotlight-result-label">{label}</span>
-                          <span className="spotlight-result-sublabel">{n.type?.toUpperCase()} Node</span>
-                        </div>
+                      {/* Content */}
+                      <Box sx={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+                        <Typography
+                          sx={{
+                            fontSize: 15,
+                            fontWeight: 500,
+                            color: isSelected ? "white" : "rgba(255,255,255,0.9)",
+                          }}
+                        >
+                          {label}
+                        </Typography>
+                        <Typography
+                          sx={{
+                            fontSize: "0.6875rem",
+                            color: isSelected
+                              ? "rgba(255,255,255,0.7)"
+                              : "rgba(255,255,255,0.35)",
+                          }}
+                        >
+                          {n.type?.toUpperCase()} Node
+                        </Typography>
+                      </Box>
 
-                        {isSelected && (
-                          <div className="ml-auto text-white/50 text-[10px] font-bold pr-2">
-                            ↵
-                          </div>
-                        )}
-                      </button>
-                    );
-                  })
-                )}
-              </div>
+                      {isSelected && (
+                        <Typography
+                          sx={{
+                            ml: "auto",
+                            color: "rgba(255,255,255,0.5)",
+                            fontSize: "0.625rem",
+                            fontWeight: 700,
+                            pr: 1,
+                          }}
+                        >
+                          ↵
+                        </Typography>
+                      )}
+                    </ListItemButton>
+                  );
+                })}
+              </List>
             )}
+          </Box>
+        )}
 
-            {/* Footer */}
-            {!showResults && (
-              <div className="spotlight-footer">
-                <div className="flex gap-4">
-                  <div className="flex items-center gap-1">
-                    <span className="spotlight-key">↑↓</span>
-                    <span>Navigate</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <span className="spotlight-key">↵</span>
-                    <span>Open</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <span className="spotlight-key">ESC</span>
-                    <span>Close</span>
-                  </div>
-                </div>
-                <div className="italic opacity-50">Atlas Search</div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+        {/* Footer */}
+        {!showResults && (
+          <Box
+            sx={{
+              px: 2.5,
+              py: 1.25,
+              background: "rgba(255,255,255,0.02)",
+              borderTop: "1px solid rgba(255,255,255,0.05)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              fontSize: "0.6875rem",
+              color: "rgba(255,255,255,0.2)",
+            }}
+          >
+            <Box sx={{ display: "flex", gap: 2 }}>
+              {[
+                { key: "↑↓", label: "Navigate" },
+                { key: "↵", label: "Open" },
+                { key: "ESC", label: "Close" },
+              ].map(({ key, label }) => (
+                <Box key={key} sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                  <Chip
+                    label={key}
+                    size="small"
+                    sx={{
+                      height: 18,
+                      fontSize: "0.5625rem",
+                      fontWeight: 700,
+                      bgcolor: "rgba(255,255,255,0.05)",
+                      border: "1px solid rgba(255,255,255,0.1)",
+                      color: "inherit",
+                    }}
+                  />
+                  <Typography sx={{ fontSize: "inherit" }}>{label}</Typography>
+                </Box>
+              ))}
+            </Box>
+            <Typography sx={{ fontStyle: "italic", opacity: 0.5 }}>
+              Atlas Search
+            </Typography>
+          </Box>
+        )}
+      </Dialog>
     </>
   );
 }
