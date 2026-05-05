@@ -429,7 +429,7 @@ export default function AnalysisSidebar({
             </IconButton>
           </Box>
           
-          <Box sx={{ display: "flex", gap: 2 }}>
+          <Box sx={{ display: "flex", gap: 2, mb: 3 }}>
             <Box>
               <Typography variant="caption" sx={{ color: "rgba(255,255,255,0.4)", display: "block" }}>Incoming</Typography>
               <Typography sx={{ fontWeight: 700, color: "var(--accent)" }}>{neighborCounts.in}</Typography>
@@ -442,6 +442,62 @@ export default function AnalysisSidebar({
               <Box>
                 <Typography variant="caption" sx={{ color: "rgba(255,255,255,0.4)", display: "block" }}>Lines</Typography>
                 <Typography sx={{ fontWeight: 700 }}>{(selectedNode.data?.metadata as any).lineCount}</Typography>
+              </Box>
+            )}
+          </Box>
+
+          {/* Find All References (Incoming Edges) */}
+          <Box>
+            <Typography 
+              variant="caption" 
+              sx={{ 
+                color: "rgba(255,255,255,0.4)", 
+                fontWeight: 700, 
+                textTransform: "uppercase", 
+                letterSpacing: "0.05em",
+                display: "block",
+                mb: 1
+              }}
+            >
+              References ({neighborCounts.in})
+            </Typography>
+            {neighborCounts.in === 0 ? (
+              <Typography sx={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.2)", fontStyle: "italic" }}>
+                No incoming references found
+              </Typography>
+            ) : (
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
+                {edges
+                  .filter(e => e.target === selectedNodeId)
+                  .map((e, idx) => {
+                    const sourceNode = nodes.find(n => n.id === e.source);
+                    if (!sourceNode) return null;
+                    return (
+                      <ListItemButton
+                        key={`${e.id}-${idx}`}
+                        onClick={() => panToNode(sourceNode.id)}
+                        sx={{
+                          py: 0.5,
+                          px: 1,
+                          borderRadius: 1,
+                          bgcolor: "rgba(255,255,255,0.03)",
+                          "&:hover": { bgcolor: "rgba(255,255,255,0.08)" }
+                        }}
+                      >
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1, width: "100%" }}>
+                          <Typography sx={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.8)", flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                            {sourceNode.data?.label}
+                          </Typography>
+                          <Chip 
+                            label={e.type || e.label || "ref"} 
+                            size="small" 
+                            sx={{ height: 16, fontSize: "0.5625rem", bgcolor: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.4)" }} 
+                          />
+                        </Box>
+                      </ListItemButton>
+                    );
+                  })
+                }
               </Box>
             )}
           </Box>
@@ -577,15 +633,20 @@ export default function AnalysisSidebar({
                     <Typography sx={{ fontSize: "0.8125rem", fontWeight: 600, color: "rgba(255,255,255,0.9)", whiteSpace: "nowrap", textOverflow: "ellipsis", overflow: "hidden" }}>
                       {file.label}
                     </Typography>
-                    <Typography sx={{ fontSize: "0.625rem", color: "rgba(255,255,255,0.4)", whiteSpace: "nowrap", textOverflow: "ellipsis", overflow: "hidden" }}>
+                    <Typography sx={{ fontSize: "0.625rem", color: "rgba(255,255,255,0.4)", whiteSpace: "nowrap", textOverflow: "ellipsis", overflow: "hidden", mb: 0.5 }}>
                       {file.path}
                     </Typography>
+                    <Typography sx={{ fontSize: "0.625rem", color: "#818cf8", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                      {file.score > 15 ? "🔥 Architectural Hub" : file.score > 10 ? "⚡ Core Logic" : "📦 Module Container"}
+                    </Typography>
                   </Box>
-                  <Chip
-                    label={`Score: ${file.score}`}
-                    size="small"
-                    sx={{ height: 18, fontSize: "0.5625rem", fontWeight: 700, bgcolor: "rgba(0,0,0,0.3)", color: "rgba(255,255,255,0.5)" }}
-                  />
+                  <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
+                    <Chip
+                      label={`Score: ${file.score}`}
+                      size="small"
+                      sx={{ height: 18, fontSize: "0.5625rem", fontWeight: 700, bgcolor: "rgba(0,0,0,0.3)", color: "rgba(255,255,255,0.5)", mb: 0.5 }}
+                    />
+                  </Box>
                 </Box>
               </ListItemButton>
             ))}

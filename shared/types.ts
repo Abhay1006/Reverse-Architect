@@ -1,10 +1,19 @@
 // ============================================================
 //  Atlas-TS — Shared Types
 //  Used by both backend and frontend
+//  🔄 Extended with optional LSP-enhanced fields
 // ============================================================
 
 // --- Parser Types ---
 export type EntityKind = "class" | "interface" | "function" | "file" | "database" | "group";
+
+/** LSP: precise source range for a symbol */
+export interface SourceRange {
+  startLine: number;
+  startCol: number;
+  endLine: number;
+  endCol: number;
+}
 
 export interface ParsedParameter {
   name: string;
@@ -24,6 +33,10 @@ export interface ParsedMethod {
   visibility: "public" | "protected" | "private" | "unknown";
   complexity: number;
   calledFunctions?: string[];
+  /** LSP: precise position range of this method in the source file */
+  range?: SourceRange;
+  /** LSP: fully qualified type signature from hover */
+  typeSignature?: string;
 }
 
 export interface ParsedClass {
@@ -37,6 +50,8 @@ export interface ParsedClass {
   implements: string[];
   decorators: string[];
   lineCount: number;
+  /** LSP: source range of the class declaration */
+  range?: SourceRange;
 }
 
 export interface ParsedInterface {
@@ -58,6 +73,8 @@ export interface ParsedFunction {
   lineCount: number;
   complexity: number;
   calledFunctions?: string[];
+  /** LSP: source range of the function declaration */
+  range?: SourceRange;
 }
 
 export interface ParsedDatabase {
@@ -74,6 +91,8 @@ export interface ParsedImport {
   defaultImport?: string | undefined;
   namedImports: string[];
   namespaceImport?: string | undefined;
+  /** LSP: the URI that definition resolved to */
+  definitionUri?: string;
 }
 
 export interface ParsedFile {
@@ -98,6 +117,7 @@ export interface ArchNode {
   metadata: {
     properties?: string[];
     methods?: string[];
+    entities?: { name: string; type: string }[];
     lineCount: number;
     exportCount: number;
     maxComplexity: number;

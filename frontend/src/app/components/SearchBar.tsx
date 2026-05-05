@@ -31,21 +31,35 @@ export default function SearchBar() {
         const label = ((n.data?.label as string) || "").toLowerCase();
         const id = n.id.toLowerCase();
         const path = ((n.data?.filePath as string) || "").toLowerCase();
+        
+        // Search inside methods and properties
+        const methods = (n.data?.metadata?.methods || []).map(m => m.toLowerCase());
+        const properties = (n.data?.metadata?.properties || []).map(p => p.toLowerCase());
+        const hasSymbolMatch = methods.some(m => m.includes(q)) || properties.some(p => p.includes(q));
 
-        return label.includes(q) || id.includes(q) || path.includes(q);
+        return label.includes(q) || id.includes(q) || path.includes(q) || hasSymbolMatch;
       })
       .sort((a, b) => {
-        // Priority: exact label match > label starts with > path contains
         const aLabel = ((a.data?.label as string) || "").toLowerCase();
         const bLabel = ((b.data?.label as string) || "").toLowerCase();
 
+        // Priority: exact label match > label starts with > symbol match > path contains
         if (aLabel === q) return -1;
         if (bLabel === q) return 1;
         if (aLabel.startsWith(q) && !bLabel.startsWith(q)) return -1;
         if (!aLabel.startsWith(q) && bLabel.startsWith(q)) return 1;
+        
+        // Symbol match priority
+        const aSymbols = [...(a.data?.metadata?.methods || []), ...(a.data?.metadata?.properties || [])].map(s => s.toLowerCase());
+        const bSymbols = [...(b.data?.metadata?.methods || []), ...(b.data?.metadata?.properties || [])].map(s => s.toLowerCase());
+        const aHasSymbol = aSymbols.some(s => s.includes(q));
+        const bHasSymbol = bSymbols.some(s => s.includes(q));
+        if (aHasSymbol && !bHasSymbol) return -1;
+        if (!aHasSymbol && bHasSymbol) return 1;
+
         return 0;
       })
-      .slice(0, 10);
+      .slice(0, 15);
   }, [nodes, localQuery]);
 
   // Toggle on Cmd+K
@@ -201,7 +215,7 @@ export default function SearchBar() {
             inputRef={inputRef}
             value={localQuery}
             onChange={handleChange}
-            placeholder="Spotlight Search"
+            placeholder="Search symbols, files..."
             autoComplete="off"
             spellCheck="false"
             fullWidth
@@ -294,26 +308,47 @@ export default function SearchBar() {
                       </Box>
 
                       {/* Content */}
-                      <Box sx={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+                      <Box sx={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1 }}>
                         <Typography
                           sx={{
                             fontSize: 15,
                             fontWeight: 500,
                             color: isSelected ? "white" : "rgba(255,255,255,0.9)",
+                            whiteSpace: "nowrap",
+                            textOverflow: "ellipsis",
+                            overflow: "hidden",
                           }}
                         >
                           {label}
                         </Typography>
-                        <Typography
-                          sx={{
-                            fontSize: "0.6875rem",
-                            color: isSelected
-                              ? "rgba(255,255,255,0.7)"
-                              : "rgba(255,255,255,0.35)",
-                          }}
-                        >
-                          {n.type?.toUpperCase()} Node
-                        </Typography>
+                        
+                        {/* Symbol Match Highlight */}
+                        {(() => {
+                          const q = localQuery.toLowerCase();
+                          const matchingMethod = (n.data?.metadata?.methods || []).find(m => m.toLowerCase().includes(q));
+                          const matchingProp = (n.data?.metadata?.properties || []).find(p => p.toLowerCase().includes(q));
+                          const match = matchingMethod || matchingProp;
+                          
+                          if (match) {
+                            return (
+                              <Typography sx={{ fontSize: "0.6875rem", color: isSelected ? "rgba(255,255,255,0.9)" : "var(--primary)", fontWeight: 700 }}>
+                                Match: <span style={{ opacity: 0.7 }}>{match}</span>
+                              </Typography>
+                            );
+                          }
+                          return (
+                            <Typography
+                              sx={{
+                                fontSize: "0.6875rem",
+                                color: isSelected
+                                  ? "rgba(255,255,255,0.7)"
+                                  : "rgba(255,255,255,0.35)",
+                              }}
+                            >
+                              {n.type?.toUpperCase()} in {n.data?.filePath?.split('/').pop()}
+                            </Typography>
+                          );
+                        })()}
                       </Box>
 
                       {isSelected && (
@@ -376,7 +411,7 @@ export default function SearchBar() {
               ))}
             </Box>
             <Typography sx={{ fontStyle: "italic", opacity: 0.5 }}>
-              Atlas Search
+              Search
             </Typography>
           </Box>
         )}

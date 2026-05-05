@@ -168,6 +168,17 @@ export async function analyzeGithub(url: string): Promise<ReactFlowGraph> {
   return handleResponse(res);
 }
 
+/**
+ * Fetch recently analyzed repositories from the cache.
+ */
+export async function getRecentRepos(): Promise<{ repos: { repo_id: string; repo_name: string; analyzed_at: string; node_count: number; edge_count: number }[] }> {
+  const res = await fetch(`${apiBase()}/../repos/recent`);
+  if (!res.ok) {
+    throw new Error('Failed to fetch recent repos');
+  }
+  return res.json();
+}
+
 // ---------------------------------------------------------------------------
 //  Store Adapter
 //  Converts the API response into the shape expected by useAtlasStore.setGraph

@@ -12,7 +12,7 @@ import {
   Node,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { Box, Typography, IconButton, Chip } from "@mui/material";
+import { Box, Typography, IconButton, Chip, Button } from "@mui/material";
 import { Close as CloseIcon, FilterCenterFocus as FocusIcon } from "@mui/icons-material";
 
 import { useAtlasStore, getVisibleNodes, getVisibleEdges } from "../store/atlas-store";
@@ -265,6 +265,27 @@ function CanvasInner() {
     }
   }, [fitViewTrigger, fitView]);
 
+  // --- GUIDED TOUR & INITIAL FOCUS ---
+  const entryPoint = useAtlasStore(s => s.entryPoint);
+  const hasGuidedTourShown = useAtlasStore(s => s.hasGuidedTourShown);
+  const setHasGuidedTourShown = useAtlasStore(s => s.setHasGuidedTourShown);
+  const [showTourOverlay, setShowTourOverlay] = React.useState(false);
+
+  // Auto-focus entry point on first load
+  useEffect(() => {
+    if (allNodes.length > 0 && !hasGuidedTourShown && entryPoint) {
+      const entryNode = allNodes.find(n => n.data?.filePath === entryPoint.entryFile && n.type === 'file');
+      if (entryNode) {
+        // Give time for the graph to render and layout
+        setTimeout(() => {
+          panToNode(entryNode.id);
+          setShowTourOverlay(true);
+          setHasGuidedTourShown(true);
+        }, 1500);
+      }
+    }
+  }, [allNodes, entryPoint, hasGuidedTourShown, panToNode, setHasGuidedTourShown]);
+
   // Handle pan to specific node
   useEffect(() => {
     if (panToNodeId) {
@@ -272,10 +293,10 @@ function CanvasInner() {
       if (node) {
         fitView({
           nodes: [{ id: panToNodeId }],
-          duration: 600,
+          duration: 800,
           padding: 3.0,
         });
-        setTimeout(() => panToNode(null), 1000);
+        setTimeout(() => panToNode(null), 1200);
       }
     }
   }, [panToNodeId, allNodes, fitView, panToNode]);
@@ -376,6 +397,51 @@ function CanvasInner() {
           >
             <CloseIcon fontSize="small" />
           </IconButton>
+        </Box>
+      )}
+
+      {/* Guided Tour Overlay */}
+      {showTourOverlay && (
+        <Box
+          sx={{
+            position: "absolute",
+            bottom: 40,
+            right: 40,
+            zIndex: 2000,
+            width: 280,
+            background: "linear-gradient(135deg, rgba(79, 70, 229, 0.95), rgba(124, 58, 237, 0.95))",
+            backdropFilter: "blur(10px)",
+            borderRadius: 4,
+            p: 3,
+            boxShadow: "0 20px 50px rgba(0,0,0,0.4)",
+            animation: "slideUp 0.5s ease-out",
+            "@keyframes slideUp": {
+              from: { transform: "translateY(20px)", opacity: 0 },
+              to: { transform: "translateY(0)", opacity: 1 },
+            },
+          }}
+        >
+          <Typography sx={{ color: "white", fontSize: "1rem", fontWeight: 800, mb: 1 }}>
+            🎯 Start Here
+          </Typography>
+          <Typography sx={{ color: "rgba(255,255,255,0.8)", fontSize: "0.8125rem", lineHeight: 1.5, mb: 2 }}>
+            We've detected the <b>{entryPoint?.framework}</b> entry point at <code>{entryPoint?.entryFile}</code>. 
+            Follow the arrows to see how the code flows!
+          </Typography>
+          <Button 
+            fullWidth
+            onClick={() => setShowTourOverlay(false)}
+            sx={{ 
+              bgcolor: "white", 
+              color: "#4f46e5", 
+              fontWeight: 700,
+              fontSize: "0.75rem",
+              borderRadius: 2,
+              "&:hover": { bgcolor: "rgba(255,255,255,0.9)" }
+            }}
+          >
+            Got it, thanks!
+          </Button>
         </Box>
       )}
     </Box>

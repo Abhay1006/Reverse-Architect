@@ -24,6 +24,7 @@ import AnalysisSidebar from "./components/AnalysisSidebar";
 import SearchBar from "./components/SearchBar";
 import FolderTree from "./components/FolderTree";
 import Breadcrumb from "./components/Breadcrumb";
+import LandingHero from "./components/LandingHero";
 import { useAtlasStore } from "./store/atlas-store";
 
 export default function Home() {
@@ -124,15 +125,6 @@ export default function Home() {
                 }}
               >
                 ATLAS
-                <Box
-                  component="span"
-                  sx={{
-                    color: "primary.main",
-                    fontStyle: "italic",
-                  }}
-                >
-                  .TS
-                </Box>
               </Typography>
             </Box>
 
@@ -213,95 +205,7 @@ export default function Home() {
         {/* Canvas / Empty State */}
         <Box sx={{ flex: 1, position: "relative", overflow: "hidden" }}>
           {nodes.length === 0 ? (
-            /* ── Empty State ── */
-            <Box
-              sx={{
-                position: "absolute",
-                inset: 0,
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 3,
-              }}
-            >
-              <Box
-                sx={{
-                  p: 3,
-                  borderRadius: "50%",
-                  background:
-                    "linear-gradient(135deg, rgba(99,102,241,0.15), rgba(168,85,247,0.1))",
-                  border: "1px solid rgba(99,102,241,0.2)",
-                  animation: "pulse-glow 3s ease-in-out infinite",
-                  "@keyframes pulse-glow": {
-                    "0%, 100%": {
-                      boxShadow: "0 0 30px rgba(99,102,241,0.15)",
-                    },
-                    "50%": {
-                      boxShadow: "0 0 50px rgba(99,102,241,0.25)",
-                    },
-                  },
-                }}
-              >
-                <AtlasIcon
-                  sx={{
-                    fontSize: 48,
-                    color: "primary.main",
-                    opacity: 0.7,
-                  }}
-                />
-              </Box>
-
-              <Box sx={{ textAlign: "center", maxWidth: 400 }}>
-                <Typography
-                  variant="h5"
-                  sx={{
-                    fontWeight: 700,
-                    letterSpacing: "-0.02em",
-                    color: "rgba(255,255,255,0.7)",
-                    mb: 1,
-                  }}
-                >
-                  Visualize Your Architecture
-                </Typography>
-                <Typography
-                  sx={{
-                    color: "rgba(255,255,255,0.3)",
-                    fontSize: "0.875rem",
-                    lineHeight: 1.6,
-                  }}
-                >
-                  Upload a .zip file or provide a GitHub URL to reverse-engineer
-                  and explore your project's TypeScript architecture.
-                </Typography>
-              </Box>
-
-              <Button
-                variant="contained"
-                onClick={() => setIsUploadOpen(true)}
-                startIcon={<ReAnalyzeIcon />}
-                sx={{
-                  mt: 1,
-                  px: 4,
-                  py: 1.5,
-                  borderRadius: 3,
-                  fontSize: "0.875rem",
-                  fontWeight: 600,
-                  background:
-                    "linear-gradient(135deg, #4f46e5, #7c3aed)",
-                  boxShadow:
-                    "0 8px 32px rgba(99,102,241,0.3)",
-                  "&:hover": {
-                    background:
-                      "linear-gradient(135deg, #4338ca, #6d28d9)",
-                    boxShadow:
-                      "0 12px 40px rgba(99,102,241,0.4)",
-                  },
-                }}
-              >
-                Analyze a Project
-              </Button>
-            </Box>
+            <LandingHero />
           ) : (
             <Canvas />
           )}

@@ -1,0 +1,549 @@
+// ============================================================
+//  Atlas-TS — LSP → ParsedFile Adapter
+//  Converts LSP DocumentSymbol[] responses into the ParsedFile
+//  format expected by the graph builder. This is the compatibility
+//  bridge between the new LSP layer and the existing pipeline.
+// ============================================================
+
+import * as fs from 'fs';
+import * as path from 'path';
+import { SymbolKind, type DocumentSymbol } from './lsp-types.js';
+import { estimateComplexity } from './lsp-complexity.js';
+import type {
+  ParsedFile,
+  ParsedClass,
+  ParsedInterface,
+  ParsedFunction,
+  ParsedMethod,
+  ParsedProperty,
+  ParsedParameter,
+  ParsedImport,
+} from '../../../shared/types.js';
+
+// ---------------------------------------------------------------------------
+//  Main Adapter Function
+// ---------------------------------------------------------------------------
+
+/**
+ * Convert LSP document symbols for a single file into a ParsedFile.
+ * 
+ * @param filePath Absolute path to the source file.
+ * @param symbols Hierarchical DocumentSymbol[] from the LSP server.
+ * @param resolvedImports Pre-resolved import information for this file.
+ * @returns A ParsedFile matching the existing shared type contract.
+ */
+export function adaptSymbolsToParsedFile(
+  filePath: string,
+  symbols: DocumentSymbol[],
+  resolvedImports: ParsedImport[],
+): ParsedFile {
+  const classes: ParsedClass[] = [];
+  const interfaces: ParsedInterface[] = [];
+  const functions: ParsedFunction[] = [];
+
+  for (const sym of symbols) {
+    switch (sym.kind) {
+      case SymbolKind.Class:
+        classes.push(adaptClass(sym, filePath));
+        break;
+
+      case SymbolKind.Interface:
+        interfaces.push(adaptInterface(sym, filePath));
+        break;
+
+      case SymbolKind.Function:
+        functions.push(adaptFunction(sym, filePath));
+        break;
+
+      case SymbolKind.Variable:
+      case SymbolKind.Constant:
+        // Check if this variable is an arrow function by inspecting its children
+        // or the detail string (which often shows the type signature)
+        if (isLikelyArrowFunction(sym)) {
+          functions.push(adaptFunction(sym, filePath));
+        }
+        break;
+
+      case SymbolKind.Module:
+      case SymbolKind.Namespace:
+        // Recursively process symbols inside modules/namespaces
+        if (sym.children) {
+          const nested = adaptSymbolsToParsedFile(filePath, sym.children, []);
+          classes.push(...nested.classes);
+          interfaces.push(...nested.interfaces);
+          functions.push(...nested.functions);
+        }
+        break;
+
+      default:
+        // Enum, TypeAlias, etc. — skip for now
+        break;
+    }
+  }
+
+  // Calculate total line count
+  let lineCount = 0;
+  try {
+    const content = fs.readFileSync(filePath, 'utf-8');
+    lineCount = content.split('\n').length;
+  } catch {
+    lineCount = 0;
+  }
+
+  return {
+    kind: 'file',
+    name: path.basename(filePath),
+    filePath, // Will be made relative by the caller
+    imports: resolvedImports,
+    classes,
+    interfaces,
+    functions,
+    lineCount,
+  };
+}
+
+// ---------------------------------------------------------------------------
+//  Class Adapter
+// ---------------------------------------------------------------------------
+
+function adaptClass(sym: DocumentSymbol, filePath: string): ParsedClass {
+  const properties: ParsedProperty[] = [];
+  const methods: ParsedMethod[] = [];
+  let extendsName: string | undefined;
+  const implementsList: string[] = [];
+  const decorators: string[] = [];
+
+  // Process children of the class
+  if (sym.children) {
+    for (const child of sym.children) {
+      switch (child.kind) {
+        case SymbolKind.Property:
+        case SymbolKind.Field:
+          properties.push(adaptProperty(child));
+          break;
+
+        case SymbolKind.Method:
+        case SymbolKind.Constructor:
+          methods.push(adaptMethod(child, filePath));
+          break;
+
+        default:
+          break;
+      }
+    }
+  }
+
+  // Try to extract extends/implements from the detail string
+  // typescript-language-server often puts this in the detail field
+  if (sym.detail) {
+    const extendsMatch = sym.detail.match(/extends\s+(\w+)/);
+    if (extendsMatch) extendsName = extendsMatch[1];
+
+    const implMatch = sym.detail.match(/implements\s+([\w,\s]+)/);
+    if (implMatch) {
+      implementsList.push(
+        ...implMatch[1]!.split(',').map(s => s.trim()).filter(Boolean)
+      );
+    }
+  }
+
+  // If detail doesn't have extends/implements, try parsing the source line
+  if (!extendsName) {
+    const lineInfo = readSourceLine(filePath, sym.range.start.line);
+    if (lineInfo) {
+      const extMatch = lineInfo.match(/extends\s+(\w+)/);
+      if (extMatch) extendsName = extMatch[1];
+
+      if (implementsList.length === 0) {
+        const implMatch = lineInfo.match(/implements\s+([\w,\s<>]+)/);
+        if (implMatch) {
+          implementsList.push(
+            ...implMatch[1]!.split(',').map(s => s.trim().replace(/<.*>/, '')).filter(Boolean)
+          );
+        }
+      }
+    }
+  }
+
+  const lineCount = sym.range.end.line - sym.range.start.line + 1;
+
+  // Check if exported by looking at the source line
+  const isExported = checkIfExported(filePath, sym.range.start.line);
+  const isAbstract = checkIfAbstract(filePath, sym.range.start.line);
+
+  return {
+    kind: 'class',
+    name: sym.name,
+    isExported,
+    isAbstract,
+    properties,
+    methods,
+    extends: extendsName,
+    implements: implementsList,
+    decorators,
+    lineCount,
+  };
+}
+
+// ---------------------------------------------------------------------------
+//  Interface Adapter
+// ---------------------------------------------------------------------------
+
+function adaptInterface(sym: DocumentSymbol, filePath: string): ParsedInterface {
+  const properties: ParsedProperty[] = [];
+  const methods: ParsedMethod[] = [];
+  const extendsList: string[] = [];
+
+  if (sym.children) {
+    for (const child of sym.children) {
+      switch (child.kind) {
+        case SymbolKind.Property:
+        case SymbolKind.Field:
+          properties.push(adaptProperty(child));
+          break;
+
+        case SymbolKind.Method:
+          methods.push(adaptMethod(child, filePath));
+          break;
+
+        default:
+          break;
+      }
+    }
+  }
+
+  // Extract extends from detail or source
+  if (sym.detail) {
+    const extMatch = sym.detail.match(/extends\s+([\w,\s<>]+)/);
+    if (extMatch) {
+      extendsList.push(
+        ...extMatch[1]!.split(',').map(s => s.trim().replace(/<.*>/, '')).filter(Boolean)
+      );
+    }
+  }
+
+  if (extendsList.length === 0) {
+    const lineInfo = readSourceLine(filePath, sym.range.start.line);
+    if (lineInfo) {
+      const extMatch = lineInfo.match(/extends\s+([\w,\s<>]+)\s*\{/);
+      if (extMatch) {
+        extendsList.push(
+          ...extMatch[1]!.split(',').map(s => s.trim().replace(/<.*>/, '')).filter(Boolean)
+        );
+      }
+    }
+  }
+
+  const lineCount = sym.range.end.line - sym.range.start.line + 1;
+  const isExported = checkIfExported(filePath, sym.range.start.line);
+
+  return {
+    kind: 'interface',
+    name: sym.name,
+    isExported,
+    properties,
+    methods,
+    extends: extendsList,
+    lineCount,
+  };
+}
+
+// ---------------------------------------------------------------------------
+//  Function Adapter
+// ---------------------------------------------------------------------------
+
+function adaptFunction(sym: DocumentSymbol, filePath: string): ParsedFunction {
+  const parameters = extractParametersFromDetail(sym.detail || '');
+  const returnType = extractReturnTypeFromDetail(sym.detail || '');
+  const lineCount = sym.range.end.line - sym.range.start.line + 1;
+  const complexity = estimateComplexity(filePath, sym.range.start.line, sym.range.end.line);
+  const isExported = checkIfExported(filePath, sym.range.start.line);
+
+  // Extract called functions from the function body text
+  const calledFunctions = extractCalledFunctionsFromSource(filePath, sym.range.start.line, sym.range.end.line);
+
+  return {
+    kind: 'function',
+    name: sym.name,
+    isExported,
+    parameters,
+    returnType,
+    lineCount,
+    complexity,
+    calledFunctions,
+  };
+}
+
+// ---------------------------------------------------------------------------
+//  Property & Method Adapters
+// ---------------------------------------------------------------------------
+
+function adaptProperty(sym: DocumentSymbol): ParsedProperty {
+  const visibility = extractVisibility(sym.name, sym.detail);
+
+  return {
+    name: sym.name,
+    type: sym.detail || 'any',
+    visibility,
+  };
+}
+
+function adaptMethod(sym: DocumentSymbol, filePath: string): ParsedMethod {
+  const visibility = extractVisibility(sym.name, sym.detail);
+  const parameters = extractParametersFromDetail(sym.detail || '');
+  const returnType = extractReturnTypeFromDetail(sym.detail || '');
+  const complexity = estimateComplexity(filePath, sym.range.start.line, sym.range.end.line);
+  const calledFunctions = extractCalledFunctionsFromSource(filePath, sym.range.start.line, sym.range.end.line);
+
+  return {
+    name: sym.name,
+    parameters,
+    returnType,
+    visibility,
+    complexity,
+    calledFunctions,
+  };
+}
+
+// ---------------------------------------------------------------------------
+//  Import Extraction (from source text)
+// ---------------------------------------------------------------------------
+
+/**
+ * Extract import declarations from a source file by parsing the text.
+ * This is a fallback when we can't get imports from LSP directly.
+ */
+export function extractImportsFromSource(filePath: string): ParsedImport[] {
+  try {
+    const content = fs.readFileSync(filePath, 'utf-8');
+    return parseImportsFromText(content);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Parse import statements from source text.
+ */
+export function parseImportsFromText(text: string): ParsedImport[] {
+  const imports: ParsedImport[] = [];
+
+  // Match: import { x, y } from 'module';
+  // Match: import Default from 'module';
+  // Match: import * as ns from 'module';
+  // Match: import 'module';
+  // Match: import type { x } from 'module';
+  const importRegex = /import\s+(?:type\s+)?(?:(?:(\w+)(?:\s*,\s*)?)?(?:\{([^}]*)\})?(?:\*\s+as\s+(\w+))?(?:\s+from\s+)?)?['"]([^'"]+)['"]/g;
+
+  let match;
+  while ((match = importRegex.exec(text)) !== null) {
+    const defaultImport = match[1] || undefined;
+    const namedImportStr = match[2] || '';
+    const namespaceImport = match[3] || undefined;
+    const moduleSpecifier = match[4]!;
+
+    const namedImports = namedImportStr
+      .split(',')
+      .map(s => {
+        const parts = s.trim().split(/\s+as\s+/);
+        return parts[0]?.trim() || '';
+      })
+      .filter(Boolean);
+
+    imports.push({
+      kind: 'import',
+      moduleSpecifier,
+      defaultImport,
+      namedImports,
+      namespaceImport,
+    });
+  }
+
+  return imports;
+}
+
+// ---------------------------------------------------------------------------
+//  Helpers
+// ---------------------------------------------------------------------------
+
+/** Read a specific line from a file (0-indexed). */
+function readSourceLine(filePath: string, lineNumber: number): string | null {
+  try {
+    const content = fs.readFileSync(filePath, 'utf-8');
+    const lines = content.split('\n');
+    // Also check a few lines above for decorators, and the line itself
+    // might wrap, so grab a range
+    const start = Math.max(0, lineNumber - 2);
+    const end = Math.min(lines.length, lineNumber + 3);
+    return lines.slice(start, end).join(' ');
+  } catch {
+    return null;
+  }
+}
+
+/** Check if a declaration at a given line is exported. */
+function checkIfExported(filePath: string, lineNumber: number): boolean {
+  try {
+    const content = fs.readFileSync(filePath, 'utf-8');
+    const lines = content.split('\n');
+    // Check the declaration line and the line above (for `export` on previous line)
+    const start = Math.max(0, lineNumber - 1);
+    const end = Math.min(lines.length, lineNumber + 1);
+    const snippet = lines.slice(start, end).join(' ');
+    return /\bexport\b/.test(snippet);
+  } catch {
+    return false;
+  }
+}
+
+/** Check if a class declaration is abstract. */
+function checkIfAbstract(filePath: string, lineNumber: number): boolean {
+  try {
+    const content = fs.readFileSync(filePath, 'utf-8');
+    const lines = content.split('\n');
+    const line = lines[lineNumber] || '';
+    return /\babstract\s+class\b/.test(line);
+  } catch {
+    return false;
+  }
+}
+
+/** Determine the visibility of a member from its name prefix or detail. */
+function extractVisibility(name: string, detail?: string): 'public' | 'protected' | 'private' | 'unknown' {
+  // TypeScript convention: #privateProp or private keyword
+  if (name.startsWith('#')) return 'private';
+
+  // Check if the detail mentions visibility
+  if (detail) {
+    if (/\bprivate\b/.test(detail)) return 'private';
+    if (/\bprotected\b/.test(detail)) return 'protected';
+    if (/\bpublic\b/.test(detail)) return 'public';
+  }
+
+  return 'public'; // TypeScript default
+}
+
+/** Extract parameter list from a function detail string like "(a: string, b: number): void" */
+function extractParametersFromDetail(detail: string): ParsedParameter[] {
+  // Match the parameter list: (param1: type1, param2: type2)
+  const paramMatch = detail.match(/\(([^)]*)\)/);
+  if (!paramMatch || !paramMatch[1]) return [];
+
+  return paramMatch[1]
+    .split(',')
+    .map(p => p.trim())
+    .filter(Boolean)
+    .map(p => {
+      const [name, ...typeParts] = p.split(':');
+      return {
+        name: (name || '').trim().replace(/\?$/, ''),
+        type: typeParts.join(':').trim() || 'any',
+      };
+    })
+    .filter(p => p.name); // Filter out empty names
+}
+
+/** Extract return type from a function detail string. */
+function extractReturnTypeFromDetail(detail: string): string {
+  // Match after the closing parenthesis: ): ReturnType
+  const returnMatch = detail.match(/\)\s*:\s*(.+)$/);
+  if (returnMatch) return returnMatch[1]!.trim();
+
+  // Match a simple type annotation: : Type
+  const simpleMatch = detail.match(/:\s*(.+)$/);
+  if (simpleMatch) return simpleMatch[1]!.trim();
+
+  return 'void';
+}
+
+/** Check if a variable symbol is likely an arrow function. */
+function isLikelyArrowFunction(sym: DocumentSymbol): boolean {
+  // Heuristic 1: has children that are methods/functions
+  if (sym.children && sym.children.some(c =>
+    c.kind === SymbolKind.Function || c.kind === SymbolKind.Method
+  )) {
+    return false; // More likely an object
+  }
+
+  // Heuristic 2: detail contains function signature patterns
+  if (sym.detail) {
+    if (sym.detail.includes('=>') || sym.detail.includes('(')) {
+      return true;
+    }
+  }
+
+  // Heuristic 3: spans multiple lines (likely a function body)
+  const lineSpan = sym.range.end.line - sym.range.start.line;
+  if (lineSpan > 1 && sym.children && sym.children.length === 0) {
+    return true; // Multi-line variable with no children — likely arrow fn
+  }
+
+  return false;
+}
+
+/**
+ * Extract function calls from source text within a line range.
+ * Simple pattern-based extraction (similar to old ts-morph approach
+ * but from raw text).
+ */
+function extractCalledFunctionsFromSource(
+  filePath: string,
+  startLine: number,
+  endLine: number,
+): string[] {
+  try {
+    const content = fs.readFileSync(filePath, 'utf-8');
+    const lines = content.split('\n');
+    const slice = lines.slice(startLine, endLine + 1).join('\n');
+    return extractCalledFunctionsFromText(slice);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Extract function call names from source text.
+ */
+export function extractCalledFunctionsFromText(text: string): string[] {
+  const calledFunctions = new Set<string>();
+
+  // Strip comments and strings
+  const cleaned = text
+    .replace(/\/\/.*$/gm, '')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/"(?:\\.|[^"\\])*"/g, '""')
+    .replace(/'(?:\\.|[^'\\])*'/g, "''")
+    .replace(/`(?:\\.|[^`\\])*`/g, '``');
+
+  // Match function calls: identifier( or obj.method(
+  const callPattern = /(?:^|[^.\w])(\w+)\s*\(/g;
+  let match;
+  while ((match = callPattern.exec(cleaned)) !== null) {
+    const name = match[1]!;
+    // Filter out language keywords
+    if (!KEYWORDS.has(name)) {
+      calledFunctions.add(name);
+    }
+  }
+
+  // Match property access calls: something.method(
+  const propCallPattern = /\.(\w+)\s*\(/g;
+  while ((match = propCallPattern.exec(cleaned)) !== null) {
+    const name = match[1]!;
+    if (!KEYWORDS.has(name)) {
+      calledFunctions.add(name);
+    }
+  }
+
+  return Array.from(calledFunctions);
+}
+
+/** Keywords to exclude from function call detection. */
+const KEYWORDS = new Set([
+  'if', 'else', 'for', 'while', 'do', 'switch', 'case', 'break',
+  'continue', 'return', 'throw', 'try', 'catch', 'finally', 'new',
+  'delete', 'typeof', 'instanceof', 'void', 'import', 'export',
+  'const', 'let', 'var', 'class', 'function', 'async', 'await',
+  'yield', 'from', 'as', 'of', 'in', 'type', 'interface', 'enum',
+  'extends', 'implements', 'super', 'this', 'constructor',
+]);

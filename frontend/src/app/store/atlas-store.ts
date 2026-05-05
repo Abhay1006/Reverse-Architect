@@ -48,6 +48,7 @@ interface AtlasState {
   fitViewTrigger: number; // Increment to trigger fitView in component
   panToNodeId: string | null; // Node to pan to
   focusedNodeId: string | null; // Node currently in isolated focus mode
+  hasGuidedTourShown: boolean;
 
   // --- Actions ---
   setGraph: (nodes: AtlasNode[], edges: Edge[], analysis: AnalysisResult, godObjectDetails?: GodObjectDetail[], deadCodeDetails?: DeadCodeDetail[], entryPoint?: EntryPoint) => void;
@@ -66,6 +67,7 @@ interface AtlasState {
   triggerFitView: () => void;
   panToNode: (nodeId: string | null) => void;
   setFocusedNode: (nodeId: string | null) => void;
+  setHasGuidedTourShown: (shown: boolean) => void;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────
@@ -208,6 +210,7 @@ export const useAtlasStore = create<AtlasState>((set, get) => ({
   fitViewTrigger: 0,
   panToNodeId: null,
   focusedNodeId: null,
+  hasGuidedTourShown: false,
 
   setGraph: (nodes, edges, analysisResults, godObjectDetails, deadCodeDetails, entryPoint) => {
     set({ 
@@ -330,5 +333,9 @@ export const useAtlasStore = create<AtlasState>((set, get) => ({
     if (nodeId) {
       get().triggerFitView();
     }
+  },
+
+  setHasGuidedTourShown: (shown) => {
+    set({ hasGuidedTourShown: shown });
   },
 }));

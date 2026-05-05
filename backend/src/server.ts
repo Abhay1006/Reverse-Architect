@@ -2,6 +2,7 @@
 //  Atlas-TS — Backend Express API Server
 //  Exposes endpoints for analyzing TypeScript/JavaScript projects
 //  via file upload (.zip) or GitHub URL.
+//  🔄 Now powered by LSP (Language Server Protocol)
 // ============================================================
 
 import express from 'express';
@@ -13,12 +14,13 @@ import os from 'os';
 import AdmZip from 'adm-zip';
 import rateLimit from 'express-rate-limit';
 
-import { parseProject, parseDatabaseSchemas } from './parser/project-parser.js';
-import { extractClass } from './parser/extractors/class-extractor.js';
-import { extractInterface } from './parser/extractors/interface-extractor.js';
-import { extractFunction, extractArrowFunction } from './parser/extractors/function-extractor.js';
-import { SyntaxKind } from 'ts-morph';
-import { extractImport } from './parser/extractors/import-extractor.js';
+import { CacheManager } from './cache/cache-manager.js';
+import { getRemoteCommitSha } from './cache/git.js';
+
+// --- LSP-based analysis ---
+import { analyzeWithLsp } from './lsp/index.js';
+import { parseDatabaseSchemas } from './parser/project-parser.js';
+
 import { buildGraph } from './graph/graph-builder.js';
 import { computeLayout } from './graph/layout.js';
 import { serializeToReactFlow } from './graph/serialize.js';
@@ -74,10 +76,11 @@ app.use('/api/', apiLimiter);
 import { detectEntryPoint, detectAllEntryPoints } from './parser/entry-point.js';
 
 /**
- * Core analysis function: parse project → build graph → layout → serialize.
+ * Core analysis function using the LSP engine (new default).
+ * parse project → build graph → layout → serialize.
  * Works on an already-extracted directory path.
  */
-function analyzeProjectDir(projectPath: string) {
+async function analyzeProjectDir(projectPath: string) {
   // 0. Detect entry points (scanning root and subdirectories)
   const entryPoints = detectAllEntryPoints(projectPath);
   if (entryPoints.length > 0) {
@@ -89,53 +92,35 @@ function analyzeProjectDir(projectPath: string) {
     console.log("No entry point detected.");
   }
 
-  // 1. Parse project files and database schemas
-  const sourceFiles = parseProject(projectPath);
+  // 1. Parse project files using LSP + database schemas
+  console.log('🔄 Using LSP engine for analysis...');
+  const lspParsedFiles = await analyzeWithLsp(projectPath);
   const dbFiles = parseDatabaseSchemas(projectPath);
 
   // Helper: convert absolute file paths to paths relative to the project root
   const toRelativePath = (absPath: string) => {
     const rel = path.relative(projectPath, absPath);
-    // Normalize to forward slashes for consistency
     return rel.split(path.sep).join('/');
   };
 
-  // 2. Extract entities from each source file
-  const parsedFiles: ParsedFile[] = dbFiles.map(f => ({
-    ...f,
-    filePath: toRelativePath(f.filePath),
-  }));
-  for (const file of sourceFiles) {
-    const classes = file.getClasses().map(extractClass);
-    const interfaces = file.getInterfaces().map(extractInterface);
-    const functions = file.getFunctions().map(extractFunction);
-    
-    const arrowFunctions = file.getVariableDeclarations()
-      .filter(v => v.getInitializerIfKind(SyntaxKind.ArrowFunction))
-      .map(v => extractArrowFunction(v, v.getInitializerIfKind(SyntaxKind.ArrowFunction)!));
-    functions.push(...arrowFunctions);
-    
-    const imports = file.getImportDeclarations().map(extractImport).map(imp => ({
-      ...imp,
-      // Fix import resolved path to be relative too!
-      resolvedPath: imp.resolvedPath ? toRelativePath(imp.resolvedPath) : undefined
-    }));
-    const lineCount = file.getEndLineNumber() - file.getStartLineNumber() + 1;
+  // 2. Merge database schema files with LSP-parsed files
+  const parsedFiles: ParsedFile[] = [
+    ...dbFiles.map(f => ({
+      ...f,
+      filePath: toRelativePath(f.filePath),
+    })),
+    ...lspParsedFiles,
+  ];
 
-    parsedFiles.push({
-      kind: 'file',
-      name: file.getBaseName(),
-      filePath: toRelativePath(file.getFilePath()),
-      classes,
-      interfaces,
-      functions,
-      imports,
-      lineCount,
-    });
-  }
+  // 3–8: Downstream pipeline (unchanged — operates on ParsedFile[])
+  return runGraphPipeline(parsedFiles, entryPoints);
+}
 
+/**
+ * Shared downstream pipeline: graph building → analysis → layout → serialize.
+ */
+function runGraphPipeline(parsedFiles: ParsedFile[], entryPoints: ReturnType<typeof detectAllEntryPoints>) {
   // 3. Build the architecture graph
-  // Pass all entry points to support monorepo BFS from multiple roots
   const entryFileList = entryPoints.map(ep => ep.entryFile);
   const graph = buildGraph(parsedFiles, entryFileList.length > 0 ? entryFileList : undefined);
 
@@ -154,7 +139,6 @@ function analyzeProjectDir(projectPath: string) {
   graph.analysis.patterns = detectPatterns(graph);
 
   // 8. Compute layout positions
-  // Use TB (Top-to-Bottom) layout for trees, instead of LR
   const positioned = computeLayout(graph, {
     direction: entryPoints.length > 0 ? 'BT' : 'LR',
   });
@@ -165,9 +149,8 @@ function analyzeProjectDir(projectPath: string) {
     posNodeMap.set(n.id, n);
   }
 
-  // 7. Serialize to React Flow format
+  // 9. Serialize to React Flow format
   const initialNodes: any[] = positioned.nodes.map((n) => {
-    
     // React Flow requires child nodes strictly position relatively to their mathematical parent bounding top-left corner
     let relativeX = n.x;
     let relativeY = n.y;
@@ -175,7 +158,6 @@ function analyzeProjectDir(projectPath: string) {
     if (n.parentNode) {
       const parentNode = posNodeMap.get(n.parentNode);
       if (parentNode) {
-        // Since layout.ts already converted everyone to absolute top-left, we calculate relative offsets directly
         relativeX = n.x - parentNode.x;
         relativeY = n.y - parentNode.y;
       }
@@ -210,7 +192,7 @@ function analyzeProjectDir(projectPath: string) {
     // Assign mathematical sub-flow nesting parent linkage
     if (n.parentNode) {
       rfNode.parentId = n.parentNode;
-      rfNode.extent = 'parent'; // Prevent dragging outside the boundary mathematically
+      rfNode.extent = 'parent';
     }
 
     return rfNode;
@@ -294,7 +276,7 @@ app.post('/api/analyze/upload', upload.single('file'), analysisLimiter, async (r
 
     // Find root and analyze
     const projectRoot = findProjectRoot(extractDir);
-    const result = analyzeProjectDir(projectRoot);
+    const result = await analyzeProjectDir(projectRoot);
 
     res.json(result);
   } catch (err: unknown) {
@@ -325,21 +307,87 @@ app.post('/api/analyze/github', analysisLimiter, async (req, res) => {
   }
 
   const cleanUrl = url.trim();
+  const repoId = cleanUrl.replace(/^https?:\/\/(www\.)?github\.com\//, '').replace(/\/$/, '');
 
-  const cloneDir = path.join(os.tmpdir(), `atlas-gh-${Date.now()}`);
   try {
-    console.log(`Cloning ${cleanUrl} into ${cloneDir}...`);
-    const { cloneRepo } = await import('./github/clone.js');
-    await cloneRepo(cleanUrl, cloneDir);
+    // 1. Check cache freshness without cloning
+    console.log(`[Cache] Checking freshness for ${repoId}...`);
+    const latestCommit = getRemoteCommitSha(cleanUrl);
+    
+    if (latestCommit) {
+      const cachedCommit = CacheManager.getLastCommit(repoId);
+      if (cachedCommit === latestCommit) {
+        const cachedResult = CacheManager.getCachedResult(repoId);
+        if (cachedResult) {
+          console.log(`⚡ [Cache Hit] Returning cached analysis for ${repoId} (commit: ${latestCommit.substring(0, 7)})`);
+          return res.json(cachedResult);
+        }
+      } else {
+        console.log(`🔄 [Cache Miss/Stale] Cache commit: ${cachedCommit || 'none'}, Remote commit: ${latestCommit}`);
+      }
+    } else {
+      console.log(`[Cache] Could not fetch remote commit for ${repoId}. Proceeding with analysis.`);
+    }
 
-    const result = analyzeProjectDir(cloneDir);
-    res.json(result);
+    // 2. Perform full analysis
+    const cloneDir = path.join(os.tmpdir(), `atlas-gh-${Date.now()}`);
+    let analysisResult;
+    try {
+      console.log(`Cloning ${cleanUrl} into ${cloneDir}...`);
+      const { cloneRepo } = await import('./github/clone.js');
+      await cloneRepo(cleanUrl, cloneDir);
+
+      analysisResult = await analyzeProjectDir(cloneDir);
+      
+      // 3. Save to cache
+      if (latestCommit) {
+        console.log(`💾 [Cache] Saving result for ${repoId} (commit: ${latestCommit.substring(0, 7)})`);
+        CacheManager.saveResult(repoId, cleanUrl, latestCommit, analysisResult);
+      }
+    } finally {
+      cleanup(cloneDir);
+    }
+
+    res.json(analysisResult);
   } catch (err: unknown) {
     console.error('[/api/analyze/github] Error:', err);
     const message = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: 'Analysis failed', details: message });
-  } finally {
-    cleanup(cloneDir);
+  }
+});
+
+// ---------------------------------------------------------------------------
+//  Cache-related Routes
+// ---------------------------------------------------------------------------
+
+/** GET /api/repos/recent — get list of recently analyzed repos */
+app.get('/api/repos/recent', (_req, res) => {
+  try {
+    const recent = CacheManager.getRecentRepos(6);
+    res.json({ repos: recent });
+  } catch (err) {
+    console.error('[/api/repos/recent] Error:', err);
+    res.status(500).json({ error: 'Failed to fetch recent repos' });
+  }
+});
+
+/** GET /api/analyze/github/cached — return analysis ONLY if cached */
+app.get('/api/analyze/github/cached', (req, res) => {
+  const repoId = req.query.repoId as string;
+  if (!repoId) {
+    return res.status(400).json({ error: 'Missing "repoId" query parameter' });
+  }
+  
+  try {
+    const cachedResult = CacheManager.getCachedResult(repoId);
+    if (cachedResult) {
+      return res.json(cachedResult);
+    } else {
+      return res.status(404).json({ error: 'Not found in cache' });
+    }
+  } catch (err) {
+    console.error('[/api/analyze/github/cached] Error:', err);
+    return res.status(500).json({ error: 'Failed to query cache' });
   }
 });
 
@@ -349,6 +397,7 @@ app.post('/api/analyze/github', analysisLimiter, async (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`\n🏛️  Atlas-TS backend running on http://localhost:${PORT}`);
+  console.log(`   Engine: LSP (Language Server Protocol)`);
   console.log(`   POST /api/analyze/upload   — Upload .zip`);
   console.log(`   POST /api/analyze/github   — Analyze GitHub repo`);
   console.log(`   GET  /api/health           — Health check\n`);
