@@ -22,7 +22,7 @@ function manualResolveImport(
   if (fileMap.has(resolved)) return resolved;
 
   // Try common extensions
-  const extensions = ['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs'];
+  const extensions = ['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.py', '.go', '.rs', '.java', '.rb', '.php', '.kt', '.swift', '.cs'];
   for (const ext of extensions) {
     const candidate = resolved + ext;
     if (fileMap.has(candidate)) return candidate;
@@ -204,6 +204,38 @@ export function buildGraph(files: ParsedFile[], entryFiles?: string[]): ArchGrap
   // --- Step 2: Edge Generation ---
   const edgeIds = new Set<string>(); // Track edge IDs to prevent duplicates
 
+  // Build a reverse lookup: for each import, what names does this file bring in from which file?
+  // This is crucial for resolving calls across files
+  const importedNamesMap = new Map<string, Map<string, string>>(); // filePath -> Map<importedName, sourceFilePath>
+  
+  for (const file of files) {
+    if (!reachableFiles.has(file.filePath)) continue;
+    const namesMap = new Map<string, string>();
+    
+    for (const imp of file.imports) {
+      let resolvedTarget = imp.resolvedPath;
+      if (!resolvedTarget && imp.moduleSpecifier.startsWith('.')) {
+        resolvedTarget = manualResolveImport(file.filePath, imp.moduleSpecifier, fileMap);
+      }
+      if (!resolvedTarget || !reachableFiles.has(resolvedTarget)) continue;
+      
+      // Track named imports
+      for (const name of imp.namedImports) {
+        namesMap.set(name, resolvedTarget);
+      }
+      // Track default import
+      if (imp.defaultImport) {
+        namesMap.set(imp.defaultImport, resolvedTarget);
+      }
+      // Track namespace import (e.g. import * as utils from './utils')
+      if (imp.namespaceImport) {
+        namesMap.set(imp.namespaceImport, resolvedTarget);
+      }
+    }
+    
+    importedNamesMap.set(file.filePath, namesMap);
+  }
+
   for (const file of files) {
     if (!reachableFiles.has(file.filePath)) continue;
 
@@ -224,14 +256,15 @@ export function buildGraph(files: ParsedFile[], entryFiles?: string[]): ArchGrap
             source: getFileNodeId(file.filePath),
             target: getFileNodeId(resolvedTarget),
             type: 'import',
-            label: imp.moduleSpecifier
+            label: 'imports'
           });
         }
       }
     }
 
     /**
-     * Helper to resolve where an entity (by name) is defined
+     * Helper to resolve where an entity (by name) is defined.
+     * Enhanced to handle CommonJS, namespace imports, and fuzzy matching.
      */
     const resolveEntityNodeId = (name: string, sourceFile: ParsedFile): string | null => {
       // Look in same file first
@@ -246,24 +279,48 @@ export function buildGraph(files: ParsedFile[], entryFiles?: string[]): ArchGrap
 
       // Look in imports
       for (const imp of sourceFile.imports) {
-        if (!imp.resolvedPath || !reachableFiles.has(imp.resolvedPath)) continue;
+        let resolvedPath = imp.resolvedPath;
+        if (!resolvedPath && imp.moduleSpecifier.startsWith('.')) {
+          resolvedPath = manualResolveImport(sourceFile.filePath, imp.moduleSpecifier, fileMap);
+        }
+        if (!resolvedPath || !reachableFiles.has(resolvedPath)) continue;
 
         const isNamedImport = imp.namedImports.includes(name);
         const isDefaultImport = imp.defaultImport === name;
 
         if (isNamedImport || isDefaultImport) {
-          // Verify the entity actually exists in the target file
-          const targetFile = fileMap.get(imp.resolvedPath)!;
+          const targetFile = fileMap.get(resolvedPath);
+          if (!targetFile) continue;
+          
+          // Check if the entity exists in the target file
           const targetExists = targetFile.classes.some(c => c.name === name) || 
                                targetFile.interfaces.some(i => i.name === name) ||
                                targetFile.functions.some(f => f.name === name);
           
           if (targetExists) {
-            return getEntityNodeId(imp.resolvedPath, name);
+            return getEntityNodeId(resolvedPath, name);
+          }
+          
+          // For default imports, match the first exported entity
+          if (isDefaultImport) {
+            const exportedFn = targetFile.functions.find(f => f.isExported);
+            if (exportedFn) return getEntityNodeId(resolvedPath, exportedFn.name);
+            const exportedCls = targetFile.classes.find(c => c.isExported);
+            if (exportedCls) return getEntityNodeId(resolvedPath, exportedCls.name);
           }
         }
       }
       return null;
+    };
+
+    /**
+     * Resolve a called function name to a target file path.
+     * Used to create file-level "calls" edges when entity-level resolution fails.
+     */
+    const resolveCallToFile = (calledName: string, sourceFile: ParsedFile): string | null => {
+      const namesMap = importedNamesMap.get(sourceFile.filePath);
+      if (!namesMap) return null;
+      return namesMap.get(calledName) || null;
     };
 
     // 2.2 Entity-level Inheritance Edges
@@ -306,10 +363,13 @@ export function buildGraph(files: ParsedFile[], entryFiles?: string[]): ArchGrap
       }
     }
 
-    // 2.3 Entity-level Call Edges (Execution Flow)
+    // 2.3 Call Edges — both entity-level and file-level
+    const fileCallTargets = new Set<string>(); // Track file-level call targets to avoid duplicates
+    
     const addCallEdges = (sourceId: string, calledNames: string[] | undefined) => {
       if (!calledNames) return;
       for (const calledName of calledNames) {
+        // Try entity-level resolution first
         const targetId = resolveEntityNodeId(calledName, file);
         if (targetId) {
           const edgeId = `edge:calls:${sourceId}->${targetId}`;
@@ -323,6 +383,12 @@ export function buildGraph(files: ParsedFile[], entryFiles?: string[]): ArchGrap
               label: 'calls'
             });
           }
+        } else {
+          // Fallback: create file-level "calls" edge
+          const targetFilePath = resolveCallToFile(calledName, file);
+          if (targetFilePath && targetFilePath !== file.filePath) {
+            fileCallTargets.add(targetFilePath);
+          }
         }
       }
     };
@@ -333,9 +399,22 @@ export function buildGraph(files: ParsedFile[], entryFiles?: string[]): ArchGrap
     
     for (const cls of file.classes) {
       for (const method of cls.methods) {
-        // Here we map method calls from inside the class as originating from the class itself for simplicity at the graph level,
-        // unless we want to render method nodes. Since we render class nodes, we link calls from the class.
         addCallEdges(getEntityNodeId(file.filePath, cls.name), method.calledFunctions);
+      }
+    }
+
+    // 2.4 File-level "calls" edges for unresolved entity calls
+    for (const targetFilePath of fileCallTargets) {
+      const edgeId = `edge:calls:${file.filePath}->${targetFilePath}`;
+      if (!edgeIds.has(edgeId)) {
+        edgeIds.add(edgeId);
+        edges.push({
+          id: edgeId,
+          source: getFileNodeId(file.filePath),
+          target: getFileNodeId(targetFilePath),
+          type: 'calls',
+          label: 'calls'
+        });
       }
     }
   }
@@ -346,7 +425,7 @@ export function buildGraph(files: ParsedFile[], entryFiles?: string[]): ArchGrap
   const outDegreeMap = new Map<string, number>();
   
   for (const edge of edges) {
-    if (edge.type === 'import') {
+    if (edge.type === 'import' || edge.type === 'calls') {
       outDegreeMap.set(edge.source, (outDegreeMap.get(edge.source) || 0) + 1);
       inDegreeMap.set(edge.target, (inDegreeMap.get(edge.target) || 0) + 1);
     }

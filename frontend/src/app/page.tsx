@@ -18,7 +18,7 @@ import {
   Architecture as AtlasIcon,
 } from "@mui/icons-material";
 import { toPng } from "html-to-image";
-import Canvas from "./components/Canvas";
+import Dashboard from "./components/Dashboard";
 import Upload from "./components/Upload";
 import AnalysisSidebar from "./components/AnalysisSidebar";
 import SearchBar from "./components/SearchBar";
@@ -207,7 +207,7 @@ export default function Home() {
           {nodes.length === 0 ? (
             <LandingHero />
           ) : (
-            <Canvas />
+            <Dashboard />
           )}
         </Box>
       </Box>

@@ -48,7 +48,7 @@ const FileNode = ({ data, selected }: NodeProps<FileNodeType>) => {
           {pathParts[pathParts.length - 1]}
         </Typography>
 
-        {isExpanded && entities.length > 0 && (
+        {entities.length > 0 && (
           <Box 
             sx={{ 
               mt: 1.5, 
@@ -59,7 +59,7 @@ const FileNode = ({ data, selected }: NodeProps<FileNodeType>) => {
               gap: 0.75
             }}
           >
-            {entities.map((entity: any, i: number) => (
+            {entities.slice(0, 3).map((entity: any, i: number) => (
               <Box 
                 key={`${entity.name}-${i}`}
                 sx={{ 
@@ -81,7 +81,7 @@ const FileNode = ({ data, selected }: NodeProps<FileNodeType>) => {
                              entity.type === 'function' ? 'var(--function-bg)' : 'var(--interface-bg)'
                   }} 
                 />
-                <Typography sx={{ fontSize: '0.625rem', color: 'rgba(255,255,255,0.8)', fontWeight: 600 }}>
+                <Typography sx={{ fontSize: '0.625rem', color: 'rgba(255,255,255,0.8)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 180 }}>
                   {entity.name}
                 </Typography>
                 <Typography sx={{ fontSize: '0.5rem', color: 'rgba(255,255,255,0.3)', ml: 'auto', textTransform: 'uppercase' }}>
@@ -89,8 +89,33 @@ const FileNode = ({ data, selected }: NodeProps<FileNodeType>) => {
                 </Typography>
               </Box>
             ))}
+            {entities.length > 3 && (
+              <Typography sx={{ fontSize: '0.55rem', color: 'rgba(255,255,255,0.3)', textAlign: 'center', mt: 0.5 }}>
+                + {entities.length - 3} more exports
+              </Typography>
+            )}
           </Box>
         )}
+
+        <Box sx={{ display: 'flex', gap: 1, mt: 1.5 }}>
+          {(data.metadata as any)?.maxComplexity ? (
+             <Box sx={{ 
+               bgcolor: (data.metadata as any).maxComplexity > 10 ? 'rgba(239, 68, 68, 0.2)' : 'rgba(255,255,255,0.05)', 
+               color: (data.metadata as any).maxComplexity > 10 ? '#fca5a5' : 'rgba(255,255,255,0.5)',
+               px: 1, py: 0.25, borderRadius: 1, fontSize: '0.5625rem', fontWeight: 700 
+             }}>
+               Complexity: {(data.metadata as any).maxComplexity}
+             </Box>
+          ) : null}
+          {(data.metadata as any)?.lineCount ? (
+             <Box sx={{ 
+               bgcolor: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.5)',
+               px: 1, py: 0.25, borderRadius: 1, fontSize: '0.5625rem', fontWeight: 700 
+             }}>
+               {(data.metadata as any).lineCount} L
+             </Box>
+          ) : null}
+        </Box>
       </Box>
     </BaseNode>
   );

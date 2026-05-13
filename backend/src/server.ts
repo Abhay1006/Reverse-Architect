@@ -16,6 +16,7 @@ import rateLimit from 'express-rate-limit';
 
 import { CacheManager } from './cache/cache-manager.js';
 import { getRemoteCommitSha } from './cache/git.js';
+import { progressTracker } from './progress.js';
 
 // --- LSP-based analysis ---
 import { analyzeWithLsp } from './lsp/index.js';
@@ -292,12 +293,14 @@ app.post('/api/analyze/upload', upload.single('file'), analysisLimiter, async (r
 
 /** POST /api/analyze/github — clone and analyze a GitHub repo */
 app.post('/api/analyze/github', analysisLimiter, async (req, res) => {
-  const { url } = req.body as { url?: string };
+  const { url, sessionId } = req.body as { url?: string; sessionId?: string };
 
   if (!url || typeof url !== 'string') {
     res.status(400).json({ error: 'Missing or invalid "url" field' });
     return;
   }
+
+  const sid = sessionId || 'default-session';
 
   // Strict validation for GitHub URLs to prevent SSRF or malformed repos
   const githubUrlRegex = /^https?:\/\/(www\.)?github\.com\/[\w.-]+\/[\w.-]+\/?$/;
@@ -311,6 +314,7 @@ app.post('/api/analyze/github', analysisLimiter, async (req, res) => {
 
   try {
     // 1. Check cache freshness without cloning
+    progressTracker.emitProgress(sid, { step: 'starting-lsp', message: `Checking cache for ${repoId}...` });
     console.log(`[Cache] Checking freshness for ${repoId}...`);
     const latestCommit = getRemoteCommitSha(cleanUrl);
     
@@ -320,6 +324,8 @@ app.post('/api/analyze/github', analysisLimiter, async (req, res) => {
         const cachedResult = CacheManager.getCachedResult(repoId);
         if (cachedResult) {
           console.log(`⚡ [Cache Hit] Returning cached analysis for ${repoId} (commit: ${latestCommit.substring(0, 7)})`);
+          progressTracker.emitProgress(sid, { step: 'done', message: 'Loaded from cache instantly!' });
+          progressTracker.cleanup(sid);
           return res.json(cachedResult);
         }
       } else {
@@ -330,6 +336,7 @@ app.post('/api/analyze/github', analysisLimiter, async (req, res) => {
     }
 
     // 2. Perform full analysis
+    progressTracker.emitProgress(sid, { step: 'cloning', message: `Cloning repository ${repoId}...` });
     const cloneDir = path.join(os.tmpdir(), `atlas-gh-${Date.now()}`);
     let analysisResult;
     try {
@@ -337,7 +344,10 @@ app.post('/api/analyze/github', analysisLimiter, async (req, res) => {
       const { cloneRepo } = await import('./github/clone.js');
       await cloneRepo(cleanUrl, cloneDir);
 
+      progressTracker.emitProgress(sid, { step: 'extracting', message: `Running LSP analysis...`, progress: 50 });
       analysisResult = await analyzeProjectDir(cloneDir);
+      
+      progressTracker.emitProgress(sid, { step: 'building-graph', message: `Building architecture graph...`, progress: 90 });
       
       // 3. Save to cache
       if (latestCommit) {
@@ -348,11 +358,15 @@ app.post('/api/analyze/github', analysisLimiter, async (req, res) => {
       cleanup(cloneDir);
     }
 
+    progressTracker.emitProgress(sid, { step: 'done', message: 'Analysis complete!', progress: 100 });
     res.json(analysisResult);
   } catch (err: unknown) {
     console.error('[/api/analyze/github] Error:', err);
     const message = err instanceof Error ? err.message : String(err);
+    progressTracker.emitProgress(sid, { step: 'error', message: `Analysis failed: ${message}` });
     res.status(500).json({ error: 'Analysis failed', details: message });
+  } finally {
+    setTimeout(() => progressTracker.cleanup(sid), 5000);
   }
 });
 
@@ -394,6 +408,37 @@ app.get('/api/analyze/github/cached', (req, res) => {
 // ---------------------------------------------------------------------------
 //  Start Server
 // ---------------------------------------------------------------------------
+
+/** GET /api/analyze/progress — Server-Sent Events stream for analysis progress */
+app.get('/api/analyze/progress', (req, res) => {
+  const sessionId = req.query.sessionId as string;
+  if (!sessionId) {
+    return res.status(400).json({ error: 'Missing sessionId' });
+  }
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+
+  // Send initial state if any
+  const lastEvent = progressTracker.getLastEvent(sessionId);
+  if (lastEvent) {
+    res.write(`data: ${JSON.stringify(lastEvent)}\n\n`);
+  }
+
+  const onProgress = (event: any) => {
+    res.write(`data: ${JSON.stringify(event)}\n\n`);
+    if (event.step === 'done' || event.step === 'error') {
+      res.end();
+    }
+  };
+
+  progressTracker.on(`progress:${sessionId}`, onProgress);
+
+  req.on('close', () => {
+    progressTracker.off(`progress:${sessionId}`, onProgress);
+  });
+});
 
 app.listen(PORT, () => {
   console.log(`\n🏛️  Atlas-TS backend running on http://localhost:${PORT}`);

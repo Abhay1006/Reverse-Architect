@@ -324,10 +324,12 @@ export function extractImportsFromSource(filePath: string): ParsedImport[] {
 
 /**
  * Parse import statements from source text.
+ * Supports: ES modules, CommonJS require(), Python, Go, Java, C/C++, Rust, Ruby, PHP, C#, Kotlin, Swift
  */
 export function parseImportsFromText(text: string): ParsedImport[] {
   const imports: ParsedImport[] = [];
 
+  // --- ES Module imports ---
   // Match: import { x, y } from 'module';
   // Match: import Default from 'module';
   // Match: import * as ns from 'module';
@@ -357,6 +359,97 @@ export function parseImportsFromText(text: string): ParsedImport[] {
       namedImports,
       namespaceImport,
     });
+  }
+
+  // --- CommonJS require() ---
+  // Match: const x = require('module')
+  // Match: const { a, b } = require('module')
+  const requireRegex = /(?:const|let|var)\s+(?:(\w+)|(?:\{([^}]*)\}))\s*=\s*require\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
+  while ((match = requireRegex.exec(text)) !== null) {
+    const defaultImport = match[1] || undefined;
+    const namedImportStr = match[2] || '';
+    const moduleSpecifier = match[3]!;
+    const namedImports = namedImportStr.split(',').map(s => s.trim().split(/\s*:\s*/)[0]?.trim() || '').filter(Boolean);
+    imports.push({ kind: 'import', moduleSpecifier, defaultImport, namedImports });
+  }
+
+  // --- Python ---
+  // Match: from module import x, y
+  const pyFromRegex = /^from\s+([\w.]+)\s+import\s+(.+)$/gm;
+  while ((match = pyFromRegex.exec(text)) !== null) {
+    const moduleSpecifier = match[1]!.replace(/\./g, '/');
+    const namedImports = match[2]!.split(',').map(s => s.trim().split(/\s+as\s+/)[0]?.trim() || '').filter(Boolean);
+    imports.push({ kind: 'import', moduleSpecifier, namedImports });
+  }
+  // Match: import module
+  const pyImportRegex = /^import\s+([\w.]+)(?:\s+as\s+(\w+))?$/gm;
+  while ((match = pyImportRegex.exec(text)) !== null) {
+    const mod = match[1]!;
+    // Skip if it looks like an ES module import (has quotes after it)
+    if (/['"]/.test(mod)) continue;
+    imports.push({ kind: 'import', moduleSpecifier: mod.replace(/\./g, '/'), defaultImport: match[2] || mod.split('.').pop(), namedImports: [] });
+  }
+
+  // --- Go ---
+  // Match: import "package" or import alias "package"
+  const goImportRegex = /import\s+(?:(\w+)\s+)?"([^"]+)"/g;
+  while ((match = goImportRegex.exec(text)) !== null) {
+    imports.push({ kind: 'import', moduleSpecifier: match[2]!, defaultImport: match[1], namedImports: [] });
+  }
+
+  // --- Java / Kotlin ---
+  // Match: import com.example.ClassName;
+  const javaImportRegex = /^import\s+(?:static\s+)?([\w.]+(?:\.\*)?)\s*;/gm;
+  while ((match = javaImportRegex.exec(text)) !== null) {
+    const spec = match[1]!;
+    const parts = spec.split('.');
+    const name = parts.pop()!;
+    imports.push({ kind: 'import', moduleSpecifier: parts.join('/'), namedImports: name === '*' ? [] : [name] });
+  }
+
+  // --- C/C++ ---
+  // Match: #include "file.h" (project-local includes)
+  const cIncludeRegex = /^\s*#include\s+"([^"]+)"/gm;
+  while ((match = cIncludeRegex.exec(text)) !== null) {
+    imports.push({ kind: 'import', moduleSpecifier: './' + match[1]!, namedImports: [] });
+  }
+
+  // --- Rust ---
+  // Match: use crate::module::item;
+  const rustUseRegex = /^use\s+((?:crate|super|self)(?:::\w+)+)(?:::\{([^}]+)\})?/gm;
+  while ((match = rustUseRegex.exec(text)) !== null) {
+    const modPath = match[1]!.replace(/::/g, '/').replace(/^crate\//, './');
+    const namedImports = match[2] ? match[2].split(',').map(s => s.trim()).filter(Boolean) : [];
+    imports.push({ kind: 'import', moduleSpecifier: modPath, namedImports });
+  }
+
+  // --- Ruby ---
+  // Match: require 'file' or require_relative 'file'
+  const rubyRequireRegex = /require(?:_relative)?\s+['"]([^'"]+)['"]/g;
+  while ((match = rubyRequireRegex.exec(text)) !== null) {
+    imports.push({ kind: 'import', moduleSpecifier: match[1]!, namedImports: [] });
+  }
+
+  // --- PHP ---
+  // Match: use Namespace\Class;
+  const phpUseRegex = /^use\s+([\w\\]+)(?:\s+as\s+(\w+))?\s*;/gm;
+  while ((match = phpUseRegex.exec(text)) !== null) {
+    const spec = match[1]!.replace(/\\/g, '/');
+    imports.push({ kind: 'import', moduleSpecifier: spec, defaultImport: match[2], namedImports: [] });
+  }
+
+  // --- C# ---
+  // Match: using Namespace.SubNamespace;
+  const csUsingRegex = /^using\s+(?:static\s+)?([\w.]+)\s*;/gm;
+  while ((match = csUsingRegex.exec(text)) !== null) {
+    imports.push({ kind: 'import', moduleSpecifier: match[1]!.replace(/\./g, '/'), namedImports: [] });
+  }
+
+  // --- Swift ---
+  // Match: import Module
+  const swiftImportRegex = /^import\s+(\w+)\s*$/gm;
+  while ((match = swiftImportRegex.exec(text)) !== null) {
+    imports.push({ kind: 'import', moduleSpecifier: match[1]!, namedImports: [] });
   }
 
   return imports;

@@ -37,8 +37,34 @@ export class LspClient {
       serverBin: opts.serverBin ?? '',
       requestTimeout: opts.requestTimeout ?? 30_000,
       verbose: opts.verbose ?? false,
-      extensions: opts.extensions ?? ['.ts', '.tsx', '.js', '.jsx'],
-      excludeDirs: opts.excludeDirs ?? ['node_modules', '.git', 'dist', 'build', '.next', 'out', 'coverage', '__pycache__'],
+      extensions: opts.extensions ?? [
+        '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs',  // JavaScript/TypeScript
+        '.py', '.pyw',                                    // Python
+        '.go',                                             // Go
+        '.rs',                                             // Rust
+        '.java',                                           // Java
+        '.kt', '.kts',                                     // Kotlin
+        '.swift',                                          // Swift
+        '.c', '.h', '.cpp', '.hpp', '.cc', '.cxx',        // C/C++
+        '.cs',                                             // C#
+        '.rb',                                             // Ruby
+        '.php',                                            // PHP
+        '.scala',                                          // Scala
+        '.dart',                                           // Dart
+        '.lua',                                            // Lua
+        '.ex', '.exs',                                     // Elixir
+      ],
+      excludeDirs: opts.excludeDirs ?? [
+        'node_modules', '.git', 'dist', 'build', '.next', 'out', 'coverage',
+        '__pycache__', '.pytest_cache', 'venv', 'env', '.venv',     // Python
+        'target',                                                      // Rust / Java (Maven)
+        'vendor',                                                      // Go / PHP / Ruby
+        '.gradle', 'gradle',                                           // Java (Gradle)
+        'bin', 'obj',                                                  // C# / .NET
+        '.build', 'Pods',                                              // Swift / iOS
+        '.dart_tool',                                                  // Dart
+        '_deps', 'CMakeFiles',                                         // C/C++ CMake
+      ],
     };
   }
 
@@ -287,12 +313,23 @@ export class LspClient {
     switch (ext) {
       case '.ts': return 'typescript';
       case '.tsx': return 'typescriptreact';
-      case '.js': return 'javascript';
+      case '.js': case '.mjs': case '.cjs': return 'javascript';
       case '.jsx': return 'javascriptreact';
-      case '.py': return 'python';
+      case '.py': case '.pyw': return 'python';
       case '.go': return 'go';
       case '.rs': return 'rust';
       case '.java': return 'java';
+      case '.kt': case '.kts': return 'kotlin';
+      case '.swift': return 'swift';
+      case '.c': case '.h': return 'c';
+      case '.cpp': case '.hpp': case '.cc': case '.cxx': return 'cpp';
+      case '.cs': return 'csharp';
+      case '.rb': return 'ruby';
+      case '.php': return 'php';
+      case '.scala': return 'scala';
+      case '.dart': return 'dart';
+      case '.lua': return 'lua';
+      case '.ex': case '.exs': return 'elixir';
       default: return 'plaintext';
     }
   }

@@ -1,18 +1,24 @@
 // ============================================================
-//  Atlas-TS — LSP Extractors (Orchestrator)
-//  Orchestrates the full LSP-based extraction pipeline:
-//  1. Opens project via LSP client
-//  2. Queries document symbols for each file
-//  3. Resolves imports using textDocument/definition
-//  4. Builds call edges using callHierarchy
-//  5. Converts everything to ParsedFile[] via the adapter
+//  Atlas — Analysis Orchestrator
+//  Routes projects to the right analyzer:
+//    - JS/TS → LSP-powered analysis (TypeScript Language Server)
+//    - All other languages → Generic text-based analysis
 // ============================================================
 
 import * as path from 'path';
 import * as fs from 'fs';
 import { LspClient, type LspClientOptions } from './lsp-client.js';
-import { adaptSymbolsToParsedFile, extractImportsFromSource, parseImportsFromText } from './lsp-adapter.js';
+import { adaptSymbolsToParsedFile, extractImportsFromSource } from './lsp-adapter.js';
 import { uriToPath, pathToUri } from './lsp-types.js';
+import {
+  detectProjectLanguage,
+  isJsTsLang,
+  detectLang,
+  analyzeFileWithText,
+  resolveGoImports,
+  resolveGenericImport,
+  extractGoMethods,
+} from './text-analyzer.js';
 import type { ParsedFile, ParsedImport } from '../../../shared/types.js';
 
 // ---------------------------------------------------------------------------
@@ -20,122 +26,208 @@ import type { ParsedFile, ParsedImport } from '../../../shared/types.js';
 // ---------------------------------------------------------------------------
 
 /**
- * Analyze a project using the LSP pipeline.
- * This is the LSP equivalent of the old `parseProject()` function.
- * 
- * @param projectPath Absolute path to the project directory.
- * @param opts Optional LSP client configuration.
- * @returns Array of ParsedFile objects, ready for the graph builder.
+ * Analyze a project — auto-detects language and chooses the right engine.
  */
 export async function analyzeWithLsp(
   projectPath: string,
   opts?: LspClientOptions,
 ): Promise<ParsedFile[]> {
-  const client = new LspClient({
-    verbose: false,
-    ...opts,
-  });
+  // Discover all files first
+  const client = new LspClient({ verbose: false, ...opts });
+  const filePaths = client.discoverFiles(projectPath);
+  console.log(`[Atlas] Discovered ${filePaths.length} source files`);
+
+  if (filePaths.length === 0) return [];
+
+  const primaryLang = detectProjectLanguage(filePaths);
+  console.log(`[Atlas] Primary language detected: ${primaryLang}`);
+
+  // Decide analysis strategy
+  const hasJsTs = filePaths.some(fp => isJsTsLang(detectLang(path.extname(fp))));
+  const hasOther = filePaths.some(fp => !isJsTsLang(detectLang(path.extname(fp))) && detectLang(path.extname(fp)) !== 'unknown');
+
+  // If primarily JS/TS, use LSP for those files + text for others
+  if (isJsTsLang(primaryLang) && hasJsTs) {
+    return analyzeWithLspEngine(projectPath, filePaths, opts);
+  }
+
+  // Otherwise use pure text-based analysis
+  return analyzeWithTextEngine(projectPath, filePaths);
+}
+
+// ---------------------------------------------------------------------------
+//  LSP Engine (JS/TS projects)
+// ---------------------------------------------------------------------------
+
+async function analyzeWithLspEngine(
+  projectPath: string,
+  allFilePaths: string[],
+  opts?: LspClientOptions,
+): Promise<ParsedFile[]> {
+  const client = new LspClient({ verbose: false, ...opts });
 
   try {
-    // 1. Open the project — starts LSP server, opens all files
     console.log(`[LSP] Opening project: ${projectPath}`);
     const filePaths = await client.openProject(projectPath);
     console.log(`[LSP] Project opened with ${filePaths.length} files`);
 
-    // 2. Process each file
     const parsedFiles: ParsedFile[] = [];
     const filePathSet = new Set(filePaths);
-    
-    // Build a map of relative paths for import resolution
+
     const relativePathMap = new Map<string, string>();
     for (const fp of filePaths) {
-      const rel = path.relative(projectPath, fp).split(path.sep).join('/');
-      relativePathMap.set(fp, rel);
+      relativePathMap.set(fp, path.relative(projectPath, fp).split(path.sep).join('/'));
     }
 
     for (const filePath of filePaths) {
       try {
-        // 2a. Get document symbols from LSP
-        const symbols = await client.getDocumentSymbols(filePath);
+        const ext = path.extname(filePath);
+        const lang = detectLang(ext);
 
-        // 2b. Extract and resolve imports
-        const imports = await resolveImports(filePath, projectPath, filePathSet, client);
+        let parsed: ParsedFile;
+        if (isJsTsLang(lang)) {
+          // Use LSP for JS/TS
+          const symbols = await client.getDocumentSymbols(filePath);
+          const imports = await resolveJsImports(filePath, projectPath, filePathSet, client);
+          parsed = adaptSymbolsToParsedFile(filePath, symbols, imports);
+        } else {
+          // Text-based for non-JS/TS files in mixed projects
+          parsed = analyzeFileWithText(filePath);
+        }
 
-        // 2c. Convert LSP symbols → ParsedFile
-        const parsed = adaptSymbolsToParsedFile(filePath, symbols, imports);
-
-        // 2d. Make file path relative to project root
         parsed.filePath = relativePathMap.get(filePath) || parsed.filePath;
 
-        // 2e. Fix import resolved paths to be relative too
         for (const imp of parsed.imports) {
           if (imp.resolvedPath) {
-            const absResolved = imp.resolvedPath;
-            if (relativePathMap.has(absResolved)) {
-              imp.resolvedPath = relativePathMap.get(absResolved);
-            } else {
-              // Try to make it relative
-              imp.resolvedPath = path.relative(projectPath, absResolved).split(path.sep).join('/');
-            }
+            const abs = imp.resolvedPath;
+            imp.resolvedPath = relativePathMap.has(abs)
+              ? relativePathMap.get(abs)
+              : path.relative(projectPath, abs).split(path.sep).join('/');
           }
         }
 
         parsedFiles.push(parsed);
       } catch (err) {
         console.error(`[LSP] Failed to process ${filePath}:`, err);
-        // Continue with other files
       }
     }
 
     console.log(`[LSP] Successfully parsed ${parsedFiles.length} files`);
-
-    // 3. Enhance with call hierarchy data (best-effort)
     await enhanceWithCallHierarchy(client, parsedFiles, projectPath);
-
     return parsedFiles;
   } finally {
-    // Always clean up the LSP server
     await client.close();
   }
 }
 
 // ---------------------------------------------------------------------------
-//  Import Resolution
+//  Text Engine (Go, Python, Rust, Java, etc.)
 // ---------------------------------------------------------------------------
 
-/**
- * Extract imports from a file and resolve their targets using LSP.
- */
-async function resolveImports(
+async function analyzeWithTextEngine(
+  projectPath: string,
+  filePaths: string[],
+): Promise<ParsedFile[]> {
+  console.log(`[Text] Analyzing ${filePaths.length} files with text engine`);
+
+  const parsedFiles: ParsedFile[] = [];
+  const relativePathMap = new Map<string, string>();
+  const relativePathSet = new Set<string>();
+
+  for (const fp of filePaths) {
+    const rel = path.relative(projectPath, fp).split(path.sep).join('/');
+    relativePathMap.set(fp, rel);
+    relativePathSet.add(rel);
+  }
+
+  // Go-specific: resolve module imports
+  const goInfo = resolveGoImports(projectPath, filePaths);
+  if (goInfo.moduleName) {
+    console.log(`[Text] Go module detected: ${goInfo.moduleName}`);
+  }
+
+  // Collect all Go methods (they're defined outside structs in Go)
+  const allGoMethods = new Map<string, any[]>();
+  const primaryLang = detectProjectLanguage(filePaths);
+  if (primaryLang === 'go') {
+    for (const fp of filePaths) {
+      if (!fp.endsWith('.go')) continue;
+      try {
+        const content = fs.readFileSync(fp, 'utf-8');
+        const methods = extractGoMethods(content, fp);
+        for (const [receiver, fns] of methods) {
+          if (!allGoMethods.has(receiver)) allGoMethods.set(receiver, []);
+          allGoMethods.get(receiver)!.push(...fns);
+        }
+      } catch { /* skip */ }
+    }
+  }
+
+  for (const filePath of filePaths) {
+    try {
+      const parsed = analyzeFileWithText(filePath);
+      const relPath = relativePathMap.get(filePath) || parsed.filePath;
+      parsed.filePath = relPath;
+
+      // Resolve imports
+      for (const imp of parsed.imports) {
+        const resolved = resolveGenericImport(
+          imp, relPath, projectPath, relativePathSet, goInfo
+        );
+        if (resolved) {
+          imp.resolvedPath = resolved;
+        }
+      }
+
+      // For Go: attach methods to their struct classes
+      if (primaryLang === 'go') {
+        for (const cls of parsed.classes) {
+          const methods = allGoMethods.get(cls.name);
+          if (methods) {
+            cls.methods = methods.map(m => ({
+              name: m.name,
+              parameters: [],
+              returnType: 'void',
+              visibility: /^[A-Z]/.test(m.name) ? 'public' as const : 'private' as const,
+              complexity: m.complexity || 1,
+              calledFunctions: m.calledFunctions || [],
+            }));
+          }
+        }
+      }
+
+      parsedFiles.push(parsed);
+    } catch (err) {
+      console.error(`[Text] Failed to process ${filePath}:`, err);
+    }
+  }
+
+  console.log(`[Text] Successfully parsed ${parsedFiles.length} files`);
+  return parsedFiles;
+}
+
+// ---------------------------------------------------------------------------
+//  JS/TS Import Resolution
+// ---------------------------------------------------------------------------
+
+async function resolveJsImports(
   filePath: string,
   projectPath: string,
   allFilePaths: Set<string>,
   client: LspClient,
 ): Promise<ParsedImport[]> {
-  // Parse imports from source text
   const rawImports = extractImportsFromSource(filePath);
 
-  // Resolve each import's target file
   for (const imp of rawImports) {
-    if (!imp.moduleSpecifier.startsWith('.')) {
-      // External module (npm package) — skip resolution
-      continue;
-    }
-
-    // Try to resolve the import target
-    const resolvedPath = resolveImportTarget(filePath, imp.moduleSpecifier, allFilePaths);
-    if (resolvedPath) {
-      imp.resolvedPath = resolvedPath;
-    }
+    if (!imp.moduleSpecifier.startsWith('.')) continue;
+    const resolvedPath = resolveJsImportTarget(filePath, imp.moduleSpecifier, allFilePaths);
+    if (resolvedPath) imp.resolvedPath = resolvedPath;
   }
 
   return rawImports;
 }
 
-/**
- * Resolve a relative import specifier to an absolute file path.
- */
-function resolveImportTarget(
+function resolveJsImportTarget(
   importingFile: string,
   moduleSpecifier: string,
   knownFiles: Set<string>,
@@ -144,34 +236,23 @@ function resolveImportTarget(
   const resolved = path.resolve(importDir, moduleSpecifier);
   const normalized = resolved.split(path.sep).join('/');
 
-  // Try exact match
   if (knownFiles.has(normalized)) return normalized;
 
-  // Try with extensions
   const extensions = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'];
   for (const ext of extensions) {
-    const candidate = normalized + ext;
-    if (knownFiles.has(candidate)) return candidate;
+    if (knownFiles.has(normalized + ext)) return normalized + ext;
   }
-
-  // Try index files
   for (const ext of extensions) {
-    const candidate = normalized + '/index' + ext;
-    if (knownFiles.has(candidate)) return candidate;
+    if (knownFiles.has(normalized + '/index' + ext)) return normalized + '/index' + ext;
   }
 
   return undefined;
 }
 
 // ---------------------------------------------------------------------------
-//  Call Hierarchy Enhancement
+//  Call Hierarchy Enhancement (LSP-only, JS/TS)
 // ---------------------------------------------------------------------------
 
-/**
- * Enhance parsed files with accurate call hierarchy information from LSP.
- * This replaces the text-based calledFunctions extraction with LSP-powered
- * outgoing call analysis for improved accuracy.
- */
 async function enhanceWithCallHierarchy(
   client: LspClient,
   parsedFiles: ParsedFile[],
@@ -184,63 +265,36 @@ async function enhanceWithCallHierarchy(
 
   for (const file of parsedFiles) {
     const absolutePath = path.resolve(projectPath, file.filePath);
+    const ext = path.extname(absolutePath);
+    if (!isJsTsLang(detectLang(ext))) continue; // Skip non-JS/TS
 
-    // Process functions
     for (const fn of file.functions) {
       try {
-        // Find the function's position by searching for its name in the source
         const position = findSymbolPosition(absolutePath, fn.name);
-        if (!position) {
-          skippedCount++;
-          continue;
-        }
-
-        // Prepare call hierarchy at the function's position
+        if (!position) { skippedCount++; continue; }
         const items = await client.prepareCallHierarchy(absolutePath, position);
-        if (items.length === 0) {
-          skippedCount++;
-          continue;
-        }
-
-        // Get outgoing calls
+        if (items.length === 0) { skippedCount++; continue; }
         const outgoing = await client.getOutgoingCalls(items[0]!);
         if (outgoing.length > 0) {
           fn.calledFunctions = outgoing.map(call => call.to.name);
           enhancedCount++;
         }
-      } catch {
-        skippedCount++;
-      }
+      } catch { skippedCount++; }
     }
 
-    // Process class methods
     for (const cls of file.classes) {
       for (const method of cls.methods) {
         try {
-          const position = findSymbolPosition(
-            absolutePath,
-            method.name,
-            cls.name,
-          );
-          if (!position) {
-            skippedCount++;
-            continue;
-          }
-
+          const position = findSymbolPosition(absolutePath, method.name, cls.name);
+          if (!position) { skippedCount++; continue; }
           const items = await client.prepareCallHierarchy(absolutePath, position);
-          if (items.length === 0) {
-            skippedCount++;
-            continue;
-          }
-
+          if (items.length === 0) { skippedCount++; continue; }
           const outgoing = await client.getOutgoingCalls(items[0]!);
           if (outgoing.length > 0) {
             method.calledFunctions = outgoing.map(call => call.to.name);
             enhancedCount++;
           }
-        } catch {
-          skippedCount++;
-        }
+        } catch { skippedCount++; }
       }
     }
   }
@@ -248,57 +302,38 @@ async function enhanceWithCallHierarchy(
   console.log(`[LSP] Call hierarchy: enhanced ${enhancedCount}, skipped ${skippedCount}`);
 }
 
-/**
- * Find the position of a symbol name in a source file.
- * Optionally scoped within a parent symbol (e.g., a method inside a class).
- */
 function findSymbolPosition(
-  filePath: string,
-  symbolName: string,
-  parentName?: string,
+  filePath: string, symbolName: string, parentName?: string,
 ): { line: number; character: number } | null {
   try {
     const content = fs.readFileSync(filePath, 'utf-8');
     const lines = content.split('\n');
-
-    // If we have a parent, try to find the symbol after the parent declaration
     let startLine = 0;
     if (parentName) {
       for (let i = 0; i < lines.length; i++) {
         if (lines[i]!.includes(`class ${parentName}`) || lines[i]!.includes(`interface ${parentName}`)) {
-          startLine = i;
-          break;
+          startLine = i; break;
         }
       }
     }
-
-    // Search for the symbol name as a function/method declaration
     const patterns = [
       new RegExp(`\\b(?:async\\s+)?(?:function\\s+)?${escapeRegExp(symbolName)}\\s*[<(]`),
       new RegExp(`\\b${escapeRegExp(symbolName)}\\s*=\\s*(?:async\\s+)?(?:\\([^)]*\\)|\\w+)\\s*=>`),
       new RegExp(`\\b${escapeRegExp(symbolName)}\\s*\\(`),
     ];
-
     for (let i = startLine; i < lines.length; i++) {
       for (const pattern of patterns) {
         const match = pattern.exec(lines[i]!);
         if (match) {
           const charIndex = lines[i]!.indexOf(symbolName, match.index);
-          return {
-            line: i,
-            character: charIndex >= 0 ? charIndex : match.index,
-          };
+          return { line: i, character: charIndex >= 0 ? charIndex : match.index };
         }
       }
     }
-
     return null;
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
 
-/** Escape special regex characters in a string. */
 function escapeRegExp(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

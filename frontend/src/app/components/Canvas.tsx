@@ -97,9 +97,10 @@ function CanvasInner() {
         color = "var(--god-object)";
         strokeDasharray = "5,5";
       } else {
+        if (edge.label === "imports") color = "var(--primary)";
         if (edge.label === "implements") color = "var(--accent)";
         if (edge.label === "extends") color = "var(--secondary)";
-        if (edge.label === "calls") color = "var(--primary)";
+        if (edge.label === "calls") color = "#f59e0b";
       }
 
       return {
@@ -168,51 +169,81 @@ function CanvasInner() {
       });
     }
 
-    // --- Proximity Focus Logic (Gathering) ---
+    // --- Proximity Focus Logic (Radial Hover) ---
     if (selectedNodeId) {
       const selectedNode = allNodes.find(n => n.id === selectedNodeId);
       if (!selectedNode) return styledNodes;
 
+      // Helper to calculate absolute position
+      const getAbsolutePosition = (nodeId: string) => {
+        let curr = allNodes.find(n => n.id === nodeId);
+        let x = 0;
+        let y = 0;
+        while (curr) {
+          x += curr.position.x;
+          y += curr.position.y;
+          curr = curr.parentId ? allNodes.find(n => n.id === curr!.parentId) : undefined;
+        }
+        return { x, y };
+      };
+
+      const absCenter = getAbsolutePosition(selectedNodeId);
+      
+      // Calculate true center of the selected node (assuming ~250px width if not measured)
+      const centerNodeWidth = selectedNode.measured?.width || selectedNode.width || 250;
+      const centerNodeHeight = selectedNode.measured?.height || selectedNode.height || 100;
+      const trueCenterX = absCenter.x + centerNodeWidth / 2;
+      const trueCenterY = absCenter.y + centerNodeHeight / 2;
+
       // Find neighbors
-      const neighbors = new Set<string>();
+      const neighborSet = new Set<string>();
       allEdges.forEach(e => {
-        if (e.source === selectedNodeId) neighbors.add(e.target);
-        if (e.target === selectedNodeId) neighbors.add(e.source);
+        if (e.source === selectedNodeId) neighborSet.add(e.target);
+        if (e.target === selectedNodeId) neighborSet.add(e.source);
       });
+      
+      const neighborArray = Array.from(neighborSet);
+      
+      // Significantly increase radius to account for wide rectangular nodes
+      const radius = Math.max(400, neighborArray.length * 100); 
+      const angleStep = (2 * Math.PI) / Math.max(1, neighborArray.length);
 
       return styledNodes.map(node => {
         const isSelected = node.id === selectedNodeId;
-        const isNeighbor = neighbors.has(node.id);
+        const isNeighbor = neighborSet.has(node.id);
 
         if (isSelected) {
-          return { ...node, style: { ...node.style, opacity: 1, filter: 'none', zIndex: 1000 } };
+          return { 
+            ...node, 
+            parentId: undefined, // Detach to float
+            position: absCenter, // Keep selected node exactly where it was
+            style: { ...node.style, opacity: 1, filter: 'none', zIndex: 1000 } 
+          };
         }
 
         if (isNeighbor) {
-          // Pull neighbors slightly closer to the selected node
-          const dx = node.position.x - selectedNode.position.x;
-          const dy = node.position.y - selectedNode.position.y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          const targetDist = 300; // Desired distance
+          const index = neighborArray.indexOf(node.id);
+          const angle = index * angleStep;
           
-          if (dist > targetDist) {
-            const ratio = targetDist / dist;
-            return {
-              ...node,
-              position: {
-                x: selectedNode.position.x + dx * ratio,
-                y: selectedNode.position.y + dy * ratio,
-              },
-              style: { ...node.style, opacity: 1, filter: 'none' }
-            };
-          }
-          return { ...node, style: { ...node.style, opacity: 1, filter: 'none' } };
+          const nodeWidth = node.measured?.width || node.width || 250;
+          const nodeHeight = node.measured?.height || node.height || 100;
+          
+          return { 
+            ...node, 
+            parentId: undefined, // Detach to float freely
+            position: {
+              // Position the center of the neighbor at the exact ring coordinate
+              x: trueCenterX + radius * Math.cos(angle) - nodeWidth / 2,
+              y: trueCenterY + radius * Math.sin(angle) - nodeHeight / 2,
+            },
+            style: { ...node.style, opacity: 1, filter: 'none', zIndex: 900 } 
+          };
         }
 
         // Fade out unrelated nodes
         return {
           ...node,
-          style: { ...node.style, opacity: 0.2, filter: 'grayscale(100%)' }
+          style: { ...node.style, opacity: 0.1, filter: 'grayscale(100%)', pointerEvents: 'none' as const }
         };
       });
     }
@@ -222,7 +253,7 @@ function CanvasInner() {
 
   const finalEdges = useMemo(() => {
     const nodeIds = new Set(finalNodes.map(n => n.id));
-    let edges = allEdges.filter(e => nodeIds.has(e.source) && nodeIds.has(e.target));
+    let edges = styledEdges.filter(e => nodeIds.has(e.source) && nodeIds.has(e.target));
 
     if (focusedNodeId || selectedNodeId) {
       const activeId = focusedNodeId || selectedNodeId;
@@ -231,13 +262,14 @@ function CanvasInner() {
         return {
           ...e,
           animated: isActive,
-          style: { ...e.style, opacity: isActive ? 1 : 0.1 }
+          label: isActive ? e.label : undefined, // Hide text for unconnected edges
+          style: { ...e.style, opacity: isActive ? 1 : 0.05 }
         };
       });
     }
 
-    return styledEdges;
-  }, [focusedNodeId, selectedNodeId, finalNodes, allEdges, styledEdges]);
+    return edges;
+  }, [focusedNodeId, selectedNodeId, finalNodes, styledEdges]);
 
   // Auto fit-view when focus mode toggles
   useEffect(() => {

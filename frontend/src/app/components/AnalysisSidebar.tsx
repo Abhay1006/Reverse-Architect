@@ -749,12 +749,21 @@ export default function AnalysisSidebar({
             count={
               edges.filter(
                 (e) =>
-                  e.label === "uses" ||
+                  e.label === "imports" ||
                   e.type === "import" ||
                   (!e.label && !e.type)
               ).length
             }
             color="var(--primary)"
+          />
+          <EdgeStat
+            label="Calls"
+            count={
+              edges.filter(
+                (e) => e.label === "calls" || e.type === "calls"
+              ).length
+            }
+            color="#f59e0b"
           />
           <EdgeStat
             label="Extends"

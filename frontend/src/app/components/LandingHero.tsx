@@ -4,9 +4,14 @@ import { ArrowForward as ArrowForwardIcon, Code as CodeIcon, GitHub as GitHubIco
 import { getRecentRepos, analyzeGithub, toStoreGraph } from '../lib/atlas-api';
 import { useAtlasStore } from '../store/atlas-store';
 
+function generateSessionId() {
+  return Math.random().toString(36).substring(2, 15);
+}
+
 export default function LandingHero() {
   const [url, setUrl] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [progressText, setProgressText] = useState('Analyzing...');
   const [recentRepos, setRecentRepos] = useState<{ repo_id: string; repo_name: string; analyzed_at: string; node_count: number; edge_count: number }[]>([]);
   const setGraph = useAtlasStore((state) => state.setGraph);
 
@@ -23,9 +28,27 @@ export default function LandingHero() {
       finalUrl = `https://github.com/${finalUrl}`;
     }
 
+    const sessionId = generateSessionId();
     setIsLoading(true);
+    setProgressText('Initializing...');
+
+    const eventSource = new EventSource(`/api/analyze/progress?sessionId=${sessionId}`);
+    eventSource.onmessage = (e) => {
+      try {
+        const event = JSON.parse(e.data);
+        if (event.message) {
+          setProgressText(event.message);
+        }
+        if (event.step === 'done' || event.step === 'error') {
+          eventSource.close();
+        }
+      } catch (err) {
+        console.error('Failed to parse SSE', err);
+      }
+    };
+
     try {
-      const result = await analyzeGithub(finalUrl);
+      const result = await analyzeGithub(finalUrl, sessionId);
       const storeGraph = toStoreGraph(result);
       setGraph(
         storeGraph.nodes,
@@ -39,6 +62,7 @@ export default function LandingHero() {
       console.error('Analysis failed:', err);
       alert('Analysis failed. Check console for details.');
     } finally {
+      eventSource.close();
       setIsLoading(false);
     }
   };
@@ -80,10 +104,16 @@ export default function LandingHero() {
           sx={{
             borderRadius: 2, px: 3, py: 1.5, textTransform: 'none', fontSize: '1rem', fontWeight: 600,
             background: 'linear-gradient(135deg, #4f46e5, #7c3aed)',
+            whiteSpace: 'nowrap',
+            minWidth: 140,
             '&:hover': { background: 'linear-gradient(135deg, #4338ca, #6d28d9)' }
           }}
         >
-          Analyze
+          {isLoading ? (
+            <Typography sx={{ fontSize: '0.85rem', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {progressText}
+            </Typography>
+          ) : 'Analyze'}
         </Button>
       </Paper>
 

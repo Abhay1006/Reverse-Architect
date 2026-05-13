@@ -158,11 +158,11 @@ export async function analyzeUpload(file: File): Promise<ReactFlowGraph> {
  * Analyze a public GitHub repository by URL.
  * Sends a JSON body to POST /api/analyze/github.
  */
-export async function analyzeGithub(url: string): Promise<ReactFlowGraph> {
+export async function analyzeGithub(url: string, sessionId?: string): Promise<ReactFlowGraph> {
   const res = await fetch(`${apiBase()}/github`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url }),
+    body: JSON.stringify({ url, sessionId }),
   });
 
   return handleResponse(res);
