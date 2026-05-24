@@ -39,6 +39,11 @@ export async function analyzeWithLsp(
 
   if (filePaths.length === 0) return [];
 
+  const MAX_FILES = 3000;
+  if (filePaths.length > MAX_FILES) {
+    throw new Error(`Repository is too large to analyze (${filePaths.length} source files discovered). The maximum limit is ${MAX_FILES} files. Please select a smaller repository or project.`);
+  }
+
   const primaryLang = detectProjectLanguage(filePaths);
   console.log(`[Atlas] Primary language detected: ${primaryLang}`);
 

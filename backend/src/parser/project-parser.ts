@@ -11,17 +11,27 @@ import type { ParsedFile, ParsedDatabase } from '../../../shared/types.js';
 
 function walkDir(dir: string, ext: string[]): string[] {
   let results: string[] = [];
-  const list = fs.readdirSync(dir);
-  for (const file of list) {
-    const fullPath = path.join(dir, file);
-    const stat = fs.statSync(fullPath);
-    if (stat && stat.isDirectory()) {
-      if (!fullPath.includes('node_modules')) {
-        results = results.concat(walkDir(fullPath, ext));
+  const excludeDirs = ['.git', 'node_modules', 'dist', 'build', '.next', 'venv', '.venv', 'target', '__pycache__'];
+  
+  try {
+    const list = fs.readdirSync(dir);
+    for (const file of list) {
+      const fullPath = path.join(dir, file);
+      try {
+        const stat = fs.statSync(fullPath);
+        if (stat && stat.isDirectory()) {
+          if (!excludeDirs.includes(file)) {
+            results = results.concat(walkDir(fullPath, ext));
+          }
+        } else {
+          if (ext.some(e => fullPath.endsWith(e))) results.push(fullPath);
+        }
+      } catch {
+        // Skip unreadable files
       }
-    } else {
-      if (ext.some(e => fullPath.endsWith(e))) results.push(fullPath);
     }
+  } catch {
+    // Skip unreadable directories
   }
   return results;
 }
