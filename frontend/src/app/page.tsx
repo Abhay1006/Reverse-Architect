@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   AppBar,
   Toolbar,
@@ -9,6 +9,8 @@ import {
   IconButton,
   Typography,
   Tooltip,
+  Chip,
+  CircularProgress,
 } from "@mui/material";
 import {
   Menu as MenuIcon,
@@ -16,6 +18,7 @@ import {
   Refresh as ReAnalyzeIcon,
   Analytics as AnalysisIcon,
   Architecture as AtlasIcon,
+  Label as LabelIcon,
 } from "@mui/icons-material";
 import { toPng } from "html-to-image";
 import Dashboard from "./components/Dashboard";
@@ -26,12 +29,30 @@ import FolderTree from "./components/FolderTree";
 import Breadcrumb from "./components/Breadcrumb";
 import LandingHero from "./components/LandingHero";
 import { useAtlasStore } from "./store/atlas-store";
+import { ErrorBoundary } from "./components/ErrorBoundary";
+import GraphSkeleton from "./components/GraphSkeleton";
+import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 
 export default function Home() {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const nodes = useAtlasStore((state) => state.nodes);
+  const edges = useAtlasStore((state) => state.edges);
+  const analysisResults = useAtlasStore((state) => state.analysisResults);
+  const visibleNodeTypes = useAtlasStore((state) => state.visibleNodeTypes);
+  const toggleNodeType = useAtlasStore((state) => state.toggleNodeType);
+  const showEdgeLabels = useAtlasStore((state) => state.showEdgeLabels);
+  const toggleEdgeLabels = useAtlasStore((state) => state.toggleEdgeLabels);
+  const isLoading = useAtlasStore((state) => state.isLoading);
+
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isFolderTreeOpen, setIsFolderTreeOpen] = useState(true);
+
+  const triggerFitView = useAtlasStore((state) => state.triggerFitView);
 
   const handleExportPng = () => {
     const el = document.querySelector(".react-flow") as HTMLElement;
@@ -51,6 +72,62 @@ export default function Home() {
         console.error("Failed to export image", err);
       });
   };
+
+  useKeyboardShortcuts([
+    {
+      key: "e",
+      ctrl: true,
+      action: handleExportPng,
+      description: "Export graph to PNG",
+    },
+    {
+      key: "f",
+      ctrl: true,
+      action: triggerFitView,
+      description: "Fit graph to view",
+    },
+    {
+      key: "Escape",
+      action: () => setIsSidebarOpen(false),
+      description: "Close sidebar",
+    },
+    {
+      key: "l",
+      action: toggleEdgeLabels,
+      description: "Toggle edge labels",
+    },
+    {
+      key: "1",
+      action: () => toggleNodeType("file"),
+      description: "Toggle file nodes filter",
+    },
+    {
+      key: "2",
+      action: () => toggleNodeType("class"),
+      description: "Toggle class nodes filter",
+    },
+    {
+      key: "3",
+      action: () => toggleNodeType("interface"),
+      description: "Toggle interface nodes filter",
+    },
+    {
+      key: "4",
+      action: () => toggleNodeType("function"),
+      description: "Toggle function nodes filter",
+    },
+    {
+      key: "5",
+      action: () => toggleNodeType("database"),
+      description: "Toggle database nodes filter",
+    },
+  ]);
+
+  if (!mounted) {
+    return (
+      <div style={{ width: "100vw", height: "100vh", backgroundColor: "#0a0a0c" }} />
+    );
+  }
 
   return (
     <Box component="main" sx={{ display: "flex", width: "100vw", height: "100vh", overflow: "hidden", bgcolor: "background.default" }}>
@@ -204,11 +281,15 @@ export default function Home() {
 
         {/* Canvas / Empty State */}
         <Box sx={{ flex: 1, position: "relative", overflow: "hidden" }}>
-          {nodes.length === 0 ? (
-            <LandingHero />
-          ) : (
-            <Dashboard />
-          )}
+          <ErrorBoundary>
+            {isLoading ? (
+              <GraphSkeleton />
+            ) : nodes.length === 0 ? (
+              <LandingHero />
+            ) : (
+              <Dashboard />
+            )}
+          </ErrorBoundary>
         </Box>
       </Box>
 

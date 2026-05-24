@@ -11,8 +11,8 @@ import * as path from 'path';
 export interface EntryPointResult {
   /** Relative path to the entry file from the project root */
   entryFile: string;
-  /** Detected framework */
-  framework: 'node' | 'nextjs' | 'vite' | 'express' | 'unknown';
+  /** Detected framework or language environment */
+  framework: 'node' | 'nextjs' | 'vite' | 'express' | 'python' | 'go' | 'rust' | 'java' | 'cpp' | 'unknown';
   /** The package name from package.json */
   packageName?: string | undefined;
 }
@@ -308,33 +308,55 @@ function findViteEntry(pkgDir: string): string | null {
 
 /** Convention scan for entry files when no package.json hints are available */
 function conventionScan(dir: string): EntryPointResult | null {
-  const candidates = [
-    'src/index.ts',
-    'src/index.tsx',
-    'src/index.js',
-    'src/app.ts',
-    'src/app.tsx',
-    'src/app.js',
-    'src/server.ts',
-    'src/server.js',
-    'src/main.ts',
-    'src/main.tsx',
-    'src/main.js',
-    'index.ts',
-    'index.tsx',
-    'index.js',
-    'app.ts',
-    'app.js',
-    'server.ts',
-    'server.js',
+  const candidates: { file: string; framework: EntryPointResult['framework'] }[] = [
+    // Python
+    { file: 'main.py', framework: 'python' },
+    { file: 'app.py', framework: 'python' },
+    { file: 'run.py', framework: 'python' },
+    { file: 'manage.py', framework: 'python' },
+    // Go
+    { file: 'main.go', framework: 'go' },
+    // Rust
+    { file: 'src/main.rs', framework: 'rust' },
+    { file: 'src/lib.rs', framework: 'rust' },
+    { file: 'main.rs', framework: 'rust' },
+    // C/C++
+    { file: 'main.cpp', framework: 'cpp' },
+    { file: 'main.c', framework: 'cpp' },
+    { file: 'src/main.cpp', framework: 'cpp' },
+    { file: 'src/main.c', framework: 'cpp' },
+    // Java/Kotlin
+    { file: 'src/main/java/Main.java', framework: 'java' },
+    { file: 'Main.java', framework: 'java' },
+    { file: 'src/main/kotlin/Main.kt', framework: 'java' },
+    { file: 'Main.kt', framework: 'java' },
+    // JS/TS
+    { file: 'src/index.ts', framework: 'node' },
+    { file: 'src/index.tsx', framework: 'node' },
+    { file: 'src/index.js', framework: 'node' },
+    { file: 'src/app.ts', framework: 'node' },
+    { file: 'src/app.tsx', framework: 'node' },
+    { file: 'src/app.js', framework: 'node' },
+    { file: 'src/server.ts', framework: 'node' },
+    { file: 'src/server.js', framework: 'node' },
+    { file: 'src/main.ts', framework: 'node' },
+    { file: 'src/main.tsx', framework: 'node' },
+    { file: 'src/main.js', framework: 'node' },
+    { file: 'index.ts', framework: 'node' },
+    { file: 'index.tsx', framework: 'node' },
+    { file: 'index.js', framework: 'node' },
+    { file: 'app.ts', framework: 'node' },
+    { file: 'app.js', framework: 'node' },
+    { file: 'server.ts', framework: 'node' },
+    { file: 'server.js', framework: 'node' },
   ];
 
   for (const candidate of candidates) {
-    const full = path.join(dir, candidate);
+    const full = path.join(dir, candidate.file);
     if (fs.existsSync(full) && fs.statSync(full).isFile()) {
       return {
-        entryFile: candidate,
-        framework: 'unknown',
+        entryFile: candidate.file,
+        framework: candidate.framework,
       };
     }
   }

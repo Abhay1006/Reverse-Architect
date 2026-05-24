@@ -155,14 +155,6 @@ function runGraphPipeline(parsedFiles: ParsedFile[], entryPoints: ReturnType<typ
     // React Flow requires child nodes strictly position relatively to their mathematical parent bounding top-left corner
     let relativeX = n.x;
     let relativeY = n.y;
-    
-    if (n.parentNode) {
-      const parentNode = posNodeMap.get(n.parentNode);
-      if (parentNode) {
-        relativeX = n.x - parentNode.x;
-        relativeY = n.y - parentNode.y;
-      }
-    }
 
     const rfNode: any = {
       id: n.id,
@@ -269,7 +261,14 @@ app.post('/api/analyze/upload', upload.single('file'), analysisLimiter, async (r
     return;
   }
 
-  const extractDir = path.join(os.tmpdir(), `atlas-${Date.now()}`);
+  const uploadId = `upload-${Date.now()}`;
+  const clonesBaseDir = path.join(os.homedir(), '.atlas', 'clones');
+  const extractDir = path.join(clonesBaseDir, uploadId);
+  
+  if (!fs.existsSync(clonesBaseDir)) {
+    fs.mkdirSync(clonesBaseDir, { recursive: true });
+  }
+
   try {
     // Extract the zip
     const zip = new AdmZip(file.path);
@@ -279,15 +278,17 @@ app.post('/api/analyze/upload', upload.single('file'), analysisLimiter, async (r
     const projectRoot = findProjectRoot(extractDir);
     const result = await analyzeProjectDir(projectRoot);
 
-    res.json(result);
+    res.json({
+      ...result,
+      repoId: uploadId,
+    });
   } catch (err: unknown) {
     console.error('[/api/analyze/upload] Error:', err);
     const message = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: 'Analysis failed', details: message });
   } finally {
-    // Cleanup temp files
+    // Cleanup temp uploaded file (keep the extracted directory for peeking)
     cleanup(file.path);
-    cleanup(extractDir);
   }
 });
 
@@ -326,7 +327,10 @@ app.post('/api/analyze/github', analysisLimiter, async (req, res) => {
           console.log(`⚡ [Cache Hit] Returning cached analysis for ${repoId} (commit: ${latestCommit.substring(0, 7)})`);
           progressTracker.emitProgress(sid, { step: 'done', message: 'Loaded from cache instantly!' });
           progressTracker.cleanup(sid);
-          return res.json(cachedResult);
+          return res.json({
+            ...cachedResult,
+            repoId,
+          });
         }
       } else {
         console.log(`🔄 [Cache Miss/Stale] Cache commit: ${cachedCommit || 'none'}, Remote commit: ${latestCommit}`);
@@ -337,7 +341,18 @@ app.post('/api/analyze/github', analysisLimiter, async (req, res) => {
 
     // 2. Perform full analysis
     progressTracker.emitProgress(sid, { step: 'cloning', message: `Cloning repository ${repoId}...` });
-    const cloneDir = path.join(os.tmpdir(), `atlas-gh-${Date.now()}`);
+    
+    const clonesBaseDir = path.join(os.homedir(), '.atlas', 'clones');
+    const cloneDir = path.join(clonesBaseDir, repoId);
+    
+    if (!fs.existsSync(clonesBaseDir)) {
+      fs.mkdirSync(clonesBaseDir, { recursive: true });
+    }
+    
+    if (fs.existsSync(cloneDir)) {
+      cleanup(cloneDir);
+    }
+
     let analysisResult;
     try {
       console.log(`Cloning ${cleanUrl} into ${cloneDir}...`);
@@ -354,12 +369,17 @@ app.post('/api/analyze/github', analysisLimiter, async (req, res) => {
         console.log(`💾 [Cache] Saving result for ${repoId} (commit: ${latestCommit.substring(0, 7)})`);
         CacheManager.saveResult(repoId, cleanUrl, latestCommit, analysisResult);
       }
-    } finally {
+    } catch (err) {
+      // Cleanup clone if cloning or analysis failed
       cleanup(cloneDir);
+      throw err;
     }
 
     progressTracker.emitProgress(sid, { step: 'done', message: 'Analysis complete!', progress: 100 });
-    res.json(analysisResult);
+    res.json({
+      ...analysisResult,
+      repoId,
+    });
   } catch (err: unknown) {
     console.error('[/api/analyze/github] Error:', err);
     const message = err instanceof Error ? err.message : String(err);
@@ -382,6 +402,72 @@ app.get('/api/repos/recent', (_req, res) => {
   } catch (err) {
     console.error('[/api/repos/recent] Error:', err);
     res.status(500).json({ error: 'Failed to fetch recent repos' });
+  }
+});
+
+/** GET /api/code — read file code for peeking */
+app.get('/api/code', (req, res) => {
+  const { repoId, filePath } = req.query as { repoId?: string; filePath?: string };
+  if (!repoId || !filePath) {
+    res.status(400).json({ error: 'Missing repoId or filePath' });
+    return;
+  }
+
+  // Prevent directory traversal attacks
+  const safeRepoId = path.normalize(repoId).replace(/^(\.\.(\/|\\|$))+/, '');
+  const safeFilePath = path.normalize(filePath).replace(/^(\.\.(\/|\\|$))+/, '');
+
+  const clonesBaseDir = path.join(os.homedir(), '.atlas', 'clones');
+  const repoPath = path.join(clonesBaseDir, safeRepoId);
+  
+  let fullFilePath = path.join(repoPath, safeFilePath);
+  
+  if (!fs.existsSync(fullFilePath)) {
+    // If it's a zip upload with nested directories, search for the relative path
+    const findFileRecursively = (dir: string, relPath: string): string | null => {
+      try {
+        const entries = fs.readdirSync(dir, { withFileTypes: true });
+        for (const entry of entries) {
+          if (entry.isDirectory()) {
+            const subDir = path.join(dir, entry.name);
+            const candidate = path.join(subDir, relPath);
+            if (fs.existsSync(candidate)) {
+              return candidate;
+            }
+            const nested = findFileRecursively(subDir, relPath);
+            if (nested) return nested;
+          }
+        }
+      } catch {
+        // ignore read errors
+      }
+      return null;
+    };
+    
+    if (fs.existsSync(repoPath)) {
+      const nestedPath = findFileRecursively(repoPath, safeFilePath);
+      if (nestedPath) {
+        fullFilePath = nestedPath;
+      }
+    }
+  }
+
+  if (!fullFilePath.startsWith(repoPath)) {
+    res.status(403).json({ error: 'Access denied' });
+    return;
+  }
+
+  if (!fs.existsSync(fullFilePath) || fs.statSync(fullFilePath).isDirectory()) {
+    res.status(404).json({ error: 'File not found' });
+    return;
+  }
+
+  try {
+    const code = fs.readFileSync(fullFilePath, 'utf8');
+    const ext = path.extname(fullFilePath).toLowerCase().substring(1);
+    res.json({ code, language: ext });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to read file', details: String(err) });
   }
 });
 

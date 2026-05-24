@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
     const backendRes = await fetch(`${BACKEND_URL}/api/analyze/github`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url: body.url }),
+      body: JSON.stringify({ url: body.url, sessionId: body.sessionId }),
     });
 
     if (!backendRes.ok) {

@@ -2,7 +2,8 @@
 
 import React, { memo, ReactNode } from "react";
 import { Handle, Position } from "@xyflow/react";
-import { Box, Typography, Chip } from "@mui/material";
+import { Box, Typography } from "@mui/material";
+import { useAtlasStore } from "../../store/atlas-store";
 
 interface BaseNodeProps {
   label: string;
@@ -12,6 +13,7 @@ interface BaseNodeProps {
   headerColor?: string;
   selected?: boolean;
   status?: "god" | "dead" | "entry" | "default";
+  complexity?: number;
 }
 
 const BaseNode = ({
@@ -22,7 +24,9 @@ const BaseNode = ({
   headerColor = "var(--primary)",
   selected = false,
   status = "default",
+  complexity,
 }: BaseNodeProps) => {
+  const heatmapEnabled = useAtlasStore((s) => s.heatmapEnabled);
 
   const getBackgroundStyle = () => {
     if (status === "god") {
@@ -34,6 +38,12 @@ const BaseNode = ({
     if (status === "entry") {
       return `linear-gradient(145deg, rgba(99, 102, 241, 0.25) 0%, rgba(15, 15, 20, 0.98) 120%)`;
     }
+    if (heatmapEnabled && complexity !== undefined) {
+      const hue = Math.max(0, 120 - complexity * 8); // 120 = green, 0 = red
+      const sat = Math.min(100, 35 + complexity * 3.5);
+      const color = `hsl(${hue}, ${sat}%, 20%)`;
+      return `linear-gradient(145deg, color-mix(in srgb, ${color} 45%, transparent) 0%, rgba(15, 15, 20, 0.98) 120%)`;
+    }
     return `linear-gradient(145deg, color-mix(in srgb, ${headerColor} 25%, transparent) 0%, rgba(15, 15, 20, 0.98) 120%)`;
   };
 
@@ -41,6 +51,11 @@ const BaseNode = ({
     if (status === "god") return "rgba(239, 68, 68, 0.8)";
     if (status === "dead") return "rgba(148, 163, 184, 0.3)";
     if (status === "entry") return "var(--primary)";
+    if (heatmapEnabled && complexity !== undefined) {
+      const hue = Math.max(0, 120 - complexity * 8);
+      const sat = Math.min(100, 35 + complexity * 3.5);
+      return `hsl(${hue}, ${sat}%, 45%)`;
+    }
     return selected ? headerColor : "rgba(255, 255, 255, 0.1)";
   };
 

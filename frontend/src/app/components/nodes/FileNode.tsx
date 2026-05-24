@@ -9,9 +9,56 @@ import { FileNode as FileNodeType } from "../../types/nodes";
 
 import { useAtlasStore } from "../../store/atlas-store";
 
+const getLanguageDetails = (filePath: string) => {
+  const ext = '.' + filePath.split('.').pop()?.toLowerCase();
+  switch (ext) {
+    case '.py':
+    case '.pyw':
+      return { label: 'Python', short: 'PY', color: '#3776ab' };
+    case '.go':
+      return { label: 'Go', short: 'GO', color: '#00add8' };
+    case '.rs':
+      return { label: 'Rust', short: 'RS', color: '#ce412b' };
+    case '.java':
+      return { label: 'Java', short: 'JV', color: '#ea2d2e' };
+    case '.kt':
+    case '.kts':
+      return { label: 'Kotlin', short: 'KT', color: '#7f52ff' };
+    case '.swift':
+      return { label: 'Swift', short: 'SW', color: '#f05138' };
+    case '.c':
+    case '.h':
+      return { label: 'C', short: 'C', color: '#a8b9cc' };
+    case '.cpp':
+    case '.hpp':
+    case '.cc':
+    case '.cxx':
+      return { label: 'C++', short: 'C++', color: '#00599c' };
+    case '.cs':
+      return { label: 'C#', short: 'C#', color: '#239120' };
+    case '.rb':
+      return { label: 'Ruby', short: 'RB', color: '#cc342d' };
+    case '.php':
+      return { label: 'PHP', short: 'PHP', color: '#777bb4' };
+    case '.ts':
+    case '.tsx':
+      return { label: 'TypeScript', short: 'TS', color: '#3178c6' };
+    case '.js':
+    case '.jsx':
+    case '.mjs':
+    case '.cjs':
+      return { label: 'JavaScript', short: 'JS', color: '#f7df1e' };
+    case '.sql':
+      return { label: 'SQL', short: 'SQL', color: '#00758f' };
+    case '.prisma':
+      return { label: 'Prisma', short: 'PR', color: '#5a67d8' };
+    default:
+      return { label: 'Code', short: ext.substring(1).toUpperCase() || 'SRC', color: '#94a3b8' };
+  }
+};
+
 const FileNode = ({ data, selected }: NodeProps<FileNodeType>) => {
   const fullPath = data.filePath as string;
-  const pathParts = fullPath.split('/');
   const expandedFiles = useAtlasStore(s => s.expandedFiles);
   const isExpanded = expandedFiles.has(fullPath);
 
@@ -19,18 +66,32 @@ const FileNode = ({ data, selected }: NodeProps<FileNodeType>) => {
   const status = isEntryPoint ? "entry" : "default";
 
   const entities = (data.metadata as any)?.entities || [];
+  const maxComplexity = (data.metadata as any)?.maxComplexity;
+  const lang = getLanguageDetails(fullPath);
 
   return (
     <BaseNode
       label={data.label as string}
       selected={selected}
-      headerColor={isEntryPoint ? "var(--primary)" : "var(--file-bg)"}
+      headerColor={isEntryPoint ? "var(--primary)" : lang.color}
       status={status}
+      complexity={maxComplexity}
       icon={
         isEntryPoint ? (
           <ZapIcon sx={{ fontSize: 16 }} />
         ) : (
-          <FileTextIcon sx={{ fontSize: 16 }} />
+          <Box
+            component="span"
+            sx={{
+              fontSize: "0.55rem",
+              fontWeight: 900,
+              color: lang.short === 'JS' ? '#17171a' : 'white',
+              fontFamily: "monospace",
+              lineHeight: 1,
+            }}
+          >
+            {lang.short}
+          </Box>
         )
       }
     >
@@ -45,7 +106,7 @@ const FileNode = ({ data, selected }: NodeProps<FileNodeType>) => {
           }}
           title={fullPath}
         >
-          {pathParts[pathParts.length - 1]}
+          {fullPath}
         </Typography>
 
         {entities.length > 0 && (

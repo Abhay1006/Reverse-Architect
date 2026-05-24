@@ -21,6 +21,7 @@ const FunctionNode = ({ data, selected, id }: NodeProps<FunctionNodeType>) => {
       label={data.label as string}
       selected={selected}
       status={isDeadCode ? "dead" : "default"}
+      complexity={data.metadata?.maxComplexity}
       headerColor="var(--function-bg)"
       className="min-w-[180px]"
       icon={<BracesIcon sx={{ fontSize: 16 }} />}

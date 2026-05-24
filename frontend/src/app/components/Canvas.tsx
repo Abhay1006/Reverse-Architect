@@ -12,10 +12,24 @@ import {
   Node,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { Box, Typography, IconButton, Chip, Button } from "@mui/material";
-import { Close as CloseIcon, FilterCenterFocus as FocusIcon } from "@mui/icons-material";
+import { Box, Typography, IconButton, Chip, Button, Tooltip } from "@mui/material";
+import {
+  Close as CloseIcon,
+  FilterCenterFocus as FocusIcon,
+  Label as LabelIcon,
+  UnfoldMore as ExpandAllIcon,
+  UnfoldLess as CollapseAllIcon,
+  LocalFireDepartment as FlameIcon,
+  FileDownload as DownloadIcon,
+  Code as CodeIcon,
+} from "@mui/icons-material";
 
 import { useAtlasStore, getVisibleNodes, getVisibleEdges } from "../store/atlas-store";
+import dynamic from "next/dynamic";
+
+const Graph3D = dynamic(() => import("./Graph3D"), { ssr: false });
+import CodePeekPanel from "./CodePeekPanel";
+import { exportToMermaid, exportToJSON } from "../lib/export-utils";
 import ClassNode from "./nodes/ClassNode";
 import InterfaceNode from "./nodes/InterfaceNode";
 import FunctionNode from "./nodes/FunctionNode";
@@ -52,15 +66,28 @@ function CanvasInner() {
     fitViewTrigger,
     panToNodeId,
     panToNode,
+    visibleNodeTypes,
+    showEdgeLabels,
+    expandAllFiles,
+    collapseAllFiles,
+    toggleNodeType,
+    toggleEdgeLabels,
+    activeRepoId,
+    codePeekFile,
+    setCodePeekFile,
+    heatmapEnabled,
+    toggleHeatmap,
+    graphMode,
+    setGraphMode,
   } = useAtlasStore();
 
   const { fitView } = useReactFlow();
   const prevFocusPath = useRef(focusPath);
 
-  // Filter nodes based on current focus path
+  // Filter nodes based on current focus path and type filters
   const visibleNodes = useMemo(
-    () => getVisibleNodes(allNodes, focusPath, expandedFiles),
-    [allNodes, focusPath, expandedFiles]
+    () => getVisibleNodes(allNodes, focusPath, expandedFiles, visibleNodeTypes),
+    [allNodes, focusPath, expandedFiles, visibleNodeTypes]
   );
 
   const visibleNodeIds = useMemo(
@@ -105,6 +132,7 @@ function CanvasInner() {
 
       return {
         ...edge,
+        label: showEdgeLabels ? edge.label : undefined,
         style: {
           ...edge.style,
           stroke: color,
@@ -112,7 +140,7 @@ function CanvasInner() {
         },
       };
     });
-  }, [visibleEdges, cycleEdges]);
+  }, [visibleEdges, cycleEdges, showEdgeLabels]);
 
   // Apply search filtering
   const styledNodes = useMemo(() => {
@@ -355,49 +383,336 @@ function CanvasInner() {
 
   return (
     <Box sx={{ width: "100%", height: "100%", position: "relative" }}>
-      <ReactFlow
-        nodes={finalNodes}
-        edges={finalEdges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onNodeClick={onNodeClick}
-        onNodeDoubleClick={onNodeDoubleClick}
-        onPaneClick={onPaneClick}
-        nodeTypes={nodeTypes}
-        fitView
-        minZoom={0.05}
-        maxZoom={2}
-        colorMode="dark"
-        defaultEdgeOptions={edgeOptions}
+      {graphMode === "3D" ? (
+        <Graph3D />
+      ) : (
+        <ReactFlow
+          nodes={finalNodes}
+          edges={finalEdges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onNodeClick={onNodeClick}
+          onNodeDoubleClick={onNodeDoubleClick}
+          onPaneClick={onPaneClick}
+          nodeTypes={nodeTypes}
+          fitView
+          minZoom={0.05}
+          maxZoom={2}
+          colorMode="dark"
+          defaultEdgeOptions={edgeOptions}
+        >
+          <Background
+            variant={BackgroundVariant.Dots}
+            gap={20}
+            size={1}
+            color="rgba(255, 255, 255, 0.05)"
+          />
+          <Controls />
+          <MiniMap
+            pannable
+            zoomable
+            style={{ backgroundColor: "var(--glass-bg)" }}
+            nodeColor={(n) => {
+              if (n.type === "class") return "var(--class-bg)";
+              if (n.type === "interface") return "var(--interface-bg)";
+              if (n.type === "function") return "var(--function-bg)";
+              if (n.type === "database") return "#10b981";
+              return "var(--file-bg)";
+            }}
+            maskColor="rgba(0, 0, 0, 0.5)"
+          />
+        </ReactFlow>
+      )}
+
+      {/* Floating Canvas Toolbar */}
+      <Box
+        sx={{
+          position: "absolute",
+          top: 16,
+          left: "50%",
+          transform: "translateX(-50%)",
+          zIndex: 1000,
+          display: "flex",
+          alignItems: "center",
+          gap: 1.5,
+          px: 2,
+          py: 0.75,
+          borderRadius: 3,
+          bgcolor: "rgba(10, 10, 12, 0.8)",
+          backdropFilter: "blur(12px)",
+          border: "1px solid rgba(255, 255, 255, 0.08)",
+          boxShadow: "0 8px 32px 0 rgba(0, 0, 0, 0.5)",
+        }}
       >
-        <Background
-          variant={BackgroundVariant.Dots}
-          gap={20}
-          size={1}
-          color="rgba(255, 255, 255, 0.05)"
-        />
-        <Controls />
-        <MiniMap
-          pannable
-          zoomable
-          style={{ backgroundColor: "var(--glass-bg)" }}
-          nodeColor={(n) => {
-            if (n.type === "class") return "var(--class-bg)";
-            if (n.type === "interface") return "var(--interface-bg)";
-            if (n.type === "function") return "var(--function-bg)";
-            if (n.type === "database") return "#10b981";
-            return "var(--file-bg)";
+        {/* 2D / 3D Mode Toggle */}
+        <Box 
+          sx={{ 
+            display: "flex", 
+            bgcolor: "rgba(255, 255, 255, 0.04)", 
+            border: "1px solid rgba(255, 255, 255, 0.06)", 
+            borderRadius: 2, 
+            p: 0.25 
           }}
-          maskColor="rgba(0, 0, 0, 0.5)"
-        />
-      </ReactFlow>
+        >
+          <Button
+            size="small"
+            variant={graphMode === "2D" ? "contained" : "text"}
+            onClick={() => setGraphMode("2D")}
+            sx={{
+              fontSize: "0.6875rem",
+              fontWeight: 700,
+              minWidth: 40,
+              height: 20,
+              py: 0,
+              px: 1,
+              textTransform: "none",
+              borderRadius: 1.5,
+              color: graphMode === "2D" ? "white" : "text.secondary",
+              bgcolor: graphMode === "2D" ? "rgba(99, 102, 241, 0.85)" : "transparent",
+              boxShadow: "none",
+              "&:hover": {
+                bgcolor: graphMode === "2D" ? "rgba(99, 102, 241, 0.95)" : "rgba(255, 255, 255, 0.04)",
+              }
+            }}
+          >
+            2D
+          </Button>
+          <Button
+            size="small"
+            variant={graphMode === "3D" ? "contained" : "text"}
+            onClick={() => setGraphMode("3D")}
+            sx={{
+              fontSize: "0.6875rem",
+              fontWeight: 700,
+              minWidth: 40,
+              height: 20,
+              py: 0,
+              px: 1,
+              textTransform: "none",
+              borderRadius: 1.5,
+              color: graphMode === "3D" ? "white" : "text.secondary",
+              bgcolor: graphMode === "3D" ? "rgba(99, 102, 241, 0.85)" : "transparent",
+              boxShadow: "none",
+              "&:hover": {
+                bgcolor: graphMode === "3D" ? "rgba(99, 102, 241, 0.95)" : "rgba(255, 255, 255, 0.04)",
+              }
+            }}
+          >
+            3D
+          </Button>
+        </Box>
+
+        {/* Divider */}
+        <Box sx={{ height: 16, width: "1px", bgcolor: "rgba(255,255,255,0.15)" }} />
+
+        {/* Stats Section */}
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <Chip
+            label={`${allNodes.filter(n => n.type === 'file').length} Files`}
+            size="small"
+            sx={{ bgcolor: "rgba(255, 255, 255, 0.04)", color: "rgba(255,255,255,0.7)", border: "1px solid rgba(255,255,255,0.06)", fontSize: "0.6875rem", height: 20 }}
+          />
+          <Chip
+            label={`${allEdges.length} Connections`}
+            size="small"
+            sx={{ bgcolor: "rgba(255, 255, 255, 0.04)", color: "rgba(255,255,255,0.7)", border: "1px solid rgba(255,255,255,0.06)", fontSize: "0.6875rem", height: 20 }}
+          />
+        </Box>
+
+        {/* Divider */}
+        <Box sx={{ height: 16, width: "1px", bgcolor: "rgba(255,255,255,0.15)" }} />
+
+        {/* Expand / Collapse All */}
+        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+          <Tooltip title="Expand all file nodes to show classes & functions">
+            <IconButton
+              onClick={expandAllFiles}
+              size="small"
+              sx={{
+                color: "text.secondary",
+                bgcolor: "rgba(255,255,255,0.03)",
+                border: "1px solid rgba(255,255,255,0.06)",
+                borderRadius: 1.5,
+                p: 0.5,
+                "&:hover": { bgcolor: "rgba(255,255,255,0.08)", color: "text.primary" },
+              }}
+            >
+              <ExpandAllIcon sx={{ fontSize: 14 }} />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Collapse all file nodes">
+            <IconButton
+              onClick={collapseAllFiles}
+              size="small"
+              sx={{
+                color: "text.secondary",
+                bgcolor: "rgba(255,255,255,0.03)",
+                border: "1px solid rgba(255,255,255,0.06)",
+                borderRadius: 1.5,
+                p: 0.5,
+                "&:hover": { bgcolor: "rgba(255,255,255,0.08)", color: "text.primary" },
+              }}
+            >
+              <CollapseAllIcon sx={{ fontSize: 14 }} />
+            </IconButton>
+          </Tooltip>
+        </Box>
+
+        {/* Divider */}
+        <Box sx={{ height: 16, width: "1px", bgcolor: "rgba(255,255,255,0.15)" }} />
+
+        {/* Filters */}
+        <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
+          {(["file", "class", "interface", "function", "database"] as const).map((type) => {
+            const isActive = visibleNodeTypes.has(type);
+            const label = type.charAt(0).toUpperCase() + type.slice(1);
+            let color = "rgba(255, 255, 255, 0.3)";
+            if (isActive) {
+              if (type === "class") color = "#818cf8";
+              if (type === "interface") color = "#c084fc";
+              if (type === "function") color = "#38bdf8";
+              if (type === "database") color = "#34d399";
+              if (type === "file") color = "#94a3b8";
+            }
+            return (
+              <Chip
+                key={type}
+                label={label}
+                size="small"
+                onClick={() => toggleNodeType(type)}
+                sx={{
+                  bgcolor: isActive ? `${color}15` : "transparent",
+                  color: isActive ? color : "text.secondary",
+                  border: `1px solid ${isActive ? `${color}35` : "rgba(255,255,255,0.06)"}`,
+                  fontSize: "0.6875rem",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  height: 22,
+                  transition: "all 0.15s ease",
+                  "&:hover": {
+                    bgcolor: isActive ? `${color}25` : "rgba(255,255,255,0.04)",
+                  }
+                }}
+              />
+            );
+          })}
+        </Box>
+
+        {/* Divider */}
+        <Box sx={{ height: 16, width: "1px", bgcolor: "rgba(255,255,255,0.15)" }} />
+
+        {/* Edge Labels */}
+        <Tooltip title={showEdgeLabels ? "Hide relationship labels" : "Show relationship labels"}>
+          <IconButton
+            onClick={toggleEdgeLabels}
+            size="small"
+            sx={{
+              color: showEdgeLabels ? "primary.light" : "text.secondary",
+              bgcolor: showEdgeLabels ? "rgba(99,102,241,0.08)" : "rgba(255,255,255,0.03)",
+              border: `1px solid ${showEdgeLabels ? "rgba(99,102,241,0.2)" : "rgba(255,255,255,0.06)"}`,
+              borderRadius: 1.5,
+              p: 0.5,
+              "&:hover": {
+                bgcolor: showEdgeLabels ? "rgba(99,102,241,0.15)" : "rgba(255,255,255,0.05)",
+              },
+            }}
+          >
+            <LabelIcon sx={{ fontSize: 14 }} />
+          </IconButton>
+        </Tooltip>
+
+        {/* Divider */}
+        <Box sx={{ height: 16, width: "1px", bgcolor: "rgba(255,255,255,0.15)" }} />
+
+        {/* Complexity Heatmap */}
+        <Tooltip title={heatmapEnabled ? "Disable complexity heatmap" : "Enable complexity heatmap (Low → High complexity)"}>
+          <IconButton
+            onClick={toggleHeatmap}
+            size="small"
+            sx={{
+              color: heatmapEnabled ? "error.light" : "text.secondary",
+              bgcolor: heatmapEnabled ? "rgba(239, 68, 68, 0.08)" : "rgba(255,255,255,0.03)",
+              border: `1px solid ${heatmapEnabled ? "rgba(239, 68, 68, 0.2)" : "rgba(255,255,255,0.06)"}`,
+              borderRadius: 1.5,
+              p: 0.5,
+              "&:hover": {
+                bgcolor: heatmapEnabled ? "rgba(239, 68, 68, 0.15)" : "rgba(255,255,255,0.05)",
+              },
+            }}
+          >
+            <FlameIcon sx={{ fontSize: 14 }} />
+          </IconButton>
+        </Tooltip>
+
+        {/* Divider */}
+        <Box sx={{ height: 16, width: "1px", bgcolor: "rgba(255,255,255,0.15)" }} />
+
+        {/* Export Mermaid */}
+        <Tooltip title="Copy Mermaid Diagram syntax to clipboard">
+          <Button
+            onClick={() => {
+              const mermaidCode = exportToMermaid(allNodes, allEdges);
+              navigator.clipboard.writeText(mermaidCode);
+              alert("Mermaid code copied to clipboard!");
+            }}
+            size="small"
+            variant="outlined"
+            startIcon={<CodeIcon sx={{ fontSize: 10 }} />}
+            sx={{
+              color: "text.secondary",
+              borderColor: "rgba(255,255,255,0.1)",
+              fontSize: "0.6875rem",
+              height: 22,
+              px: 1,
+              borderRadius: 1.5,
+              textTransform: "none",
+              "&:hover": {
+                borderColor: "rgba(255,255,255,0.2)",
+                color: "text.primary",
+                background: "rgba(255,255,255,0.04)",
+              },
+            }}
+          >
+            Mermaid
+          </Button>
+        </Tooltip>
+
+        {/* Export JSON */}
+        <Tooltip title="Download Graph JSON file">
+          <IconButton
+            onClick={() => {
+              const jsonStr = exportToJSON(allNodes, allEdges, analysisResults);
+              const blob = new Blob([jsonStr], { type: "application/json" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = `atlas-graph-${Date.now()}.json`;
+              a.click();
+            }}
+            size="small"
+            sx={{
+              color: "text.secondary",
+              bgcolor: "rgba(255,255,255,0.03)",
+              border: "1px solid rgba(255,255,255,0.06)",
+              borderRadius: 1.5,
+              p: 0.5,
+              "&:hover": {
+                bgcolor: "rgba(255,255,255,0.05)",
+                color: "text.primary",
+              },
+            }}
+          >
+            <DownloadIcon sx={{ fontSize: 14 }} />
+          </IconButton>
+        </Tooltip>
+      </Box>
 
       {/* Focus Mode Overlay */}
       {focusedNodeId && (
         <Box
           sx={{
             position: "absolute",
-            top: 20,
+            top: 80,
             left: "50%",
             transform: "translateX(-50%)",
             zIndex: 1000,
@@ -429,6 +744,56 @@ function CanvasInner() {
           >
             <CloseIcon fontSize="small" />
           </IconButton>
+        </Box>
+      )}
+
+      {/* Selected Node Code Peek Overlay Trigger */}
+      {selectedNodeId && activeRepoId && allNodes.find(n => n.id === selectedNodeId)?.data?.filePath && (
+        <Box
+          sx={{
+            position: "absolute",
+            top: 80,
+            right: 20,
+            zIndex: 1000,
+            background: "rgba(10, 10, 12, 0.85)",
+            backdropFilter: "blur(10px)",
+            border: "1px solid rgba(255, 255, 255, 0.08)",
+            borderRadius: 2.5,
+            px: 2,
+            py: 1,
+            display: "flex",
+            alignItems: "center",
+            gap: 1.5,
+            boxShadow: "0 8px 32px 0 rgba(0, 0, 0, 0.4)",
+          }}
+        >
+          <Typography sx={{ color: "rgba(255,255,255,0.7)", fontSize: "0.75rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 200 }}>
+            Selected: <b>{allNodes.find(n => n.id === selectedNodeId)?.data?.label}</b>
+          </Typography>
+          <Button
+            size="small"
+            variant="contained"
+            onClick={() => {
+              const sel = allNodes.find(n => n.id === selectedNodeId);
+              if (sel && sel.data?.filePath) {
+                setCodePeekFile({ filePath: sel.data.filePath, label: sel.data.label });
+              }
+            }}
+            startIcon={<CodeIcon sx={{ fontSize: 10 }} />}
+            sx={{
+              fontSize: "0.6875rem",
+              py: 0.25,
+              px: 1.5,
+              borderRadius: 2,
+              textTransform: "none",
+              background: "linear-gradient(135deg, #4f46e5, #7c3aed)",
+              "&:hover": {
+                background: "linear-gradient(135deg, #4338ca, #6d28d9)",
+              }
+            }}
+          >
+            Peek Code
+          </Button>
         </Box>
       )}
 
@@ -476,6 +841,9 @@ function CanvasInner() {
           </Button>
         </Box>
       )}
+
+      {/* Code Peek Sidebar Drawer */}
+      <CodePeekPanel />
     </Box>
   );
 }

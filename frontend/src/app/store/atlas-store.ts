@@ -49,9 +49,17 @@ interface AtlasState {
   panToNodeId: string | null; // Node to pan to
   focusedNodeId: string | null; // Node currently in isolated focus mode
   hasGuidedTourShown: boolean;
+  visibleNodeTypes: Set<string>; // Node type filter (which types are visible)
+  showEdgeLabels: boolean;       // Toggle edge label visibility
+  isLoading: boolean;            // Global loading/analyzing state
+  graphMode: '2D' | '3D';        // Toggle between 2D and 3D view modes
+  progressText: string;          // SSE progress text status
+  activeRepoId: string | null;   // Active repo/session ID for code peeking
+  codePeekFile: { filePath: string; label: string } | null; // Currently peeking file
+  heatmapEnabled: boolean;       // Complexity heatmap toggle
 
   // --- Actions ---
-  setGraph: (nodes: AtlasNode[], edges: Edge[], analysis: AnalysisResult, godObjectDetails?: GodObjectDetail[], deadCodeDetails?: DeadCodeDetail[], entryPoint?: EntryPoint) => void;
+  setGraph: (nodes: AtlasNode[], edges: Edge[], analysis: AnalysisResult, godObjectDetails?: GodObjectDetail[], deadCodeDetails?: DeadCodeDetail[], entryPoint?: EntryPoint, repoId?: string) => void;
   
   // React Flow required actions
   onNodesChange: OnNodesChange;
@@ -68,6 +76,15 @@ interface AtlasState {
   panToNode: (nodeId: string | null) => void;
   setFocusedNode: (nodeId: string | null) => void;
   setHasGuidedTourShown: (shown: boolean) => void;
+  toggleNodeType: (type: string) => void;
+  toggleEdgeLabels: () => void;
+  setGraphMode: (mode: '2D' | '3D') => void;
+  setIsLoading: (loading: boolean) => void;
+  setProgressText: (text: string) => void;
+  expandAllFiles: () => void;
+  collapseAllFiles: () => void;
+  setCodePeekFile: (file: { filePath: string; label: string } | null) => void;
+  toggleHeatmap: () => void;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────
@@ -145,7 +162,12 @@ export function buildFolderTree(nodes: AtlasNode[]): FolderTreeNode {
  * Get the nodes visible at a given focus path level.
  * Shows files and entities whose filePath starts with focusPath.
  */
-export function getVisibleNodes(allNodes: AtlasNode[], focusPath: string, expandedFiles: Set<string>): AtlasNode[] {
+export function getVisibleNodes(
+  allNodes: AtlasNode[],
+  focusPath: string,
+  expandedFiles: Set<string>,
+  visibleNodeTypes?: Set<string>
+): AtlasNode[] {
   // When a specific folder is focused, we want to show:
   // 1. Files inside that folder
   // 2. Groups that contain those files
@@ -175,6 +197,11 @@ export function getVisibleNodes(allNodes: AtlasNode[], focusPath: string, expand
     
     const fp = n.data?.filePath as string;
     if (!fp || !visibleFilePaths.has(fp)) return false;
+
+    // Filter by type if visibility set is provided
+    if (visibleNodeTypes && !visibleNodeTypes.has(n.type ?? 'file')) {
+      return false;
+    }
 
     if (n.type === 'file') {
       return true;
@@ -211,8 +238,16 @@ export const useAtlasStore = create<AtlasState>((set, get) => ({
   panToNodeId: null,
   focusedNodeId: null,
   hasGuidedTourShown: false,
+  visibleNodeTypes: new Set<string>(['file', 'class', 'interface', 'function', 'database', 'group']),
+  showEdgeLabels: true,
+  isLoading: false,
+  graphMode: '2D',
+  progressText: '',
+  activeRepoId: null,
+  codePeekFile: null,
+  heatmapEnabled: false,
 
-  setGraph: (nodes, edges, analysisResults, godObjectDetails, deadCodeDetails, entryPoint) => {
+  setGraph: (nodes, edges, analysisResults, godObjectDetails, deadCodeDetails, entryPoint, repoId) => {
     set({ 
       nodes, 
       edges, 
@@ -220,6 +255,8 @@ export const useAtlasStore = create<AtlasState>((set, get) => ({
       godObjectDetails: godObjectDetails ?? [], 
       deadCodeDetails: deadCodeDetails ?? [],
       entryPoint: entryPoint ?? null,
+      activeRepoId: repoId ?? null,
+      codePeekFile: null, // Clear active peek when new project is loaded
       focusPath: '',  // Reset focus on new graph
       expandedFolders: new Set<string>(),
       expandedFiles: new Set<string>(),
@@ -337,5 +374,57 @@ export const useAtlasStore = create<AtlasState>((set, get) => ({
 
   setHasGuidedTourShown: (shown) => {
     set({ hasGuidedTourShown: shown });
+  },
+
+  toggleNodeType: (type) => {
+    set((state) => {
+      const next = new Set(state.visibleNodeTypes);
+      if (next.has(type)) {
+        // Don't allow hiding all types
+        if (next.size > 1) next.delete(type);
+      } else {
+        next.add(type);
+      }
+      return { visibleNodeTypes: next };
+    });
+  },
+
+  toggleEdgeLabels: () => {
+    set((state) => ({ showEdgeLabels: !state.showEdgeLabels }));
+  },
+
+  setGraphMode: (mode) => {
+    set({ graphMode: mode });
+  },
+
+  setIsLoading: (loading) => {
+    set({ isLoading: loading });
+  },
+
+  setProgressText: (text) => {
+    set({ progressText: text });
+  },
+
+  expandAllFiles: () => {
+    const { nodes } = get();
+    const filePaths = new Set<string>();
+    nodes.forEach(n => {
+      if (n.type === 'file' && n.data?.filePath) {
+        filePaths.add(n.data.filePath as string);
+      }
+    });
+    set({ expandedFiles: filePaths });
+  },
+
+  collapseAllFiles: () => {
+    set({ expandedFiles: new Set<string>() });
+  },
+
+  setCodePeekFile: (file) => {
+    set({ codePeekFile: file });
+  },
+
+  toggleHeatmap: () => {
+    set((state) => ({ heatmapEnabled: !state.heatmapEnabled }));
   },
 }));

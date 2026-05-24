@@ -10,8 +10,10 @@ function generateSessionId() {
 
 export default function LandingHero() {
   const [url, setUrl] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [progressText, setProgressText] = useState('Analyzing...');
+  const isLoading = useAtlasStore((state) => state.isLoading);
+  const setIsLoading = useAtlasStore((state) => state.setIsLoading);
+  const progressText = useAtlasStore((state) => state.progressText);
+  const setProgressText = useAtlasStore((state) => state.setProgressText);
   const [recentRepos, setRecentRepos] = useState<{ repo_id: string; repo_name: string; analyzed_at: string; node_count: number; edge_count: number }[]>([]);
   const setGraph = useAtlasStore((state) => state.setGraph);
 

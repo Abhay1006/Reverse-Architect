@@ -29,6 +29,7 @@ export function useUploadAnalysis() {
         godObjectDetails,
         deadCodeDetails,
         entryPoint,
+        repoId,
       } = toStoreGraph(graph);
       setGraph(
         nodes,
@@ -36,7 +37,8 @@ export function useUploadAnalysis() {
         analysis,
         godObjectDetails,
         deadCodeDetails,
-        entryPoint
+        entryPoint,
+        repoId
       );
     },
   });
@@ -59,6 +61,7 @@ export function useGithubAnalysis() {
         godObjectDetails,
         deadCodeDetails,
         entryPoint,
+        repoId,
       } = toStoreGraph(graph);
       setGraph(
         nodes,
@@ -66,7 +69,8 @@ export function useGithubAnalysis() {
         analysis,
         godObjectDetails,
         deadCodeDetails,
-        entryPoint
+        entryPoint,
+        repoId
       );
     },
   });

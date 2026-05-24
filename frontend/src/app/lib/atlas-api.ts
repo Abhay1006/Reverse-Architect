@@ -79,6 +79,7 @@ export interface ReactFlowGraph {
   godObjectDetails?: GodObjectDetail[];
   deadCodeDetails?: DeadCodeDetail[];
   entryPoint?: EntryPoint;
+  repoId?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -90,7 +91,7 @@ const BACKEND_URL =
   process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:4000';
 
 /** Whether to route requests through the Next.js API proxy */
-const USE_PROXY = true;
+const USE_PROXY = process.env.NEXT_PUBLIC_USE_PROXY !== 'false';
 
 function apiBase(): string {
   return USE_PROXY ? '/api/analyze' : `${BACKEND_URL}/api/analyze`;
@@ -172,7 +173,8 @@ export async function analyzeGithub(url: string, sessionId?: string): Promise<Re
  * Fetch recently analyzed repositories from the cache.
  */
 export async function getRecentRepos(): Promise<{ repos: { repo_id: string; repo_name: string; analyzed_at: string; node_count: number; edge_count: number }[] }> {
-  const res = await fetch(`${apiBase()}/../repos/recent`);
+  const base = USE_PROXY ? '/api/repos/recent' : `${BACKEND_URL}/api/repos/recent`;
+  const res = await fetch(base);
   if (!res.ok) {
     throw new Error('Failed to fetch recent repos');
   }
@@ -191,6 +193,7 @@ export function toStoreGraph(graph: ReactFlowGraph): {
   godObjectDetails: GodObjectDetail[];
   deadCodeDetails: DeadCodeDetail[];
   entryPoint?: EntryPoint;
+  repoId?: string;
 } {
   const nodes: AtlasNode[] = graph.nodes.map((n) => ({
     id: n.id,
@@ -224,5 +227,6 @@ export function toStoreGraph(graph: ReactFlowGraph): {
     godObjectDetails: graph.godObjectDetails ?? [],
     deadCodeDetails: graph.deadCodeDetails ?? [],
     entryPoint: graph.entryPoint,
+    repoId: graph.repoId,
   };
 }

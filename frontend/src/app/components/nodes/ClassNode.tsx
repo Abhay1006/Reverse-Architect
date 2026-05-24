@@ -22,6 +22,7 @@ const ClassNode = ({ data, selected, id }: NodeProps<ClassNodeType>) => {
       label={data.label as string}
       selected={selected}
       status={status}
+      complexity={data.metadata?.maxComplexity}
       headerColor="var(--class-bg)"
       icon={<BookOpenIcon sx={{ fontSize: 16 }} />}
     >
