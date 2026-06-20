@@ -143,8 +143,9 @@ function runGraphPipeline(parsedFiles: ParsedFile[], entryPoints: ReturnType<typ
   graph.analysis.patterns = detectPatterns(graph);
 
   // 8. Compute layout positions
+  const direction = 'TB';
   const positioned = computeLayout(graph, {
-    direction: entryPoints.length > 0 ? 'BT' : 'LR',
+    direction,
   });
 
   // Create a quick lookup map for parent resolution
@@ -163,8 +164,8 @@ function runGraphPipeline(parsedFiles: ParsedFile[], entryPoints: ReturnType<typ
       id: n.id,
       type: n.type,
       position: { x: relativeX, y: relativeY },
-      sourcePosition: 'right',
-      targetPosition: 'left',
+      sourcePosition: direction === 'TB' ? 'bottom' : direction === 'BT' ? 'top' : 'right',
+      targetPosition: direction === 'TB' ? 'top' : direction === 'BT' ? 'bottom' : 'left',
       ...(n.width ? { width: n.width } : {}),
       ...(n.height ? { height: n.height } : {}),
       ...(n.parentNode ? { parentId: n.parentNode } : {}),

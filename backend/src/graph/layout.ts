@@ -36,65 +36,15 @@ export interface PositionedGraph extends Omit<ArchGraph, 'nodes'> {
  * @returns A new graph object where nodes contain x, y coordinates along with width and height.
  */
 export function computeLayout(graph: ArchGraph, options: LayoutOptions = {}): PositionedGraph {
-  // 1. Enable compound graphs for Sub-flow grouping bounds
-  const g = new dagre.graphlib.Graph({ compound: true });
-  
-  // Use generous defaults to prevent overlap with large metadata nodes
   const ranksep = options.ranksep ?? 100;
   const nodesep = options.nodesep ?? 80;
   const defaultNodeWidth = options.nodeWidth ?? 350;
   const defaultNodeHeight = options.nodeHeight ?? 200;
 
-  // Apply graph defaults and layout direction
-  g.setGraph({
-    rankdir: options.direction || 'BT',
-    ranksep,
-    nodesep,
-    edgesep: 100,    // Extra space between edges
-    marginx: 40,     // Graph margin
-    marginy: 40,
-    align: 'UL',     // Align nodes upper-left for cleaner reading
-  });
-  
-  // Required to tell dagre we are using a directed graph
-  g.setDefaultEdgeLabel(() => ({}));
-
   const topLevelNodes = graph.nodes.filter(n => !n.parentNode);
   const topLevelIds = new Set(topLevelNodes.map(n => n.id));
 
-  // 1. Add top-level nodes to dagre
-  for (const node of topLevelNodes) {
-    const propCount = node.metadata?.properties?.length || 0;
-    const methodCount = node.metadata?.methods?.length || 0;
-    
-    // Base estimated height. We will expand this if it has children.
-    const estimatedHeight = Math.max(
-      defaultNodeHeight,
-      90 + (propCount + methodCount) * 22
-    );
-
-    g.setNode(node.id, { 
-      label: node.label, 
-      width: defaultNodeWidth, 
-      height: estimatedHeight 
-    });
-  }
-
-  // 2. Add edges only between top-level nodes
-  for (const edge of graph.edges) {
-    if (topLevelIds.has(edge.source) && topLevelIds.has(edge.target)) {
-      g.setEdge(edge.source, edge.target);
-    }
-  }
-
-  // 3. Let dagre calculate x/y geometries for top-level nodes
-  dagre.layout(g);
-
-  // 4. Map the computed coordinates back to our ArchNode structures
-  const positionedNodes: PositionedNode[] = [];
-  const parentHeights = new Map<string, number>();
-
-  // Helper to group children by parent
+  // 1. Group children by parent
   const childrenByParent = new Map<string, typeof graph.nodes>();
   for (const node of graph.nodes) {
     if (node.parentNode) {
@@ -105,45 +55,149 @@ export function computeLayout(graph: ArchGraph, options: LayoutOptions = {}): Po
     }
   }
 
-  // Calculate parent dimensions based on children
-  for (const node of topLevelNodes) {
-    const pos = g.node(node.id);
+  // Helper to calculate required height for a parent (including children stacking)
+  const getRequiredHeight = (node: ArchNode) => {
     const children = childrenByParent.get(node.id) || [];
-    
-    // Calculate required height based on children stacking
-    // Header is ~80px. Each child gets ~60px vertical space.
-    const requiredHeight = Math.max(pos.height, 100 + (children.length * 60));
-    parentHeights.set(node.id, requiredHeight);
-    
-    // Dagre outputs absolute center coordinates. React Flow needs top-left.
-    const absoluteX = pos.x - defaultNodeWidth / 2;
-    const absoluteY = pos.y - requiredHeight / 2;
+    const propCount = node.metadata?.properties?.length || 0;
+    const methodCount = node.metadata?.methods?.length || 0;
+    const baseHeight = Math.max(
+      defaultNodeHeight,
+      90 + (propCount + methodCount) * 22
+    );
+    return Math.max(baseHeight, 100 + (children.length * 60));
+  };
+
+  // 2. Identify which top-level nodes are connected vs isolated
+  const connectedNodeIds = new Set<string>();
+  for (const edge of graph.edges) {
+    if (topLevelIds.has(edge.source) && topLevelIds.has(edge.target)) {
+      connectedNodeIds.add(edge.source);
+      connectedNodeIds.add(edge.target);
+    }
+  }
+
+  const connectedTopNodes = topLevelNodes.filter(n => connectedNodeIds.has(n.id));
+  const isolatedTopNodes = topLevelNodes.filter(n => !connectedNodeIds.has(n.id));
+
+  const tempPositions = new Map<string, { x: number; y: number }>();
+  const parentHeights = new Map<string, number>();
+
+  let maxLayoutX = 0;
+  let maxLayoutY = 0;
+
+  // 3. Lay out connected top-level nodes using Dagre
+  if (connectedTopNodes.length > 0) {
+    const g = new dagre.graphlib.Graph({ compound: true });
+    g.setGraph({
+      rankdir: options.direction || 'BT',
+      ranksep,
+      nodesep,
+      edgesep: 100,
+      marginx: 40,
+      marginy: 40,
+      align: 'UL',
+    });
+    g.setDefaultEdgeLabel(() => ({}));
+
+    for (const node of connectedTopNodes) {
+      const h = getRequiredHeight(node);
+      parentHeights.set(node.id, h);
+      g.setNode(node.id, {
+        label: node.label,
+        width: defaultNodeWidth,
+        height: h,
+      });
+    }
+
+    for (const edge of graph.edges) {
+      if (connectedNodeIds.has(edge.source) && connectedNodeIds.has(edge.target)) {
+        g.setEdge(edge.source, edge.target);
+      }
+    }
+
+    dagre.layout(g);
+
+    for (const node of connectedTopNodes) {
+      const pos = g.node(node.id);
+      const h = parentHeights.get(node.id) || defaultNodeHeight;
+      const x = pos.x - defaultNodeWidth / 2;
+      const y = pos.y - h / 2;
+      tempPositions.set(node.id, { x, y });
+
+      maxLayoutX = Math.max(maxLayoutX, x + defaultNodeWidth);
+      maxLayoutY = Math.max(maxLayoutY, y + h);
+    }
+  }
+
+  // 4. Lay out isolated nodes in a multi-column grid
+  if (isolatedTopNodes.length > 0) {
+    const startX = 40;
+    // Position isolated grid below the connected graph (if any) or at (40, 40)
+    const startY = connectedTopNodes.length > 0 ? maxLayoutY + 120 : 40;
+
+    const columnsCount = 3;
+    const colGap = 80;
+    const rowGap = 80;
+
+    // Track the height of each row in the grid
+    const rowHeights: number[] = [];
+    for (let i = 0; i < isolatedTopNodes.length; i++) {
+      const node = isolatedTopNodes[i]!;
+      const row = Math.floor(i / columnsCount);
+      const h = getRequiredHeight(node);
+      if (rowHeights[row] === undefined || h > rowHeights[row]!) {
+        rowHeights[row] = h;
+      }
+    }
+
+    // Position each isolated node
+    for (let i = 0; i < isolatedTopNodes.length; i++) {
+      const node = isolatedTopNodes[i]!;
+      const col = i % columnsCount;
+      const row = Math.floor(i / columnsCount);
+
+      let y = startY;
+      for (let r = 0; r < row; r++) {
+        y += (rowHeights[r] ?? defaultNodeHeight) + rowGap;
+      }
+
+      const x = startX + col * (defaultNodeWidth + colGap);
+      const h = getRequiredHeight(node);
+      parentHeights.set(node.id, h);
+      tempPositions.set(node.id, { x, y });
+    }
+  }
+
+  // 5. Build positioned nodes array
+  const positionedNodes: PositionedNode[] = [];
+  for (const node of topLevelNodes) {
+    const pos = tempPositions.get(node.id) || { x: 0, y: 0 };
+    const h = parentHeights.get(node.id) || getRequiredHeight(node);
 
     positionedNodes.push({
       ...node,
-      x: absoluteX,
-      y: absoluteY,
+      x: pos.x,
+      y: pos.y,
       width: defaultNodeWidth,
-      height: requiredHeight,
+      height: h,
       style: {
         ...node.style,
         width: defaultNodeWidth,
-        height: requiredHeight
-      }
+        height: h,
+      },
     });
   }
 
-  // 5. Assign relative coordinates to children
+  // 6. Assign relative coordinates to children
   for (const [parentId, children] of childrenByParent.entries()) {
     let currentY = 80; // Start below the header
     for (const child of children) {
-      // Child coordinates are mathematically relative to the parent for React Flow
       positionedNodes.push({
         ...child,
         x: 20, // Indent inside parent
         y: currentY,
         width: defaultNodeWidth - 40,
-        height: 40, // Standard child height
+        height: 40,
       });
       currentY += 60;
     }

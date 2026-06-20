@@ -8,7 +8,7 @@ import BaseNode from "./BaseNode";
 import { useAtlasStore } from "../../store/atlas-store";
 import { FunctionNode as FunctionNodeType } from "../../types/nodes";
 
-const FunctionNode = ({ data, selected, id }: NodeProps<FunctionNodeType>) => {
+const FunctionNode = ({ data, selected, id, sourcePosition, targetPosition }: NodeProps<FunctionNodeType>) => {
   const analysis = useAtlasStore((state) => state.analysisResults);
   const isDeadCode = analysis?.deadCode.includes(id);
 
@@ -25,6 +25,8 @@ const FunctionNode = ({ data, selected, id }: NodeProps<FunctionNodeType>) => {
       headerColor="var(--function-bg)"
       className="min-w-[180px]"
       icon={<BracesIcon sx={{ fontSize: 16 }} />}
+      sourcePosition={sourcePosition}
+      targetPosition={targetPosition}
     >
       <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>

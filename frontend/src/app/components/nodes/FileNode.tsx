@@ -57,7 +57,7 @@ const getLanguageDetails = (filePath: string) => {
   }
 };
 
-const FileNode = ({ data, selected }: NodeProps<FileNodeType>) => {
+const FileNode = ({ data, selected, sourcePosition, targetPosition }: NodeProps<FileNodeType>) => {
   const fullPath = data.filePath as string;
   const expandedFiles = useAtlasStore(s => s.expandedFiles);
   const isExpanded = expandedFiles.has(fullPath);
@@ -76,6 +76,8 @@ const FileNode = ({ data, selected }: NodeProps<FileNodeType>) => {
       headerColor={isEntryPoint ? "var(--primary)" : lang.color}
       status={status}
       complexity={maxComplexity}
+      sourcePosition={sourcePosition}
+      targetPosition={targetPosition}
       icon={
         isEntryPoint ? (
           <ZapIcon sx={{ fontSize: 16 }} />

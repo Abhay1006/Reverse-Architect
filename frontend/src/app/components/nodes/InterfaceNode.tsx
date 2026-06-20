@@ -8,7 +8,7 @@ import BaseNode from "./BaseNode";
 import { useAtlasStore } from "../../store/atlas-store";
 import { InterfaceNode as InterfaceNodeType } from "../../types/nodes";
 
-const InterfaceNode = ({ data, selected, id }: NodeProps<InterfaceNodeType>) => {
+const InterfaceNode = ({ data, selected, id, sourcePosition, targetPosition }: NodeProps<InterfaceNodeType>) => {
   const analysis = useAtlasStore((state) => state.analysisResults);
   const isDeadCode = analysis?.deadCode.includes(id);
 
@@ -19,6 +19,8 @@ const InterfaceNode = ({ data, selected, id }: NodeProps<InterfaceNodeType>) => 
       status={isDeadCode ? "dead" : "default"}
       headerColor="var(--interface-bg)"
       icon={<PuzzleIcon sx={{ fontSize: 16 }} />}
+      sourcePosition={sourcePosition}
+      targetPosition={targetPosition}
     >
       <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
         {data.metadata?.properties && (data.metadata.properties as string[]).length > 0 && (

@@ -8,7 +8,7 @@ import BaseNode from "./BaseNode";
 import { useAtlasStore } from "../../store/atlas-store";
 import { ClassNode as ClassNodeType } from "../../types/nodes";
 
-const ClassNode = ({ data, selected, id }: NodeProps<ClassNodeType>) => {
+const ClassNode = ({ data, selected, id, sourcePosition, targetPosition }: NodeProps<ClassNodeType>) => {
   const analysis = useAtlasStore((state) => state.analysisResults);
   
   const isGodObject = analysis?.godObjects.includes(id);
@@ -25,6 +25,8 @@ const ClassNode = ({ data, selected, id }: NodeProps<ClassNodeType>) => {
       complexity={data.metadata?.maxComplexity}
       headerColor="var(--class-bg)"
       icon={<BookOpenIcon sx={{ fontSize: 16 }} />}
+      sourcePosition={sourcePosition}
+      targetPosition={targetPosition}
     >
       <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
         {/* Properties Section */}

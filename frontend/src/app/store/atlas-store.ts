@@ -251,6 +251,13 @@ export const useAtlasStore = create<AtlasState>((set, get) => ({
   snackbarMessage: null,
 
   setGraph: (nodes, edges, analysisResults, godObjectDetails, deadCodeDetails, entryPoint, repoId) => {
+    const filePaths = new Set<string>();
+    nodes.forEach(n => {
+      if (n.type === 'file' && n.data?.filePath) {
+        filePaths.add(n.data.filePath as string);
+      }
+    });
+
     set({ 
       nodes, 
       edges, 
@@ -262,7 +269,7 @@ export const useAtlasStore = create<AtlasState>((set, get) => ({
       codePeekFile: null, // Clear active peek when new project is loaded
       focusPath: '',  // Reset focus on new graph
       expandedFolders: new Set<string>(),
-      expandedFiles: new Set<string>(),
+      expandedFiles: filePaths,
       focusedNodeId: null,
     });
   },

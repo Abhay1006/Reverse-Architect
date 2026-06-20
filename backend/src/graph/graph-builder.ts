@@ -310,6 +310,18 @@ export function buildGraph(files: ParsedFile[], entryFiles?: string[]): ArchGrap
           }
         }
       }
+
+      // Fallback: Global lookup (essential for module-less package styles like Swift/Go/Java/Kotlin)
+      for (const otherFile of files) {
+        if (otherFile.filePath === sourceFile.filePath) continue;
+        const targetExists = otherFile.classes.some(c => c.name === name) || 
+                             otherFile.interfaces.some(i => i.name === name) ||
+                             otherFile.functions.some(f => f.name === name);
+        if (targetExists) {
+          return getEntityNodeId(otherFile.filePath, name);
+        }
+      }
+
       return null;
     };
 
@@ -319,8 +331,21 @@ export function buildGraph(files: ParsedFile[], entryFiles?: string[]): ArchGrap
      */
     const resolveCallToFile = (calledName: string, sourceFile: ParsedFile): string | null => {
       const namesMap = importedNamesMap.get(sourceFile.filePath);
-      if (!namesMap) return null;
-      return namesMap.get(calledName) || null;
+      if (namesMap && namesMap.has(calledName)) {
+        return namesMap.get(calledName)!;
+      }
+      
+      // Fallback: Global lookup for any other file declaring this entity
+      for (const otherFile of files) {
+        if (otherFile.filePath === sourceFile.filePath) continue;
+        const declares = otherFile.classes.some(c => c.name === calledName) ||
+                         otherFile.interfaces.some(i => i.name === calledName) ||
+                         otherFile.functions.some(f => f.name === calledName);
+        if (declares) {
+          return otherFile.filePath;
+        }
+      }
+      return null;
     };
 
     // 2.2 Entity-level Inheritance Edges
@@ -334,6 +359,22 @@ export function buildGraph(files: ParsedFile[], entryFiles?: string[]): ArchGrap
             target: targetId,
             type: 'extends'
           });
+
+          // Generate corresponding file-level extends edge
+          const targetFilePath = targetId.split(':')[1];
+          if (targetFilePath && targetFilePath !== file.filePath) {
+            const fileEdgeId = `edge:extends:${getFileNodeId(file.filePath)}->${getFileNodeId(targetFilePath)}`;
+            if (!edgeIds.has(fileEdgeId)) {
+              edgeIds.add(fileEdgeId);
+              edges.push({
+                id: fileEdgeId,
+                source: getFileNodeId(file.filePath),
+                target: getFileNodeId(targetFilePath),
+                type: 'extends',
+                label: 'extends'
+              });
+            }
+          }
         }
       }
       for (const impl of cls.implements) {
@@ -345,6 +386,22 @@ export function buildGraph(files: ParsedFile[], entryFiles?: string[]): ArchGrap
             target: targetId,
             type: 'implements'
           });
+
+          // Generate corresponding file-level implements edge
+          const targetFilePath = targetId.split(':')[1];
+          if (targetFilePath && targetFilePath !== file.filePath) {
+            const fileEdgeId = `edge:implements:${getFileNodeId(file.filePath)}->${getFileNodeId(targetFilePath)}`;
+            if (!edgeIds.has(fileEdgeId)) {
+              edgeIds.add(fileEdgeId);
+              edges.push({
+                id: fileEdgeId,
+                source: getFileNodeId(file.filePath),
+                target: getFileNodeId(targetFilePath),
+                type: 'implements',
+                label: 'implements'
+              });
+            }
+          }
         }
       }
     }
@@ -359,6 +416,22 @@ export function buildGraph(files: ParsedFile[], entryFiles?: string[]): ArchGrap
             target: targetId,
             type: 'extends'
           });
+
+          // Generate corresponding file-level extends edge
+          const targetFilePath = targetId.split(':')[1];
+          if (targetFilePath && targetFilePath !== file.filePath) {
+            const fileEdgeId = `edge:extends:${getFileNodeId(file.filePath)}->${getFileNodeId(targetFilePath)}`;
+            if (!edgeIds.has(fileEdgeId)) {
+              edgeIds.add(fileEdgeId);
+              edges.push({
+                id: fileEdgeId,
+                source: getFileNodeId(file.filePath),
+                target: getFileNodeId(targetFilePath),
+                type: 'extends',
+                label: 'extends'
+              });
+            }
+          }
         }
       }
     }
@@ -382,6 +455,12 @@ export function buildGraph(files: ParsedFile[], entryFiles?: string[]): ArchGrap
               type: 'calls',
               label: 'calls'
             });
+          }
+
+          // Generate corresponding file-level calls edge
+          const targetFilePath = targetId.split(':')[1];
+          if (targetFilePath && targetFilePath !== file.filePath) {
+            fileCallTargets.add(targetFilePath);
           }
         } else {
           // Fallback: create file-level "calls" edge

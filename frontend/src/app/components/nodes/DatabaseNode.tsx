@@ -8,7 +8,7 @@ import BaseNode from "./BaseNode";
 import { useAtlasStore } from "../../store/atlas-store";
 import { DatabaseNodeType } from "../../types/nodes";
 
-const DatabaseNode = ({ data, selected, id }: NodeProps<DatabaseNodeType>) => {
+const DatabaseNode = ({ data, selected, id, sourcePosition, targetPosition }: NodeProps<DatabaseNodeType>) => {
   const analysis = useAtlasStore((state) => state.analysisResults);
   const isGodObject = analysis?.godObjects.includes(id);
   const isDeadCode = analysis?.deadCode.includes(id);
@@ -22,6 +22,8 @@ const DatabaseNode = ({ data, selected, id }: NodeProps<DatabaseNodeType>) => {
       status={status}
       headerColor="#10b981" // Emerald green
       icon={<DatabaseIcon sx={{ fontSize: 16 }} />}
+      sourcePosition={sourcePosition}
+      targetPosition={targetPosition}
     >
       <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
         {/* Placeholder for future schema table columns rendering */}

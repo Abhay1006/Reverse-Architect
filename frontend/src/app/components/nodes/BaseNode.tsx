@@ -14,6 +14,8 @@ interface BaseNodeProps {
   selected?: boolean;
   status?: "god" | "dead" | "entry" | "default";
   complexity?: number;
+  sourcePosition?: Position;
+  targetPosition?: Position;
 }
 
 const BaseNode = ({
@@ -25,6 +27,8 @@ const BaseNode = ({
   selected = false,
   status = "default",
   complexity,
+  sourcePosition,
+  targetPosition,
 }: BaseNodeProps) => {
   const heatmapEnabled = useAtlasStore((s) => s.heatmapEnabled);
 
@@ -59,36 +63,37 @@ const BaseNode = ({
     return selected ? headerColor : "rgba(255, 255, 255, 0.1)";
   };
 
+  const borderGlow = () => {
+    if (selected) {
+      if (status === "god") return "0 0 16px rgba(239, 68, 68, 0.4)";
+      if (status === "entry") return "0 0 16px rgba(99, 102, 241, 0.4)";
+      return `0 0 16px ${headerColor}`;
+    }
+    return "none";
+  };
+
   return (
     <Box
-      className={className}
+      className={`${className} group`}
       sx={{
-        position: "relative",
-        width: "100%",
-        height: "100%",
-        borderRadius: 4,
-        border: "1px solid",
-        backdropFilter: "blur(30px)",
-        boxShadow: selected
-          ? `0 0 25px color-mix(in srgb, ${headerColor} 40%, transparent)`
-          : "0 10px 40px rgba(0,0,0,0.6)",
-        transition: "all 0.3s",
-        transform: selected ? "translateY(-2px)" : "none",
         background: getBackgroundStyle(),
-        borderColor: getBorderColor(),
-        ...(status === "god" && {
-          animation: "pulse-red 2s infinite",
-          borderWidth: 2,
-          borderColor: "var(--god-object)",
-        }),
-        ...(status === "dead" && {
-          opacity: 0.6,
-          borderStyle: "dashed",
-          borderColor: "rgba(148,163,184,0.5)",
-        }),
-        ...(status === "entry" && {
-          boxShadow: "0 0 30px rgba(99,102,241,0.3)",
-        }),
+        border: `1.5px solid ${getBorderColor()}`,
+        borderRadius: "14px",
+        boxShadow: borderGlow(),
+        width: 350,
+        color: "white",
+        fontFamily: "Outfit, sans-serif",
+        position: "relative",
+        transition: "border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease",
+        backdropFilter: "blur(8px)",
+        overflow: "visible", // Enable handles to render outside boundaries safely
+        "&:hover": {
+          borderColor: status === "god" ? "rgba(239, 68, 68, 1)" :
+                       status === "dead" ? "rgba(148, 163, 184, 0.5)" :
+                       status === "entry" ? "var(--primary)" :
+                       headerColor,
+          transform: "translateY(-2px)",
+        },
       }}
     >
       {/* Node Header */}
@@ -97,23 +102,24 @@ const BaseNode = ({
           display: "flex",
           alignItems: "center",
           gap: 1.5,
-          px: 2,
-          py: 1.5,
-          borderBottom: "1px solid rgba(255,255,255,0.05)",
-          background: `color-mix(in srgb, ${status === 'god' ? '#ef4444' : headerColor} 15%, transparent)`,
-          borderTopLeftRadius: 16,
-          borderTopRightRadius: 16,
+          p: 2,
+          pb: 1.5,
+          borderBottom: "1px solid rgba(255,255,255,0.06)",
+          bgcolor: "rgba(255,255,255,0.02)",
+          borderTopLeftRadius: "13px",
+          borderTopRightRadius: "13px",
         }}
       >
         <Box
           sx={{
-            p: 0.75,
-            borderRadius: 2,
-            color: "white",
-            bgcolor: headerColor,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
+            width: 30,
+            height: 30,
+            borderRadius: "8px",
+            bgcolor: "rgba(255,255,255,0.04)",
+            color: headerColor,
           }}
         >
           {icon}
@@ -140,12 +146,12 @@ const BaseNode = ({
       {/* Connection Handles */}
       <Handle
         type="target"
-        position={Position.Left}
+        position={targetPosition ?? Position.Left}
         className="!w-2.5 !h-2.5 !bg-primary !border-2 !border-[#17171a]"
       />
       <Handle
         type="source"
-        position={Position.Right}
+        position={sourcePosition ?? Position.Right}
         className="!w-2.5 !h-2.5 !bg-primary !border-2 !border-[#17171a]"
       />
     </Box>
