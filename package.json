@@ -8,6 +8,7 @@
   ],
   "scripts": {
     "dev": "npx concurrently \"npm run dev -w backend\" \"npm run dev -w frontend\"",
+    "build": "npm run build --workspaces --if-present",
     "start": "npx concurrently \"npm run start -w backend\" \"npm run start -w frontend\""
   },
   "devDependencies": {
