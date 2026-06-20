@@ -469,6 +469,16 @@ export function resolveGenericImport(
   // Try direct match
   if (allFilePaths.has(spec)) return spec;
 
+  // Generic suffix fallback (e.g. Python imports relative to custom sys.path directories like 'core' or 'src')
+  // Match a module specifier that lacks a root directory prefix (e.g. 'framework/loader/cli' vs 'core/framework/loader/cli.py')
+  const suffixPy = '/' + spec + '.py';
+  const suffixInit = '/' + spec + '/__init__.py';
+  for (const fp of allFilePaths) {
+    if (fp.endsWith(suffixPy) || fp.endsWith(suffixInit)) {
+      return fp;
+    }
+  }
+
   return undefined;
 }
 

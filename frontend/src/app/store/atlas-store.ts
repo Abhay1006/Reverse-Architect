@@ -57,6 +57,7 @@ interface AtlasState {
   activeRepoId: string | null;   // Active repo/session ID for code peeking
   codePeekFile: { filePath: string; label: string } | null; // Currently peeking file
   heatmapEnabled: boolean;       // Complexity heatmap toggle
+  snackbarMessage: string | null;
 
   // --- Actions ---
   setGraph: (nodes: AtlasNode[], edges: Edge[], analysis: AnalysisResult, godObjectDetails?: GodObjectDetail[], deadCodeDetails?: DeadCodeDetail[], entryPoint?: EntryPoint, repoId?: string) => void;
@@ -85,6 +86,7 @@ interface AtlasState {
   collapseAllFiles: () => void;
   setCodePeekFile: (file: { filePath: string; label: string } | null) => void;
   toggleHeatmap: () => void;
+  setSnackbarMessage: (message: string | null) => void;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────
@@ -246,6 +248,7 @@ export const useAtlasStore = create<AtlasState>((set, get) => ({
   activeRepoId: null,
   codePeekFile: null,
   heatmapEnabled: false,
+  snackbarMessage: null,
 
   setGraph: (nodes, edges, analysisResults, godObjectDetails, deadCodeDetails, entryPoint, repoId) => {
     set({ 
@@ -426,5 +429,9 @@ export const useAtlasStore = create<AtlasState>((set, get) => ({
 
   toggleHeatmap: () => {
     set((state) => ({ heatmapEnabled: !state.heatmapEnabled }));
+  },
+
+  setSnackbarMessage: (message) => {
+    set({ snackbarMessage: message });
   },
 }));

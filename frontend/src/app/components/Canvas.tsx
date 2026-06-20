@@ -49,37 +49,36 @@ const nodeTypes = {
 
 // Inner component that uses useReactFlow (must be inside ReactFlowProvider)
 function CanvasInner() {
-  const {
-    nodes: allNodes,
-    edges: allEdges,
-    analysisResults,
-    searchQuery,
-    focusPath,
-    expandedFiles,
-    focusedNodeId,
-    onNodesChange,
-    onEdgesChange,
-    setSelectedNode,
-    toggleFileExpansion,
-    setFocusPath,
-    setFocusedNode,
-    fitViewTrigger,
-    panToNodeId,
-    panToNode,
-    visibleNodeTypes,
-    showEdgeLabels,
-    expandAllFiles,
-    collapseAllFiles,
-    toggleNodeType,
-    toggleEdgeLabels,
-    activeRepoId,
-    codePeekFile,
-    setCodePeekFile,
-    heatmapEnabled,
-    toggleHeatmap,
-    graphMode,
-    setGraphMode,
-  } = useAtlasStore();
+  const allNodes = useAtlasStore((s) => s.nodes);
+  const allEdges = useAtlasStore((s) => s.edges);
+  const analysisResults = useAtlasStore((s) => s.analysisResults);
+  const searchQuery = useAtlasStore((s) => s.searchQuery);
+  const focusPath = useAtlasStore((s) => s.focusPath);
+  const expandedFiles = useAtlasStore((s) => s.expandedFiles);
+  const focusedNodeId = useAtlasStore((s) => s.focusedNodeId);
+  const onNodesChange = useAtlasStore((s) => s.onNodesChange);
+  const onEdgesChange = useAtlasStore((s) => s.onEdgesChange);
+  const setSelectedNode = useAtlasStore((s) => s.setSelectedNode);
+  const toggleFileExpansion = useAtlasStore((s) => s.toggleFileExpansion);
+  const setFocusPath = useAtlasStore((s) => s.setFocusPath);
+  const setFocusedNode = useAtlasStore((s) => s.setFocusedNode);
+  const fitViewTrigger = useAtlasStore((s) => s.fitViewTrigger);
+  const panToNodeId = useAtlasStore((s) => s.panToNodeId);
+  const panToNode = useAtlasStore((s) => s.panToNode);
+  const visibleNodeTypes = useAtlasStore((s) => s.visibleNodeTypes);
+  const showEdgeLabels = useAtlasStore((s) => s.showEdgeLabels);
+  const expandAllFiles = useAtlasStore((s) => s.expandAllFiles);
+  const collapseAllFiles = useAtlasStore((s) => s.collapseAllFiles);
+  const toggleNodeType = useAtlasStore((s) => s.toggleNodeType);
+  const toggleEdgeLabels = useAtlasStore((s) => s.toggleEdgeLabels);
+  const activeRepoId = useAtlasStore((s) => s.activeRepoId);
+  const codePeekFile = useAtlasStore((s) => s.codePeekFile);
+  const setCodePeekFile = useAtlasStore((s) => s.setCodePeekFile);
+  const heatmapEnabled = useAtlasStore((s) => s.heatmapEnabled);
+  const toggleHeatmap = useAtlasStore((s) => s.toggleHeatmap);
+  const graphMode = useAtlasStore((s) => s.graphMode);
+  const setGraphMode = useAtlasStore((s) => s.setGraphMode);
+  const setSnackbarMessage = useAtlasStore((s) => s.setSnackbarMessage);
 
   const { fitView } = useReactFlow();
   const prevFocusPath = useRef(focusPath);
@@ -653,7 +652,7 @@ function CanvasInner() {
             onClick={() => {
               const mermaidCode = exportToMermaid(allNodes, allEdges);
               navigator.clipboard.writeText(mermaidCode);
-              alert("Mermaid code copied to clipboard!");
+              setSnackbarMessage("Mermaid code copied to clipboard!");
             }}
             size="small"
             variant="outlined"

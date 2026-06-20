@@ -11,6 +11,8 @@ import {
   Tooltip,
   Chip,
   CircularProgress,
+  Snackbar,
+  Alert,
 } from "@mui/material";
 import {
   Menu as MenuIcon,
@@ -47,6 +49,8 @@ export default function Home() {
   const showEdgeLabels = useAtlasStore((state) => state.showEdgeLabels);
   const toggleEdgeLabels = useAtlasStore((state) => state.toggleEdgeLabels);
   const isLoading = useAtlasStore((state) => state.isLoading);
+  const snackbarMessage = useAtlasStore((state) => state.snackbarMessage);
+  const setSnackbarMessage = useAtlasStore((state) => state.setSnackbarMessage);
 
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -301,6 +305,22 @@ export default function Home() {
           onClose={() => setIsSidebarOpen(false)}
         />
       )}
+
+      <Snackbar
+        open={Boolean(snackbarMessage)}
+        autoHideDuration={4000}
+        onClose={() => setSnackbarMessage(null)}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert
+          onClose={() => setSnackbarMessage(null)}
+          severity={snackbarMessage?.toLowerCase().includes("failed") ? "error" : "success"}
+          variant="filled"
+          sx={{ width: "100%", borderRadius: 2 }}
+        >
+          {snackbarMessage}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }

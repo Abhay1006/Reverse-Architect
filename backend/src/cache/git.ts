@@ -1,4 +1,4 @@
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 
 /**
  * Gets the latest commit SHA for a remote Git repository without cloning it.
@@ -9,7 +9,7 @@ export function getRemoteCommitSha(repoUrl: string): string | null {
     // git ls-remote returns output like: 
     // <sha>	HEAD
     // <sha>	refs/heads/main
-    const output = execSync(`git ls-remote ${repoUrl} HEAD`, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    const output = execFileSync('git', ['ls-remote', repoUrl, 'HEAD'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
     
     if (!output) return null;
     

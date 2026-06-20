@@ -24,6 +24,28 @@ import type {
 //  Main Adapter Function
 // ---------------------------------------------------------------------------
 
+const fileContentCache = new Map<string, string[]>();
+
+/** Clear the file content cache. Called at the start of a project analysis run. */
+export function clearFileCache(): void {
+  fileContentCache.clear();
+}
+
+/** Get the lines of a file, reading from disk only once per file. */
+function getFileLines(filePath: string): string[] {
+  let lines = fileContentCache.get(filePath);
+  if (!lines) {
+    try {
+      const content = fs.readFileSync(filePath, 'utf-8');
+      lines = content.split('\n');
+      fileContentCache.set(filePath, lines);
+    } catch {
+      lines = [];
+    }
+  }
+  return lines;
+}
+
 /**
  * Convert LSP document symbols for a single file into a ParsedFile.
  * 
@@ -82,13 +104,8 @@ export function adaptSymbolsToParsedFile(
   }
 
   // Calculate total line count
-  let lineCount = 0;
-  try {
-    const content = fs.readFileSync(filePath, 'utf-8');
-    lineCount = content.split('\n').length;
-  } catch {
-    lineCount = 0;
-  }
+  const lines = getFileLines(filePath);
+  const lineCount = lines.length;
 
   return {
     kind: 'file',
@@ -315,8 +332,8 @@ function adaptMethod(sym: DocumentSymbol, filePath: string): ParsedMethod {
  */
 export function extractImportsFromSource(filePath: string): ParsedImport[] {
   try {
-    const content = fs.readFileSync(filePath, 'utf-8');
-    return parseImportsFromText(content);
+    const lines = getFileLines(filePath);
+    return parseImportsFromText(lines.join('\n'));
   } catch {
     return [];
   }
@@ -462,8 +479,7 @@ export function parseImportsFromText(text: string): ParsedImport[] {
 /** Read a specific line from a file (0-indexed). */
 function readSourceLine(filePath: string, lineNumber: number): string | null {
   try {
-    const content = fs.readFileSync(filePath, 'utf-8');
-    const lines = content.split('\n');
+    const lines = getFileLines(filePath);
     // Also check a few lines above for decorators, and the line itself
     // might wrap, so grab a range
     const start = Math.max(0, lineNumber - 2);
@@ -477,8 +493,7 @@ function readSourceLine(filePath: string, lineNumber: number): string | null {
 /** Check if a declaration at a given line is exported. */
 function checkIfExported(filePath: string, lineNumber: number): boolean {
   try {
-    const content = fs.readFileSync(filePath, 'utf-8');
-    const lines = content.split('\n');
+    const lines = getFileLines(filePath);
     // Check the declaration line and the line above (for `export` on previous line)
     const start = Math.max(0, lineNumber - 1);
     const end = Math.min(lines.length, lineNumber + 1);
@@ -492,8 +507,7 @@ function checkIfExported(filePath: string, lineNumber: number): boolean {
 /** Check if a class declaration is abstract. */
 function checkIfAbstract(filePath: string, lineNumber: number): boolean {
   try {
-    const content = fs.readFileSync(filePath, 'utf-8');
-    const lines = content.split('\n');
+    const lines = getFileLines(filePath);
     const line = lines[lineNumber] || '';
     return /\babstract\s+class\b/.test(line);
   } catch {
@@ -585,8 +599,7 @@ function extractCalledFunctionsFromSource(
   endLine: number,
 ): string[] {
   try {
-    const content = fs.readFileSync(filePath, 'utf-8');
-    const lines = content.split('\n');
+    const lines = getFileLines(filePath);
     const slice = lines.slice(startLine, endLine + 1).join('\n');
     return extractCalledFunctionsFromText(slice);
   } catch {

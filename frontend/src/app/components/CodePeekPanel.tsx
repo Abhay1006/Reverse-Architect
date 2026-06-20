@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { Box, Typography, IconButton, Tooltip, CircularProgress } from "@mui/material";
 import { Close as CloseIcon, ContentCopy as CopyIcon, Check as CheckIcon } from "@mui/icons-material";
 import { useAtlasStore } from "../store/atlas-store";
+import { Highlight, themes } from "prism-react-renderer";
 
 export default function CodePeekPanel() {
   const { codePeekFile, setCodePeekFile, activeRepoId } = useAtlasStore();
@@ -39,6 +40,20 @@ export default function CodePeekPanel() {
     fetchCode();
   }, [codePeekFile, activeRepoId]);
 
+  // Close on Escape key
+  useEffect(() => {
+    if (!codePeekFile) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setCodePeekFile(null);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [codePeekFile, setCodePeekFile]);
+
   if (!codePeekFile) return null;
 
   const handleCopy = () => {
@@ -47,56 +62,52 @@ export default function CodePeekPanel() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const highlightCode = (rawCode: string) => {
-    if (!rawCode) return "";
-    
-    // Escape HTML to prevent injection
-    let escaped = rawCode
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;");
-
-    // Temporarily replace strings to avoid coloring keywords inside strings
-    const strings: string[] = [];
-    escaped = escaped.replace(/(["'`])(.*?)\1/g, (match) => {
-      strings.push(match);
-      return `___STR_PLACEHOLDER_${strings.length - 1}___`;
-    });
-
-    // Temporarily replace comments to avoid coloring keywords inside comments
-    const comments: string[] = [];
-    escaped = escaped.replace(/(\/\/.*|\/\*[\s\S]*?\*\/)/g, (match) => {
-      comments.push(match);
-      return `___COM_PLACEHOLDER_${comments.length - 1}___`;
-    });
-
-    // Highlight keywords
-    const keywords = /\b(const|let|var|function|class|interface|import|export|from|return|if|else|for|while|do|switch|case|break|continue|default|new|this|typeof|instanceof|extends|implements|as|any|string|number|boolean|void|async|await|try|catch|finally|throw|type)\b/g;
-    escaped = escaped.replace(keywords, '<span style="color: #ff7b72; font-weight: 600;">$1</span>');
-
-    // Highlight function calls
-    escaped = escaped.replace(/\b([a-zA-Z0-9_]+)(?=\()/g, '<span style="color: #d2a8ff;">$1</span>');
-
-    // Highlight numbers
-    escaped = escaped.replace(/\b(\d+)\b/g, '<span style="color: #79c0ff;">$1</span>');
-
-    // Restore strings
-    escaped = escaped.replace(/___STR_PLACEHOLDER_(\d+)___/g, (_, index) => {
-      const str = strings[parseInt(index, 10)] || "";
-      return `<span style="color: #a5d6ff;">${str}</span>`;
-    });
-
-    // Restore comments
-    escaped = escaped.replace(/___COM_PLACEHOLDER_(\d+)___/g, (_, index) => {
-      const com = comments[parseInt(index, 10)] || "";
-      return `<span style="color: #8b949e; font-style: italic;">${com}</span>`;
-    });
-
-    return escaped;
+  const getLanguage = (filePath: string): string => {
+    const ext = filePath.split('.').pop()?.toLowerCase();
+    if (!ext) return 'javascript';
+    switch (ext) {
+      case 'js':
+      case 'jsx':
+        return 'javascript';
+      case 'ts':
+        return 'typescript';
+      case 'tsx':
+        return 'tsx';
+      case 'py':
+        return 'python';
+      case 'go':
+        return 'go';
+      case 'rs':
+        return 'rust';
+      case 'java':
+        return 'java';
+      case 'kt':
+      case 'kts':
+        return 'kotlin';
+      case 'swift':
+        return 'swift';
+      case 'c':
+      case 'h':
+        return 'c';
+      case 'cpp':
+      case 'hpp':
+      case 'cc':
+      case 'cxx':
+        return 'cpp';
+      case 'cs':
+        return 'csharp';
+      case 'rb':
+        return 'ruby';
+      case 'php':
+        return 'php';
+      case 'sql':
+        return 'sql';
+      case 'prisma':
+        return 'prisma';
+      default:
+        return 'clike';
+    }
   };
-
-  const codeLines = code.split("\n");
-  const highlightedHtml = highlightCode(code);
 
   return (
     <Box
@@ -184,34 +195,53 @@ export default function CodePeekPanel() {
               p: 2,
             }}
           >
-            {/* Line Numbers Column */}
-            <Box
-              sx={{
-                userSelect: "none",
-                textAlign: "right",
-                color: "#30363d",
-                pr: 2.5,
-                borderRight: "1px solid #21262d",
-                mr: 2.5,
-                flexShrink: 0,
-              }}
+            <Highlight
+              theme={themes.vsDark}
+              code={code}
+              language={getLanguage(codePeekFile.filePath)}
             >
-              {codeLines.map((_, index) => (
-                <div key={index}>{index + 1}</div>
-              ))}
-            </Box>
+              {({ className, style, tokens, getLineProps, getTokenProps }) => (
+                <Box
+                  component="pre"
+                  className={className}
+                  style={{ ...style, background: "transparent", margin: 0, padding: 0 }}
+                  sx={{
+                    flex: 1,
+                    overflowX: "auto",
+                    whiteSpace: "pre",
+                    display: "flex",
+                  }}
+                >
+                  {/* Line Numbers Column */}
+                  <Box
+                    sx={{
+                      userSelect: "none",
+                      textAlign: "right",
+                      color: "#30363d",
+                      pr: 2.5,
+                      borderRight: "1px solid #21262d",
+                      mr: 2.5,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {tokens.map((_, i) => (
+                      <div key={i}>{i + 1}</div>
+                    ))}
+                  </Box>
 
-            {/* Code Text Column */}
-            <Box
-              component="pre"
-              sx={{
-                m: 0,
-                flex: 1,
-                overflowX: "auto",
-                whiteSpace: "pre",
-              }}
-              dangerouslySetInnerHTML={{ __html: highlightedHtml }}
-            />
+                  {/* Code Lines */}
+                  <Box sx={{ flex: 1, overflowX: "auto" }}>
+                    {tokens.map((line, i) => (
+                      <div key={i} {...getLineProps({ line })}>
+                        {line.map((token, key) => (
+                          <span key={key} {...getTokenProps({ token })} />
+                        ))}
+                      </div>
+                    ))}
+                  </Box>
+                </Box>
+              )}
+            </Highlight>
           </Box>
         )}
       </Box>

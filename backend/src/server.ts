@@ -19,7 +19,7 @@ import { getRemoteCommitSha } from './cache/git.js';
 import { progressTracker } from './progress.js';
 
 // --- LSP-based analysis ---
-import { analyzeWithLsp } from './lsp/index.js';
+import { analyzeWithLsp, clearFileCache } from './lsp/index.js';
 import { parseDatabaseSchemas } from './parser/project-parser.js';
 
 import { buildGraph } from './graph/graph-builder.js';
@@ -82,6 +82,9 @@ import { detectEntryPoint, detectAllEntryPoints } from './parser/entry-point.js'
  * Works on an already-extracted directory path.
  */
 async function analyzeProjectDir(projectPath: string) {
+  // Clear the LSP adapter file cache at the start of a fresh run
+  clearFileCache();
+
   // 0. Detect entry points (scanning root and subdirectories)
   const entryPoints = detectAllEntryPoints(projectPath);
   if (entryPoints.length > 0) {
@@ -247,7 +250,7 @@ app.get('/api/health', (_req, res) => {
 });
 
 /** POST /api/analyze/upload — accept a .zip file */
-app.post('/api/analyze/upload', upload.single('file'), analysisLimiter, async (req, res) => {
+app.post('/api/analyze/upload', analysisLimiter, upload.single('file'), async (req, res) => {
   const file = req.file;
   if (!file) {
     res.status(400).json({ error: 'No file uploaded' });
@@ -270,9 +273,25 @@ app.post('/api/analyze/upload', upload.single('file'), analysisLimiter, async (r
   }
 
   try {
-    // Extract the zip
+    // Extract the zip safely (protecting against Zip Slip vulnerabilities)
     const zip = new AdmZip(file.path);
-    zip.extractAllTo(extractDir, true);
+    const extractDirResolved = path.resolve(extractDir);
+
+    for (const entry of zip.getEntries()) {
+      const targetPath = path.resolve(extractDirResolved, entry.entryName);
+      const relative = path.relative(extractDirResolved, targetPath);
+
+      if (relative.startsWith('..') || path.isAbsolute(relative)) {
+        throw new Error(`Directory traversal attempt detected in zip file: ${entry.entryName}`);
+      }
+
+      if (entry.isDirectory) {
+        fs.mkdirSync(targetPath, { recursive: true });
+      } else {
+        fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+        fs.writeFileSync(targetPath, entry.getData());
+      }
+    }
 
     // Find root and analyze
     const projectRoot = findProjectRoot(extractDir);

@@ -16,6 +16,7 @@ export default function LandingHero() {
   const setProgressText = useAtlasStore((state) => state.setProgressText);
   const [recentRepos, setRecentRepos] = useState<{ repo_id: string; repo_name: string; analyzed_at: string; node_count: number; edge_count: number }[]>([]);
   const setGraph = useAtlasStore((state) => state.setGraph);
+  const setSnackbarMessage = useAtlasStore((state) => state.setSnackbarMessage);
 
   useEffect(() => {
     getRecentRepos().then(data => setRecentRepos(data.repos)).catch(console.error);
@@ -62,7 +63,7 @@ export default function LandingHero() {
       );
     } catch (err) {
       console.error('Analysis failed:', err);
-      alert('Analysis failed. Check console for details.');
+      setSnackbarMessage('Analysis failed. Check console for details.');
     } finally {
       eventSource.close();
       setIsLoading(false);
