@@ -6,11 +6,53 @@ import * as THREE from "three";
 import { Box, IconButton, Tooltip, Typography } from "@mui/material";
 import { CenterFocusStrong as FocusIcon, SettingsBackupRestore as ResetIcon } from "@mui/icons-material";
 import { useAtlasStore, getVisibleNodes, getVisibleEdges } from "../store/atlas-store";
+import type { AtlasNode } from "../types/nodes";
+
+interface ForceGraph3DInstance {
+  cameraPosition: (
+    position: { x: number; y: number; z: number },
+    lookAt: { x: number; y: number; z: number } | null,
+    transitionMs: number
+  ) => void;
+  zoomToFit: (transitionMs: number, padding: number) => void;
+  d3Force: (forceName: string) => { strength: (val: number) => void; distance: (val: number) => void } | undefined;
+}
+
+interface ThreeGraphNode {
+  id: string;
+  name: string;
+  filePath: string;
+  type: string;
+  color: string;
+  val: number;
+  opacity: number;
+  isGodObject: boolean;
+  isDeadCode: boolean;
+  isEntryPoint: boolean;
+  complexity: number;
+  lineCount: number;
+  parentId?: string;
+  x?: number;
+  y?: number;
+  z?: number;
+}
+
+interface ThreeGraphLink {
+  source: string | ThreeGraphNode;
+  target: string | ThreeGraphNode;
+  label?: React.ReactNode;
+  color: string;
+  isCycle: boolean;
+}
 
 export default function Graph3D() {
   const containerRef = useRef<HTMLDivElement>(null);
-  const fgRef = useRef<any>(null);
+  const fgRef = useRef<ForceGraph3DInstance | null>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
+
+  // WebGL cache to prevent memory leaks
+  const geometryCache = useRef(new Map<number, THREE.SphereGeometry>());
+  const materialCache = useRef(new Map<string, THREE.Material>());
 
   const {
     nodes: allNodes,
@@ -46,6 +88,16 @@ export default function Graph3D() {
     }
   }, []);
 
+  // WebGL disposal cleanup on unmount
+  useEffect(() => {
+    return () => {
+      geometryCache.current.forEach((geom) => geom.dispose());
+      geometryCache.current.clear();
+      materialCache.current.forEach((mat) => mat.dispose());
+      materialCache.current.clear();
+    };
+  }, []);
+
   // 2. Filter nodes and edges exactly like 2D view
   const visibleNodes = useMemo(
     () => getVisibleNodes(allNodes, focusPath, expandedFiles, visibleNodeTypes),
@@ -70,7 +122,9 @@ export default function Graph3D() {
       for (let i = 0; i < cycle.length; i++) {
         const source = cycle[i];
         const target = cycle[(i + 1) % cycle.length];
-        cycleSet.add(`${source}->${target}`);
+        if (source && target) {
+          cycleSet.add(`${source}->${target}`);
+        }
       }
     }
     return cycleSet;
@@ -85,8 +139,8 @@ export default function Graph3D() {
       const isGodObject = !!analysisResults?.godObjects.includes(node.id);
       const isDeadCode = !!analysisResults?.deadCode.includes(node.id);
       const isEntryPoint = !!node.data?.analysis?.isEntryPoint;
-      const complexity = (node.data?.metadata as any)?.maxComplexity || 0;
-      const lineCount = (node.data?.metadata as any)?.lineCount || 0;
+      const complexity = node.data?.metadata?.maxComplexity || 0;
+      const lineCount = node.data?.metadata?.lineCount || 0;
 
       // Color mapping
       let color = "#94a3b8"; // Slate for files
@@ -94,7 +148,7 @@ export default function Graph3D() {
       if (node.type === "interface") color = "#c084fc"; // Purple
       if (node.type === "function") color = "#38bdf8"; // Light Blue
       if (node.type === "database") color = "#34d399"; // Emerald Green
-      if (node.type === "group") color = "rgba(255, 255, 255, 0.15)"; // Gray folder
+      if (node.type === "group") color = "rgba(255, 255, 255, 0.15)"; // Play folder
 
       // Search match dimming
       let opacity = 1.0;
@@ -122,8 +176,8 @@ export default function Graph3D() {
       return {
         id: node.id,
         name: label,
-        filePath: node.data?.filePath || "",
-        type: node.type,
+        filePath: (node.data?.filePath as string) || "",
+        type: node.type || "file",
         color,
         val,
         opacity,
@@ -170,62 +224,84 @@ export default function Graph3D() {
     return { nodes, links };
   }, [visibleNodes, visibleEdges, cycleEdges, searchQuery, heatmapEnabled, analysisResults]);
 
-  // 5. Build premium 3D Mesh object for nodes
-  const nodeThreeObject = (node: any) => {
+  // 5. Build premium 3D Mesh object for nodes (with caching & disposal optimization)
+  const nodeThreeObject = (node: ThreeGraphNode) => {
     const size = node.val;
-    const geometry = new THREE.SphereGeometry(size, 16, 16);
     
-    let material: THREE.Material;
-
-    if (node.opacity < 0.5) {
-      // Dimmed nodes (search filter miss)
-      material = new THREE.MeshBasicMaterial({
-        color: node.color,
-        transparent: true,
-        opacity: 0.1,
-      });
-    } else if (node.isGodObject) {
-      // Glowing pulsing red emissive mesh
-      material = new THREE.MeshLambertMaterial({
-        color: "#ef4444",
-        emissive: "#b91c1c",
-        emissiveIntensity: 2.0,
-      });
-    } else if (node.isEntryPoint) {
-      // Glowing white/indigo emissive mesh
-      material = new THREE.MeshLambertMaterial({
-        color: "#6366f1",
-        emissive: "#4338ca",
-        emissiveIntensity: 2.0,
-      });
-    } else if (node.type === "group") {
-      // Semi-transparent cage
-      material = new THREE.MeshBasicMaterial({
-        color: "rgba(255,255,255,0.1)",
-        wireframe: true,
-        transparent: true,
-        opacity: 0.15,
-      });
-    } else {
-      // Phong shader with clean highlights
-      material = new THREE.MeshPhongMaterial({
-        color: node.color,
-        shininess: 80,
-        specular: 0x333333,
-      });
+    // Retrieve or create base geometry
+    let geometry = geometryCache.current.get(size);
+    if (!geometry) {
+      geometry = new THREE.SphereGeometry(size, 16, 16);
+      geometryCache.current.set(size, geometry);
+    }
+    
+    // Retrieve or create base material
+    const matKey = `${node.color}_${node.opacity}_${node.isGodObject}_${node.isEntryPoint}_${node.type}`;
+    let material = materialCache.current.get(matKey);
+    if (!material) {
+      if (node.opacity < 0.5) {
+        // Dimmed nodes (search filter miss)
+        material = new THREE.MeshBasicMaterial({
+          color: node.color,
+          transparent: true,
+          opacity: 0.1,
+        });
+      } else if (node.isGodObject) {
+        // Glowing pulsing red emissive mesh
+        material = new THREE.MeshLambertMaterial({
+          color: "#ef4444",
+          emissive: "#b91c1c",
+          emissiveIntensity: 2.0,
+        });
+      } else if (node.isEntryPoint) {
+        // Glowing white/indigo emissive mesh
+        material = new THREE.MeshLambertMaterial({
+          color: "#6366f1",
+          emissive: "#4338ca",
+          emissiveIntensity: 2.0,
+        });
+      } else if (node.type === "group") {
+        // Semi-transparent cage
+        material = new THREE.MeshBasicMaterial({
+          color: "rgba(255,255,255,0.1)",
+          wireframe: true,
+          transparent: true,
+          opacity: 0.15,
+        });
+      } else {
+        // Phong shader with clean highlights
+        material = new THREE.MeshPhongMaterial({
+          color: node.color,
+          shininess: 80,
+          specular: 0x333333,
+        });
+      }
+      materialCache.current.set(matKey, material);
     }
 
     const mesh = new THREE.Mesh(geometry, material);
 
     // Selected glow outline
     if (selectedNodeId === node.id) {
-      const outlineGeom = new THREE.SphereGeometry(size + 1.2, 16, 16);
-      const outlineMat = new THREE.MeshBasicMaterial({
-        color: "#38bdf8",
-        wireframe: true,
-        transparent: true,
-        opacity: 0.5,
-      });
+      const outlineSize = size + 1.2;
+      let outlineGeom = geometryCache.current.get(outlineSize);
+      if (!outlineGeom) {
+        outlineGeom = new THREE.SphereGeometry(outlineSize, 16, 16);
+        geometryCache.current.set(outlineSize, outlineGeom);
+      }
+
+      const outlineMatKey = "outline_#38bdf8";
+      let outlineMat = materialCache.current.get(outlineMatKey);
+      if (!outlineMat) {
+        outlineMat = new THREE.MeshBasicMaterial({
+          color: "#38bdf8",
+          wireframe: true,
+          transparent: true,
+          opacity: 0.5,
+        });
+        materialCache.current.set(outlineMatKey, outlineMat);
+      }
+
       const outlineMesh = new THREE.Mesh(outlineGeom, outlineMat);
       const group = new THREE.Group();
       group.add(mesh);
@@ -235,13 +311,25 @@ export default function Graph3D() {
 
     // Outer cage halo for entry point / god object
     if (node.isGodObject || node.isEntryPoint) {
-      const haloGeom = new THREE.SphereGeometry(size + 2.5, 8, 8);
-      const haloMat = new THREE.MeshBasicMaterial({
-        color: node.isGodObject ? "#ef4444" : "#818cf8",
-        wireframe: true,
-        transparent: true,
-        opacity: 0.15,
-      });
+      const haloSize = size + 2.5;
+      let haloGeom = geometryCache.current.get(haloSize);
+      if (!haloGeom) {
+        haloGeom = new THREE.SphereGeometry(haloSize, 8, 8);
+        geometryCache.current.set(haloSize, haloGeom);
+      }
+
+      const haloMatKey = `halo_${node.isGodObject ? "god" : "entry"}`;
+      let haloMat = materialCache.current.get(haloMatKey);
+      if (!haloMat) {
+        haloMat = new THREE.MeshBasicMaterial({
+          color: node.isGodObject ? "#ef4444" : "#818cf8",
+          wireframe: true,
+          transparent: true,
+          opacity: 0.15,
+        });
+        materialCache.current.set(haloMatKey, haloMat);
+      }
+
       const haloMesh = new THREE.Mesh(haloGeom, haloMat);
       const group = new THREE.Group();
       group.add(mesh);
@@ -255,17 +343,17 @@ export default function Graph3D() {
   // 6. Camera focal point & zoom actions with manual double-click detection
   const lastClickRef = useRef<{ id: string; time: number } | null>(null);
 
-  const handleNodeClick = (node: any) => {
+  const handleNodeClick = (node: ThreeGraphNode) => {
     setSelectedNode(node.id);
 
     const now = Date.now();
     if (lastClickRef.current && lastClickRef.current.id === node.id && (now - lastClickRef.current.time) < 300) {
-      if (fgRef.current) {
+      if (fgRef.current && node.x !== undefined && node.y !== undefined && node.z !== undefined) {
         const distance = 80;
         const distRatio = 1 + distance / Math.hypot(node.x, node.y, node.z);
         fgRef.current.cameraPosition(
           { x: node.x * distRatio, y: node.y * distRatio, z: node.z * distRatio }, // camera position
-          node, // focus coords
+          node as { x: number; y: number; z: number }, // focus coords
           1200 // transition duration (ms)
         );
       }
@@ -284,8 +372,8 @@ export default function Graph3D() {
   // Force simulation settings
   useEffect(() => {
     if (fgRef.current) {
-      fgRef.current.d3Force("charge").strength(-120);
-      fgRef.current.d3Force("link").distance(60);
+      fgRef.current.d3Force("charge")?.strength(-120);
+      fgRef.current.d3Force("link")?.distance(60);
     }
   }, [fgRef.current]);
 
@@ -301,13 +389,13 @@ export default function Graph3D() {
       }}
     >
       <ForceGraph3D
-        ref={fgRef}
+        ref={fgRef as any}
         width={dimensions.width}
         height={dimensions.height}
         graphData={graphData}
         nodeThreeObject={nodeThreeObject}
         onNodeClick={handleNodeClick}
-        nodeLabel={(node: any) => {
+        nodeLabel={(node: ThreeGraphNode) => {
           const typeLabel = node.type.toUpperCase();
           const info = node.complexity > 0 
             ? ` | Complexity: ${node.complexity}` 
@@ -331,12 +419,12 @@ export default function Graph3D() {
             </div>
           `;
         }}
-        linkColor={(link: any) => link.color}
-        linkWidth={(link: any) => (link.label === "inside" ? 0.5 : 1.5)}
-        linkDirectionalParticles={(link: any) => (link.label === "inside" ? 0 : 2)}
+        linkColor={(link: ThreeGraphLink) => link.color}
+        linkWidth={(link: ThreeGraphLink) => (link.label === "inside" ? 0.5 : 1.5)}
+        linkDirectionalParticles={(link: ThreeGraphLink) => (link.label === "inside" ? 0 : 2)}
         linkDirectionalParticleWidth={1.5}
         linkDirectionalParticleSpeed={0.008}
-        linkDirectionalParticleColor={(link: any) => link.color}
+        linkDirectionalParticleColor={(link: ThreeGraphLink) => link.color}
         showNavInfo={false}
       />
 

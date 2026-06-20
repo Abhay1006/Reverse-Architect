@@ -1,5 +1,5 @@
 import dagre from 'dagre';
-import type { ArchGraph, ArchNode } from '../../../shared/types.js';
+import type { ArchGraph, ArchNode } from 'shared';
 
 export interface LayoutOptions {
   /**

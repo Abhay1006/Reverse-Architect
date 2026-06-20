@@ -1,4 +1,4 @@
-import type { ArchEdge, AnalysisResult } from '../../../shared/types.js';
+import type { ArchEdge, AnalysisResult } from 'shared';
 import type { PositionedGraph, PositionedNode } from './layout.js';
 
 export interface ReactFlowNode {

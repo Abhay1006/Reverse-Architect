@@ -1,4 +1,4 @@
-import type { ArchNode, PatternMatch } from '../../../../shared/types.js';
+import type { ArchNode, PatternMatch } from 'shared';
 
 /**
  * Heuristic check for Singleton pattern.

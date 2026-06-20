@@ -6,6 +6,7 @@ export interface CustomNodeData {
   metadata?: {
     properties?: string[];
     methods?: string[];
+    entities?: { name: string; type: string }[];
     lineCount?: number;
     exportCount?: number;
     maxComplexity?: number;

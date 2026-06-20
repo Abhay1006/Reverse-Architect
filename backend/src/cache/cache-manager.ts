@@ -59,15 +59,23 @@ export interface RecentRepo {
   edge_count: number;
 }
 
+export interface AnalysisPayload {
+  nodes: unknown[];
+  edges: unknown[];
+  godObjectDetails?: unknown[];
+  deadCodeDetails?: unknown[];
+  entryPoint?: { entryFile: string; framework: string } | null | undefined;
+}
+
 export class CacheManager {
   /**
    * Get the full cached analysis result for a repo.
    */
-  static getCachedResult(repoId: string): any | null {
+  static getCachedResult(repoId: string): AnalysisPayload | null {
     const row = db.prepare('SELECT result_json FROM analysis_cache WHERE repo_id = ?').get(repoId) as { result_json: string } | undefined;
     if (!row) return null;
     try {
-      return JSON.parse(row.result_json);
+      return JSON.parse(row.result_json) as AnalysisPayload;
     } catch {
       return null;
     }
@@ -84,7 +92,7 @@ export class CacheManager {
   /**
    * Save a full analysis result to the cache.
    */
-  static saveResult(repoId: string, url: string, commitSha: string, result: any): void {
+  static saveResult(repoId: string, url: string, commitSha: string, result: AnalysisPayload): void {
     const resultJson = JSON.stringify(result);
     const nodeCount = result.nodes?.length || 0;
     const edgeCount = result.edges?.length || 0;

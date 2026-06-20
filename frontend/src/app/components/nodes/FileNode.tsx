@@ -26,9 +26,16 @@ const getLanguageDetails = (filePath: string) => {
       return { label: 'Kotlin', short: 'KT', color: '#7f52ff' };
     case '.swift':
       return { label: 'Swift', short: 'SW', color: '#f05138' };
-    case '.c':
+    case '.m':
+      return { label: 'Objective-C', short: 'M', color: '#438eff' };
+    case '.mm':
+      return { label: 'Objective-C++', short: 'MM', color: '#6866fb' };
     case '.h':
-      return { label: 'C', short: 'C', color: '#a8b9cc' };
+      return { label: 'Header', short: 'H', color: '#0ea5e9' };
+    case '.pch':
+      return { label: 'PCH', short: 'PCH', color: '#0d9488' };
+    case '.c':
+      return { label: 'C', short: 'C', color: '#64748b' };
     case '.cpp':
     case '.hpp':
     case '.cc':
@@ -57,6 +64,35 @@ const getLanguageDetails = (filePath: string) => {
   }
 };
 
+const DIRECTORY_COLORS = [
+  '#6366f1', // Indigo
+  '#3b82f6', // Blue
+  '#0ea5e9', // Sky Blue
+  '#14b8a6', // Teal
+  '#10b981', // Emerald Green
+  '#84cc16', // Lime Green
+  '#eab308', // Yellow
+  '#f97316', // Orange
+  '#ef4444', // Red
+  '#ec4899', // Pink
+  '#d946ef', // Magenta
+  '#a855f7', // Purple
+];
+
+const getDirectoryColor = (filePath: string, defaultColor: string) => {
+  const parts = filePath.split('/');
+  if (parts.length <= 1) {
+    return defaultColor;
+  }
+  const parentDir = parts.slice(0, -1).join('/');
+  let hash = 0;
+  for (let i = 0; i < parentDir.length; i++) {
+    hash = parentDir.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash) % DIRECTORY_COLORS.length;
+  return DIRECTORY_COLORS[index]!;
+};
+
 const FileNode = ({ data, selected, sourcePosition, targetPosition }: NodeProps<FileNodeType>) => {
   const fullPath = data.filePath as string;
   const expandedFiles = useAtlasStore(s => s.expandedFiles);
@@ -68,12 +104,14 @@ const FileNode = ({ data, selected, sourcePosition, targetPosition }: NodeProps<
   const entities = (data.metadata as any)?.entities || [];
   const maxComplexity = (data.metadata as any)?.maxComplexity;
   const lang = getLanguageDetails(fullPath);
+  const dirColor = getDirectoryColor(fullPath, lang.color);
 
   return (
     <BaseNode
       label={data.label as string}
       selected={selected}
-      headerColor={isEntryPoint ? "var(--primary)" : lang.color}
+      headerColor={isEntryPoint ? "var(--primary)" : dirColor}
+      iconColor={lang.color}
       status={status}
       complexity={maxComplexity}
       sourcePosition={sourcePosition}
@@ -85,7 +123,7 @@ const FileNode = ({ data, selected, sourcePosition, targetPosition }: NodeProps<
           <Box
             component="span"
             sx={{
-              fontSize: "0.55rem",
+              fontSize: "0.6rem",
               fontWeight: 900,
               color: lang.short === 'JS' ? '#17171a' : 'white',
               fontFamily: "monospace",

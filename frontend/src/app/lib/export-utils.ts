@@ -1,12 +1,14 @@
-export function exportToMermaid(nodes: any[], edges: any[]): string {
+import type { Node, Edge } from "@xyflow/react";
+
+export function exportToMermaid(nodes: Node[], edges: Edge[]): string {
   let mermaid = "flowchart TD\n";
 
   const sanitizeId = (id: string): string => {
     return id.replace(/[^a-zA-Z0-9]/g, "_");
   };
 
-  const getShape = (node: any): string => {
-    const label = node.data?.label || node.id;
+  const getShape = (node: Node): string => {
+    const label = (node.data?.label as string) || node.id;
     if (node.type === "class") return `["🔷 ${label}"]`;
     if (node.type === "interface") return `(["🔶 ${label}"])`;
     if (node.type === "function") return `{"⚡ ${label}"}`;
@@ -16,7 +18,7 @@ export function exportToMermaid(nodes: any[], edges: any[]): string {
 
   // Group nodes by parentId
   const topLevelNodes = nodes.filter(n => !n.parentId);
-  const childrenMap = new Map<string, any[]>();
+  const childrenMap = new Map<string, Node[]>();
   nodes.forEach(n => {
     if (n.parentId) {
       if (!childrenMap.has(n.parentId)) {
@@ -30,7 +32,7 @@ export function exportToMermaid(nodes: any[], edges: any[]): string {
   for (const node of topLevelNodes) {
     const children = childrenMap.get(node.id) || [];
     if (children.length > 0) {
-      mermaid += `  subgraph ${sanitizeId(node.id)} ["📁 ${node.data?.label || node.id}"]\n`;
+      mermaid += `  subgraph ${sanitizeId(node.id)} ["📁 ${(node.data?.label as string) || node.id}"]\n`;
       for (const child of children) {
         mermaid += `    ${sanitizeId(child.id)}${getShape(child)}\n`;
       }
@@ -44,7 +46,7 @@ export function exportToMermaid(nodes: any[], edges: any[]): string {
   for (const edge of edges) {
     const sourceId = sanitizeId(edge.source);
     const targetId = sanitizeId(edge.target);
-    const label = edge.label || "";
+    const label = (edge.label as string) || "";
     
     let arrow = "-->";
     if (label === "extends") {
@@ -65,6 +67,6 @@ export function exportToMermaid(nodes: any[], edges: any[]): string {
   return mermaid;
 }
 
-export function exportToJSON(nodes: any[], edges: any[], analysis: any): string {
+export function exportToJSON(nodes: Node[], edges: Edge[], analysis: unknown): string {
   return JSON.stringify({ nodes, edges, analysis }, null, 2);
 }

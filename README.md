@@ -55,7 +55,23 @@ Atlas uses a monorepo architecture divided between a Node.js/TypeScript backend 
 - `npm` or `yarn`
 - `git` installed globally (for repository cloning)
 
-### 1. Run the Backend Server
+### Run Everything in One Command (Recommended)
+
+You can spin up both the backend server and the frontend client concurrently with a single command from the root directory:
+
+```bash
+npm run dev
+```
+
+*This will start the backend API on `http://localhost:4000` and the Next.js frontend on `http://localhost:3000`.*
+
+---
+
+### Running Services Separately (Alternative)
+
+If you prefer to run the services individually:
+
+#### 1. Run the Backend Server
 The backend parses AST structures and manages rate-controlled external integrations.
 ```bash
 cd backend
@@ -64,7 +80,7 @@ npm run dev
 ```
 *The API will start on `http://localhost:4000`*
 
-### 2. Run the Frontend App
+#### 2. Run the Frontend App
 The UI dashboard built using Next.js, MUI, and Vanilla CSS with glassmorphic elements.
 ```bash
 cd frontend

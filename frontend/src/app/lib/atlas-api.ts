@@ -4,7 +4,7 @@
 //  to trigger project analysis and retrieve graph data.
 // ============================================================
 
-import type { AnalysisResult } from '../../../../shared/types';
+import type { AnalysisResult } from 'shared';
 import type { Node, Edge } from '@xyflow/react';
 import type { AtlasNode } from '../types/nodes';
 

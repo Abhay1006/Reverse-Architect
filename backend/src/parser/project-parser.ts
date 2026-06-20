@@ -7,7 +7,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import type { ParsedFile, ParsedDatabase } from '../../../shared/types.js';
+import type { ParsedFile, ParsedDatabase } from 'shared';
 
 function walkDir(dir: string, ext: string[]): string[] {
   let results: string[] = [];

@@ -5,7 +5,7 @@
 //  that know too much or are depended on by too many things.
 // ============================================================
 
-import type { ArchGraph } from '../../../shared/types.js';
+import type { ArchGraph } from 'shared';
 import { calculateDegrees } from '../graph/algorithms/degree-analysis.js';
 
 // ---------------------------------------------------------------------------

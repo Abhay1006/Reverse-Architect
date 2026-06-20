@@ -11,6 +11,7 @@ interface BaseNodeProps {
   children?: ReactNode;
   className?: string;
   headerColor?: string;
+  iconColor?: string;
   selected?: boolean;
   status?: "god" | "dead" | "entry" | "default";
   complexity?: number;
@@ -24,6 +25,7 @@ const BaseNode = ({
   children,
   className = "",
   headerColor = "var(--primary)",
+  iconColor,
   selected = false,
   status = "default",
   complexity,
@@ -34,42 +36,43 @@ const BaseNode = ({
 
   const getBackgroundStyle = () => {
     if (status === "god") {
-      return `linear-gradient(145deg, rgba(239, 68, 68, 0.35) 0%, rgba(15, 15, 20, 0.98) 120%)`;
+      return `linear-gradient(145deg, rgba(239, 68, 68, 0.18) 0%, rgba(10, 10, 12, 0.95) 100%)`;
     }
     if (status === "dead") {
-      return `linear-gradient(145deg, rgba(148, 163, 184, 0.15) 0%, rgba(15, 15, 20, 0.98) 120%)`;
+      return `linear-gradient(145deg, color-mix(in srgb, color-mix(in srgb, ${headerColor} 10%, #94a3b8) 8%, transparent) 0%, rgba(10, 10, 12, 0.98) 100%)`;
     }
     if (status === "entry") {
-      return `linear-gradient(145deg, rgba(99, 102, 241, 0.25) 0%, rgba(15, 15, 20, 0.98) 120%)`;
+      return `linear-gradient(145deg, rgba(99, 102, 241, 0.15) 0%, rgba(10, 10, 12, 0.95) 100%)`;
     }
     if (heatmapEnabled && complexity !== undefined) {
       const hue = Math.max(0, 120 - complexity * 8); // 120 = green, 0 = red
       const sat = Math.min(100, 35 + complexity * 3.5);
       const color = `hsl(${hue}, ${sat}%, 20%)`;
-      return `linear-gradient(145deg, color-mix(in srgb, ${color} 45%, transparent) 0%, rgba(15, 15, 20, 0.98) 120%)`;
+      return `linear-gradient(145deg, color-mix(in srgb, ${color} 20%, transparent) 0%, rgba(10, 10, 12, 0.95) 100%)`;
     }
-    return `linear-gradient(145deg, color-mix(in srgb, ${headerColor} 25%, transparent) 0%, rgba(15, 15, 20, 0.98) 120%)`;
+    return `linear-gradient(145deg, color-mix(in srgb, ${headerColor} 15%, transparent) 0%, rgba(10, 10, 12, 0.96) 100%)`;
   };
 
   const getBorderColor = () => {
-    if (status === "god") return "rgba(239, 68, 68, 0.8)";
-    if (status === "dead") return "rgba(148, 163, 184, 0.3)";
-    if (status === "entry") return "var(--primary)";
+    if (status === "god") return selected ? "rgba(239, 68, 68, 1)" : "rgba(239, 68, 68, 0.5)";
+    if (status === "dead") return selected ? "rgba(148, 163, 184, 0.6)" : `color-mix(in srgb, ${headerColor} 12%, rgba(148, 163, 184, 0.18))`;
+    if (status === "entry") return selected ? "var(--primary)" : "rgba(99, 102, 241, 0.5)";
     if (heatmapEnabled && complexity !== undefined) {
       const hue = Math.max(0, 120 - complexity * 8);
       const sat = Math.min(100, 35 + complexity * 3.5);
       return `hsl(${hue}, ${sat}%, 45%)`;
     }
-    return selected ? headerColor : "rgba(255, 255, 255, 0.1)";
+    return selected ? headerColor : `color-mix(in srgb, ${headerColor} 25%, rgba(255, 255, 255, 0.08))`;
   };
 
   const borderGlow = () => {
     if (selected) {
-      if (status === "god") return "0 0 16px rgba(239, 68, 68, 0.4)";
-      if (status === "entry") return "0 0 16px rgba(99, 102, 241, 0.4)";
-      return `0 0 16px ${headerColor}`;
+      if (status === "god") return "0 0 24px rgba(239, 68, 68, 0.5), inset 0 0 12px rgba(239, 68, 68, 0.2)";
+      if (status === "entry") return "0 0 24px rgba(99, 102, 241, 0.5), inset 0 0 12px rgba(99, 102, 241, 0.2)";
+      if (status === "dead") return "0 0 16px rgba(148, 163, 184, 0.2)";
+      return `0 0 24px color-mix(in srgb, ${headerColor} 40%, transparent), inset 0 0 12px color-mix(in srgb, ${headerColor} 15%, transparent)`;
     }
-    return "none";
+    return `0 8px 32px rgba(0, 0, 0, 0.5), 0 0 1px color-mix(in srgb, ${headerColor} 20%, transparent)`;
   };
 
   return (
@@ -92,7 +95,11 @@ const BaseNode = ({
                        status === "dead" ? "rgba(148, 163, 184, 0.5)" :
                        status === "entry" ? "var(--primary)" :
                        headerColor,
-          transform: "translateY(-2px)",
+          transform: "translateY(-4px)",
+          boxShadow: status === "god" ? "0 12px 30px rgba(239, 68, 68, 0.45)" :
+                     status === "entry" ? "0 12px 30px rgba(99, 102, 241, 0.45)" :
+                     status === "dead" ? "0 8px 24px rgba(148, 163, 184, 0.2)" :
+                     `0 12px 30px color-mix(in srgb, ${headerColor} 35%, rgba(0, 0, 0, 0.6))`,
         },
       }}
     >
@@ -104,8 +111,8 @@ const BaseNode = ({
           gap: 1.5,
           p: 2,
           pb: 1.5,
-          borderBottom: "1px solid rgba(255,255,255,0.06)",
-          bgcolor: "rgba(255,255,255,0.02)",
+          borderBottom: `1px solid color-mix(in srgb, ${headerColor} 12%, rgba(255,255,255,0.04))`,
+          bgcolor: status === "dead" ? "rgba(255,255,255,0.01)" : `color-mix(in srgb, ${headerColor} 8%, rgba(255,255,255,0.01))`,
           borderTopLeftRadius: "13px",
           borderTopRightRadius: "13px",
         }}
@@ -118,8 +125,9 @@ const BaseNode = ({
             width: 30,
             height: 30,
             borderRadius: "8px",
-            bgcolor: "rgba(255,255,255,0.04)",
-            color: headerColor,
+            bgcolor: `color-mix(in srgb, ${iconColor ?? headerColor} 12%, rgba(255,255,255,0.04))`,
+            color: iconColor ?? headerColor,
+            border: `1px solid color-mix(in srgb, ${iconColor ?? headerColor} 20%, transparent)`,
           }}
         >
           {icon}

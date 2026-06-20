@@ -8,7 +8,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { parseImportsFromText, extractCalledFunctionsFromText } from './lsp-adapter.js';
 import { estimateComplexityFromText } from './lsp-complexity.js';
-import type { ParsedFile, ParsedClass, ParsedInterface, ParsedFunction, ParsedImport } from '../../../shared/types.js';
+import type { ParsedFile, ParsedClass, ParsedInterface, ParsedFunction, ParsedImport } from 'shared';
 
 // ---------------------------------------------------------------------------
 //  Language Detection
@@ -64,7 +64,7 @@ export function analyzeFileWithText(filePath: string): ParsedFile {
   const imports = parseImportsFromText(content);
   const classes = extractClasses(content, lang, filePath);
   const interfaces = extractInterfaces(content, lang);
-  const functions = extractFunctions(content, lang, filePath);
+  const functions = extractFunctions(content, lang, filePath, classes);
 
   return {
     kind: 'file',
@@ -217,7 +217,7 @@ function extractInterfaces(content: string, lang: Lang): ParsedInterface[] {
 //  Multi-Language Function Extraction
 // ---------------------------------------------------------------------------
 
-function extractFunctions(content: string, lang: Lang, filePath: string): ParsedFunction[] {
+function extractFunctions(content: string, lang: Lang, filePath: string, classes: ParsedClass[] = []): ParsedFunction[] {
   const functions: ParsedFunction[] = [];
   const lines = content.split('\n');
   const patterns: RegExp[] = [];
@@ -267,12 +267,18 @@ function extractFunctions(content: string, lang: Lang, filePath: string): Parsed
 
   // Filter out names that are inside classes (we handle those as methods)
   const classMethodNames = new Set<string>();
+  for (const cls of classes) {
+    for (const m of cls.methods) {
+      classMethodNames.add(m.name);
+    }
+  }
 
   for (const pat of patterns) {
     pat.lastIndex = 0;
     let m;
     while ((m = pat.exec(content)) !== null) {
       const name = m[1]!;
+      if (classMethodNames.has(name)) continue; // Skip class methods!
       if (name === 'main' && lang === 'c') continue; // Skip C main
       if (/^[A-Z_]+$/.test(name)) continue; // Skip ALL_CAPS constants
       
@@ -280,7 +286,7 @@ function extractFunctions(content: string, lang: Lang, filePath: string): Parsed
       const endLine = findBlockEnd(lines, startLine, lang);
       const block = lines.slice(startLine, endLine + 1).join('\n');
       const complexity = estimateComplexityFromText(block);
-      const calledFunctions = extractCalledFunctionsFromText(block);
+      const calledFunctions = extractCalledFunctionsFromText(block).filter(f => f !== name);
 
       functions.push({
         kind: 'function',
@@ -351,7 +357,7 @@ function extractMethodsFromBlock(block: string, lang: Lang, filePath: string, bl
         returnType: 'void',
         visibility: /private/.test(m[0]) ? 'private' : /protected/.test(m[0]) ? 'protected' : 'public',
         complexity: estimateComplexityFromText(bodySnippet),
-        calledFunctions: extractCalledFunctionsFromText(bodySnippet),
+        calledFunctions: extractCalledFunctionsFromText(bodySnippet).filter(f => f !== name),
       });
     }
   }
@@ -384,7 +390,7 @@ export function extractGoMethods(content: string, filePath: string): Map<string,
       returnType: 'void',
       lineCount: endLine - startLine + 1,
       complexity: estimateComplexityFromText(block),
-      calledFunctions: extractCalledFunctionsFromText(block),
+      calledFunctions: extractCalledFunctionsFromText(block).filter(f => f !== name),
     });
   }
   return methodMap;

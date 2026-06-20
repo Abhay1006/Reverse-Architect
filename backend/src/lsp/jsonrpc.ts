@@ -28,9 +28,9 @@ export function encodeMessage(body: object): Buffer {
 export class MessageReader {
   private buffer = Buffer.alloc(0);
   private contentLength = -1;
-  private onMessage: (msg: any) => void;
+  private onMessage: (msg: unknown) => void;
 
-  constructor(onMessage: (msg: any) => void) {
+  constructor(onMessage: (msg: unknown) => void) {
     this.onMessage = onMessage;
   }
 

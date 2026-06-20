@@ -5,7 +5,7 @@
 //  files, classes, interfaces, or functions.
 // ============================================================
 
-import type { ArchGraph } from '../../../shared/types.js';
+import type { ArchGraph } from 'shared';
 import { calculateDegrees } from '../graph/algorithms/degree-analysis.js';
 
 // ---------------------------------------------------------------------------

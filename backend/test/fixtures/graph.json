@@ -1,0 +1,480 @@
+{
+  "nodes": [
+    {
+      "id": "file:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/main.ts",
+      "label": "main.ts",
+      "type": "file",
+      "filePath": "/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/main.ts",
+      "metadata": {
+        "lineCount": 0,
+        "exportCount": 0
+      },
+      "position": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "entity:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/main.ts:main",
+      "label": "main",
+      "type": "function",
+      "filePath": "/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/main.ts",
+      "metadata": {
+        "lineCount": 0,
+        "exportCount": 0
+      },
+      "position": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "file:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/user.ts",
+      "label": "user.ts",
+      "type": "file",
+      "filePath": "/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/user.ts",
+      "metadata": {
+        "lineCount": 0,
+        "exportCount": 2
+      },
+      "position": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "entity:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/user.ts:UserManager",
+      "label": "UserManager",
+      "type": "class",
+      "filePath": "/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/user.ts",
+      "metadata": {
+        "properties": [
+          "users"
+        ],
+        "methods": [
+          "addUser",
+          "getUser"
+        ],
+        "lineCount": 0,
+        "exportCount": 0
+      },
+      "position": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "entity:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/user.ts:User",
+      "label": "User",
+      "type": "interface",
+      "filePath": "/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/user.ts",
+      "metadata": {
+        "properties": [
+          "id",
+          "name",
+          "email"
+        ],
+        "methods": [],
+        "lineCount": 0,
+        "exportCount": 0
+      },
+      "position": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "file:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/utils.ts",
+      "label": "utils.ts",
+      "type": "file",
+      "filePath": "/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/utils.ts",
+      "metadata": {
+        "lineCount": 0,
+        "exportCount": 1
+      },
+      "position": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "entity:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/utils.ts:generateId",
+      "label": "generateId",
+      "type": "function",
+      "filePath": "/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/utils.ts",
+      "metadata": {
+        "lineCount": 0,
+        "exportCount": 0
+      },
+      "position": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "file:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/App.js",
+      "label": "App.js",
+      "type": "file",
+      "filePath": "/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/App.js",
+      "metadata": {
+        "lineCount": 0,
+        "exportCount": 1
+      },
+      "position": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "entity:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/App.js:App",
+      "label": "App",
+      "type": "function",
+      "filePath": "/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/App.js",
+      "metadata": {
+        "lineCount": 0,
+        "exportCount": 0
+      },
+      "position": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "file:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/index.js",
+      "label": "index.js",
+      "type": "file",
+      "filePath": "/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/index.js",
+      "metadata": {
+        "lineCount": 0,
+        "exportCount": 0
+      },
+      "position": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "file:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/reportWebVitals.js",
+      "label": "reportWebVitals.js",
+      "type": "file",
+      "filePath": "/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/reportWebVitals.js",
+      "metadata": {
+        "lineCount": 0,
+        "exportCount": 0
+      },
+      "position": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "file:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/components/Footer.js",
+      "label": "Footer.js",
+      "type": "file",
+      "filePath": "/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/components/Footer.js",
+      "metadata": {
+        "lineCount": 0,
+        "exportCount": 1
+      },
+      "position": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "entity:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/components/Footer.js:Footer",
+      "label": "Footer",
+      "type": "function",
+      "filePath": "/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/components/Footer.js",
+      "metadata": {
+        "lineCount": 0,
+        "exportCount": 0
+      },
+      "position": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "file:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/components/Navbar.js",
+      "label": "Navbar.js",
+      "type": "file",
+      "filePath": "/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/components/Navbar.js",
+      "metadata": {
+        "lineCount": 0,
+        "exportCount": 1
+      },
+      "position": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "entity:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/components/Navbar.js:Navbar",
+      "label": "Navbar",
+      "type": "function",
+      "filePath": "/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/components/Navbar.js",
+      "metadata": {
+        "lineCount": 0,
+        "exportCount": 0
+      },
+      "position": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "file:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/helpers/ProjectList.js",
+      "label": "ProjectList.js",
+      "type": "file",
+      "filePath": "/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/helpers/ProjectList.js",
+      "metadata": {
+        "lineCount": 0,
+        "exportCount": 0
+      },
+      "position": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "file:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/pages/Experience.js",
+      "label": "Experience.js",
+      "type": "file",
+      "filePath": "/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/pages/Experience.js",
+      "metadata": {
+        "lineCount": 0,
+        "exportCount": 1
+      },
+      "position": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "entity:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/pages/Experience.js:Experience",
+      "label": "Experience",
+      "type": "function",
+      "filePath": "/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/pages/Experience.js",
+      "metadata": {
+        "lineCount": 0,
+        "exportCount": 0
+      },
+      "position": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "file:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/pages/Home.js",
+      "label": "Home.js",
+      "type": "file",
+      "filePath": "/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/pages/Home.js",
+      "metadata": {
+        "lineCount": 0,
+        "exportCount": 1
+      },
+      "position": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "entity:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/pages/Home.js:Home",
+      "label": "Home",
+      "type": "function",
+      "filePath": "/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/pages/Home.js",
+      "metadata": {
+        "lineCount": 0,
+        "exportCount": 0
+      },
+      "position": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "file:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/pages/ProjectDisplay.js",
+      "label": "ProjectDisplay.js",
+      "type": "file",
+      "filePath": "/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/pages/ProjectDisplay.js",
+      "metadata": {
+        "lineCount": 0,
+        "exportCount": 1
+      },
+      "position": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "entity:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/pages/ProjectDisplay.js:ProjectDisplay",
+      "label": "ProjectDisplay",
+      "type": "function",
+      "filePath": "/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/pages/ProjectDisplay.js",
+      "metadata": {
+        "lineCount": 0,
+        "exportCount": 0
+      },
+      "position": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "file:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/pages/ProjectItem.js",
+      "label": "ProjectItem.js",
+      "type": "file",
+      "filePath": "/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/pages/ProjectItem.js",
+      "metadata": {
+        "lineCount": 0,
+        "exportCount": 1
+      },
+      "position": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "entity:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/pages/ProjectItem.js:ProjectItem",
+      "label": "ProjectItem",
+      "type": "function",
+      "filePath": "/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/pages/ProjectItem.js",
+      "metadata": {
+        "lineCount": 0,
+        "exportCount": 0
+      },
+      "position": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "file:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/pages/Projects.js",
+      "label": "Projects.js",
+      "type": "file",
+      "filePath": "/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/pages/Projects.js",
+      "metadata": {
+        "lineCount": 0,
+        "exportCount": 1
+      },
+      "position": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "entity:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/pages/Projects.js:Projects",
+      "label": "Projects",
+      "type": "function",
+      "filePath": "/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/pages/Projects.js",
+      "metadata": {
+        "lineCount": 0,
+        "exportCount": 0
+      },
+      "position": {
+        "x": 0,
+        "y": 0
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge:import:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/main.ts->/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/user.ts",
+      "source": "file:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/main.ts",
+      "target": "file:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/user.ts",
+      "type": "import",
+      "label": "./user"
+    },
+    {
+      "id": "edge:import:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/main.ts->/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/utils.ts",
+      "source": "file:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/main.ts",
+      "target": "file:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/utils.ts",
+      "type": "import",
+      "label": "./utils"
+    },
+    {
+      "id": "edge:import:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/App.js->/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/pages/Home.js",
+      "source": "file:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/App.js",
+      "target": "file:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/pages/Home.js",
+      "type": "import",
+      "label": "./pages/Home"
+    },
+    {
+      "id": "edge:import:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/App.js->/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/pages/Projects.js",
+      "source": "file:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/App.js",
+      "target": "file:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/pages/Projects.js",
+      "type": "import",
+      "label": "./pages/Projects"
+    },
+    {
+      "id": "edge:import:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/App.js->/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/pages/Experience.js",
+      "source": "file:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/App.js",
+      "target": "file:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/pages/Experience.js",
+      "type": "import",
+      "label": "./pages/Experience"
+    },
+    {
+      "id": "edge:import:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/App.js->/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/components/Navbar.js",
+      "source": "file:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/App.js",
+      "target": "file:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/components/Navbar.js",
+      "type": "import",
+      "label": "./components/Navbar"
+    },
+    {
+      "id": "edge:import:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/App.js->/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/components/Footer.js",
+      "source": "file:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/App.js",
+      "target": "file:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/components/Footer.js",
+      "type": "import",
+      "label": "./components/Footer"
+    },
+    {
+      "id": "edge:import:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/App.js->/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/pages/ProjectDisplay.js",
+      "source": "file:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/App.js",
+      "target": "file:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/pages/ProjectDisplay.js",
+      "type": "import",
+      "label": "./pages/ProjectDisplay"
+    },
+    {
+      "id": "edge:import:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/index.js->/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/App.js",
+      "source": "file:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/index.js",
+      "target": "file:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/App.js",
+      "type": "import",
+      "label": "./App"
+    },
+    {
+      "id": "edge:import:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/index.js->/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/reportWebVitals.js",
+      "source": "file:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/index.js",
+      "target": "file:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/reportWebVitals.js",
+      "type": "import",
+      "label": "./reportWebVitals"
+    },
+    {
+      "id": "edge:import:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/pages/ProjectDisplay.js->/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/helpers/ProjectList.js",
+      "source": "file:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/pages/ProjectDisplay.js",
+      "target": "file:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/helpers/ProjectList.js",
+      "type": "import",
+      "label": "../helpers/ProjectList"
+    },
+    {
+      "id": "edge:import:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/pages/Projects.js->/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/pages/ProjectItem.js",
+      "source": "file:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/pages/Projects.js",
+      "target": "file:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/pages/ProjectItem.js",
+      "type": "import",
+      "label": "./ProjectItem"
+    },
+    {
+      "id": "edge:import:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/pages/Projects.js->/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/helpers/ProjectList.js",
+      "source": "file:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/pages/Projects.js",
+      "target": "file:/Users/abhay/Desktop/projects/Reverse-Architect/test-fixtures/portfolio/src/helpers/ProjectList.js",
+      "type": "import",
+      "label": "../helpers/ProjectList.js"
+    }
+  ],
+  "analysis": {
+    "godObjects": [],
+    "deadCode": [],
+    "cycles": [],
+    "patterns": []
+  }
+}

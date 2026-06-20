@@ -1,4 +1,4 @@
-import type { ArchGraph } from '../../../../shared/types.js';
+import type { ArchGraph } from 'shared';
 import { runDFS, type DFSVisitor } from './dfs.js';
 
 /**

@@ -18,7 +18,7 @@ import type {
   ParsedProperty,
   ParsedParameter,
   ParsedImport,
-} from '../../../shared/types.js';
+} from 'shared';
 
 // ---------------------------------------------------------------------------
 //  Main Adapter Function
@@ -277,7 +277,7 @@ function adaptFunction(sym: DocumentSymbol, filePath: string): ParsedFunction {
   const isExported = checkIfExported(filePath, sym.range.start.line);
 
   // Extract called functions from the function body text
-  const calledFunctions = extractCalledFunctionsFromSource(filePath, sym.range.start.line, sym.range.end.line);
+  const calledFunctions = extractCalledFunctionsFromSource(filePath, sym.range.start.line, sym.range.end.line).filter(f => f !== sym.name);
 
   return {
     kind: 'function',
@@ -310,7 +310,7 @@ function adaptMethod(sym: DocumentSymbol, filePath: string): ParsedMethod {
   const parameters = extractParametersFromDetail(sym.detail || '');
   const returnType = extractReturnTypeFromDetail(sym.detail || '');
   const complexity = estimateComplexity(filePath, sym.range.start.line, sym.range.end.line);
-  const calledFunctions = extractCalledFunctionsFromSource(filePath, sym.range.start.line, sym.range.end.line);
+  const calledFunctions = extractCalledFunctionsFromSource(filePath, sym.range.start.line, sym.range.end.line).filter(f => f !== sym.name);
 
   return {
     name: sym.name,

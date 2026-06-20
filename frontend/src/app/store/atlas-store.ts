@@ -7,7 +7,7 @@ import {
   applyNodeChanges,
   applyEdgeChanges,
 } from '@xyflow/react';
-import type { AnalysisResult } from '../../../../shared/types';
+import type { AnalysisResult } from 'shared';
 import type { GodObjectDetail, DeadCodeDetail, EntryPoint } from '../lib/atlas-api';
 import type { AtlasNode } from '../types/nodes';
 

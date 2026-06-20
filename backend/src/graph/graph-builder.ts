@@ -1,5 +1,5 @@
 import * as path from 'path';
-import type { ArchGraph, ArchNode, ArchEdge, ParsedFile } from '../../../shared/types.js';
+import type { ArchGraph, ArchNode, ArchEdge, ParsedFile } from 'shared';
 
 /**
  * Manually resolve an import when ts-morph fails (common for JS projects).
@@ -444,7 +444,7 @@ export function buildGraph(files: ParsedFile[], entryFiles?: string[]): ArchGrap
       for (const calledName of calledNames) {
         // Try entity-level resolution first
         const targetId = resolveEntityNodeId(calledName, file);
-        if (targetId) {
+        if (targetId && targetId !== sourceId) {
           const edgeId = `edge:calls:${sourceId}->${targetId}`;
           if (!edgeIds.has(edgeId)) {
             edgeIds.add(edgeId);

@@ -1,4 +1,4 @@
-import type { ArchGraph } from '../../../../shared/types.js';
+import type { ArchGraph } from 'shared';
 
 export interface NodeDegrees {
   inDegree: number;

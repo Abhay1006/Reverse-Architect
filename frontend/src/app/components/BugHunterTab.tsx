@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Box, Typography, TextField, Button, Paper, List, ListItemButton, Chip } from '@mui/material';
 import { BugReport as BugIcon, Architecture as ArchitectureIcon, PlayArrow as PlayIcon } from '@mui/icons-material';
 import { useAtlasStore } from '../store/atlas-store';
+import type { AtlasNode } from '../types/nodes';
 
 export default function BugHunterTab({ onGoToGraph }: { onGoToGraph: () => void }) {
   const nodes = useAtlasStore(s => s.nodes);
@@ -10,7 +11,7 @@ export default function BugHunterTab({ onGoToGraph }: { onGoToGraph: () => void 
   const setPanToNode = useAtlasStore(s => s.panToNode);
 
   const [issueText, setIssueText] = useState("");
-  const [suspects, setSuspects] = useState<{ node: any, score: number, reason: string }[]>([]);
+  const [suspects, setSuspects] = useState<{ node: AtlasNode, score: number, reason: string }[]>([]);
 
   const handleSearch = () => {
     if (!issueText.trim()) return;
@@ -32,11 +33,11 @@ export default function BugHunterTab({ onGoToGraph }: { onGoToGraph: () => void 
 
       const label = (n.data?.label as string) || "";
       const path = (n.data?.filePath as string) || "";
-      const meta = n.data?.metadata as any;
+      const meta = n.data?.metadata;
       
       const properties = meta?.properties?.join(" ") || "";
       const methods = meta?.methods?.join(" ") || "";
-      const entities = meta?.entities?.map((e:any) => e.name).join(" ") || "";
+      const entities = meta?.entities?.map((e) => e.name).join(" ") || "";
 
       const bigString = `${label} ${path} ${properties} ${methods} ${entities}`.toLowerCase();
 

@@ -19,7 +19,7 @@ import {
   resolveGenericImport,
   extractGoMethods,
 } from './text-analyzer.js';
-import type { ParsedFile, ParsedImport } from '../../../shared/types.js';
+import type { ParsedFile, ParsedImport } from 'shared';
 
 // ---------------------------------------------------------------------------
 //  Main Extraction Function
