@@ -282,20 +282,32 @@ function CanvasInner() {
     const nodeIds = new Set(finalNodes.map(n => n.id));
     let edges = styledEdges.filter(e => nodeIds.has(e.source) && nodeIds.has(e.target));
 
-    if (focusedNodeId || selectedNodeId) {
-      const activeId = focusedNodeId || selectedNodeId;
-      return edges.map(e => {
+    return edges.map(e => {
+      const sourceNode = finalNodes.find(n => n.id === e.source);
+      const targetNode = finalNodes.find(n => n.id === e.target);
+      
+      const sourceOpacity = sourceNode?.style?.opacity !== undefined ? Number(sourceNode.style.opacity) : 1;
+      const targetOpacity = targetNode?.style?.opacity !== undefined ? Number(targetNode.style.opacity) : 1;
+      const minNodeOpacity = Math.min(sourceOpacity, targetOpacity);
+
+      if (focusedNodeId || selectedNodeId) {
+        const activeId = focusedNodeId || selectedNodeId;
         const isActive = e.source === activeId || e.target === activeId;
+        const opacity = isActive ? minNodeOpacity : Math.min(0.05, minNodeOpacity);
         return {
           ...e,
           animated: isActive,
           label: isActive ? e.label : undefined, // Hide text for unconnected edges
-          style: { ...e.style, opacity: isActive ? 1 : 0.05 }
+          style: { ...e.style, opacity }
         };
-      });
-    }
+      }
 
-    return edges;
+      // If search query is active, edge inherits node opacity scaling
+      return {
+        ...e,
+        style: { ...e.style, opacity: minNodeOpacity }
+      };
+    });
   }, [focusedNodeId, selectedNodeId, finalNodes, styledEdges]);
 
   // Auto fit-view when focus mode toggles
