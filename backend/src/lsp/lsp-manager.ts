@@ -7,6 +7,7 @@
 
 import { spawn, type ChildProcess } from 'child_process';
 import path from 'path';
+import { createRequire } from 'module';
 import { encodeMessage, MessageReader } from './jsonrpc.js';
 import { pathToUri } from './lsp-types.js';
 
@@ -69,7 +70,11 @@ export class LspManager {
     this.log(`Spawning LSP server: ${serverBin}`);
     this.log(`Project root: ${rootPath}`);
 
-    this.process = spawn(serverBin, ['--stdio'], {
+    const isJs = serverBin.endsWith('.js') || serverBin.endsWith('.mjs');
+    const spawnCmd = isJs ? 'node' : serverBin;
+    const spawnArgs = isJs ? [serverBin, '--stdio'] : ['--stdio'];
+
+    this.process = spawn(spawnCmd, spawnArgs, {
       stdio: ['pipe', 'pipe', 'pipe'],
       env: { ...process.env },
     });
@@ -328,15 +333,19 @@ export class LspManager {
   private resolveServerBin(): string {
     if (this.options.serverBin) return this.options.serverBin;
 
-    // Try to find typescript-language-server in node_modules/.bin
-    const localBin = path.resolve(
-      process.cwd(),
-      'node_modules',
-      '.bin',
-      'typescript-language-server'
-    );
-
-    return localBin;
+    // Try to resolve typescript-language-server CLI directly via ESM resolution
+    try {
+      const requireESM = createRequire(import.meta.url);
+      return requireESM.resolve('typescript-language-server/lib/cli.mjs');
+    } catch {
+      // Fallback to searching node_modules/.bin relative to process.cwd()
+      return path.resolve(
+        process.cwd(),
+        'node_modules',
+        '.bin',
+        'typescript-language-server'
+      );
+    }
   }
 
   private log(msg: string): void {
