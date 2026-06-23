@@ -10,6 +10,13 @@ import cors from 'cors';
 import { apiRouter } from './api/routes.js';
 import { apiLimiter } from './api/middleware.js';
 
+// Load optional .env file if present
+try {
+  process.loadEnvFile();
+} catch {
+  // Fallback to default/existing environment variables
+}
+
 const PORT = parseInt(process.env.PORT ?? '4000', 10);
 const app = express();
 
