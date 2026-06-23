@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "npx next dev",
-    "build": "npx next build",
+    "build": "node -e \"require('child_process').spawnSync('npx', ['next', 'build', ...(process.platform === 'android' ? ['--webpack'] : [])], { stdio: 'inherit' })\"",
     "start": "npx next start",
     "lint": "npx eslint",
     "test": "npx vitest run"
