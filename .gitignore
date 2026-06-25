@@ -3,7 +3,8 @@
 # ========================
 
 # --- Planning & Documentation (local only) ---
-# docs/ and backend/test/ are now tracked
+docs/
+# backend/test/ is now tracked
 
 # --- Dependencies ---
 node_modules/
