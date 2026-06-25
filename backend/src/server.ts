@@ -29,10 +29,17 @@ app.use('/api/', apiLimiter);
 // Mount the API Router
 app.use('/api', apiRouter);
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`\n🏛️  Atlas-TS backend running on http://localhost:${PORT}`);
   console.log(`   Engine: LSP (Language Server Protocol)`);
   console.log(`   POST /api/analyze/upload   — Upload .zip`);
   console.log(`   POST /api/analyze/github   — Analyze GitHub repo`);
   console.log(`   GET  /api/health           — Health check\n`);
 });
+
+// Configure timeouts (10 minutes) to allow cloning & analyzing large codebases
+server.headersTimeout = 10 * 60 * 1000;
+server.requestTimeout = 10 * 60 * 1000;
+server.timeout = 10 * 60 * 1000;
+server.keepAliveTimeout = 9 * 60 * 1000; // should be slightly less than headersTimeout
+

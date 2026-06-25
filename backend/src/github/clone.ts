@@ -8,7 +8,9 @@ import { simpleGit } from 'simple-git';
  * @param targetDir The absolute path where the repo should be cloned.
  */
 export async function cloneRepo(url: string, targetDir: string): Promise<void> {
-  const git = simpleGit();
+  const git = simpleGit({
+    env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: 'true' }
+  });
 
   // If GITHUB_TOKEN is present, inject it into the clone URL for private repos
   let cloneUrl = url;

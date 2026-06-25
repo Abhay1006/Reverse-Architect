@@ -9,7 +9,12 @@ export function getRemoteCommitSha(repoUrl: string): string | null {
     // git ls-remote returns output like: 
     // <sha>	HEAD
     // <sha>	refs/heads/main
-    const output = execFileSync('git', ['ls-remote', repoUrl, 'HEAD'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    const output = execFileSync('git', ['ls-remote', repoUrl, 'HEAD'], { 
+      encoding: 'utf8', 
+      stdio: ['ignore', 'pipe', 'ignore'],
+      timeout: 10000, // 10 seconds timeout to prevent blocking the event loop
+      env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: 'true' }
+    });
     
     if (!output) return null;
     
