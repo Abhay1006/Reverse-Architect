@@ -1,0 +1,44 @@
+name: Remote Deploy to Termux Tablet
+
+on:
+  push:
+    branches:
+      - main # Triggers when you push code to your original repo
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install Cloudflare CLI on Runner
+        run: |
+          curl -L --output cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+          sudo dpkg -i cloudflared.deb
+
+      - name: Deploy via SSH over Cloudflare Tunnel
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          port: 22 
+          proxy_command: cloudflared access ssh --hostname %h
+          script: |
+            # 1. Navigate to your app directory inside Termux
+            # UPDATE THIS PATH to your exact directory on the tablet if it's different!
+            cd ~/Reverse-Architect 
+
+            # 2. Sync your tablet's local clone with your original source repo
+            # We explicitly fetch from your original repository to keep it up to date
+            git pull https://github.com/Abhay1006/Reverse-Architect.git main
+
+            # 3. Restart your server process
+            # Since this is a Node.js/TypeScript backend tool, we install dependencies, build, and restart
+            npm install
+            npm run build --if-present
+            
+            # Using PM2 to restart if you have it, otherwise fallback to standard npm start in background
+            pm2 restart all || pm2 start npm -- name "reverse-architect" -- start || npm run start &
