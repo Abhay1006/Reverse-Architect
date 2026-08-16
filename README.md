@@ -48,58 +48,171 @@ graph TD
 
 ## 🚀 Getting Started
 
-Atlas uses a monorepo architecture divided between a Node.js/TypeScript backend running `typescript-language-server` and falling back on text-based regex parsers, and a React + Next.js frontend.
+Atlas is an npm-workspaces monorepo: a Node.js/TypeScript backend running `typescript-language-server` (with text-based parsers as a fallback), and a React + Next.js frontend.
 
 ### Prerequisites
-- Node.js (v18+ recommended)
-- `npm` or `yarn`
-- `git` installed globally (for repository cloning)
+- Node.js v20+ (v22 recommended — the CI uses 22)
+- `npm`
+- `git` installed globally, and reachable on `PATH` (used for cloning and for cache freshness checks)
+
+### Install
+
+Install once from the repository root — the workspaces handle both packages:
+
+```bash
+npm install
+```
 
 ### Run Everything in One Command (Recommended)
 
-You can spin up both the backend server and the frontend client concurrently with a single command from the root directory:
-
 ```bash
 npm run dev
 ```
 
-*This will start the backend API on `http://localhost:4000` and the Next.js frontend on `http://localhost:3000`.*
-
----
+*Backend API on `http://localhost:4000`, Next.js frontend on `http://localhost:3000`.*
 
 ### Running Services Separately (Alternative)
 
-If you prefer to run the services individually:
-
-#### 1. Run the Backend Server
-The backend parses AST structures and manages rate-controlled external integrations.
 ```bash
-cd backend
-npm install
-npm run dev
-```
-*The API will start on `http://localhost:4000`*
+# Terminal 1 — backend (tsx watch)
+npm run dev -w backend
 
-#### 2. Run the Frontend App
-The UI dashboard built using Next.js, MUI, and Vanilla CSS with glassmorphic elements.
-```bash
-cd frontend
-npm install
-npm run dev
+# Terminal 2 — frontend
+npm run dev -w frontend
 ```
-*The Web App will run on `http://localhost:3000`*
+
+### Production
+
+```bash
+npm run build     # compiles the backend to backend/dist and builds the Next.js app
+npm start         # runs the compiled backend + the Next.js production server
+```
+
+The backend `start` script runs `node dist/backend/src/server.js` — it does **not** use `tsx` in production.
+
+### Useful scripts
+
+| Command | What it does |
+|---|---|
+| `npm run dev` | Both services in watch mode |
+| `npm run build` | Build both workspaces |
+| `npm start` | Build, then run both in production mode |
+| `npm test -w backend` | Backend unit tests (vitest) |
+| `npm test -w frontend` | Frontend store/selector tests |
+| `npm run typecheck -w backend` | `tsc --noEmit` |
+| `npm run lint -w frontend` | ESLint |
+| `npm run cli -w backend -- parse <dir>` | Analyze a local directory and print the graph as JSON |
+
+---
+
+## ⚙️ Configuration
+
+Copy the examples and adjust as needed:
+
+```bash
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env
+```
+
+### Backend (`backend/.env`)
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `PORT` | `4000` | API port |
+| `HOST` | `127.0.0.1` | Bind address. The API is loopback-only by default because it clones arbitrary repositories and serves file contents **with no authentication**. Set `0.0.0.0` only if you deliberately expose it. |
+| `ALLOWED_ORIGINS` | *(none)* | Comma-separated browser origins allowed to call the API directly. Only needed when the frontend runs with `NEXT_PUBLIC_USE_PROXY=false`. `*` allows any origin (not recommended). |
+| `TRUST_PROXY_HOPS` | `0` | Number of reverse proxies in front of the server. Required for per-IP rate limiting to work behind a tunnel or nginx. Never set higher than the real hop count — clients could otherwise spoof `X-Forwarded-For`. |
+| `ATLAS_DB_PATH` | `~/.atlas/cache.db` | SQLite cache location |
+| `GITHUB_TOKEN` | *(none)* | Optional PAT for cloning private repositories. Sent as an HTTP header, never embedded in the remote URL. |
+
+**Resource limits**
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `ATLAS_MAX_CONCURRENT_ANALYSES` | `1` | Analyses allowed to run at once. Each spawns a language server, so raising this on a small host risks OOM. |
+| `ATLAS_QUEUE_TIMEOUT_MS` | `600000` | How long a queued request waits for a slot |
+| `ATLAS_CLONE_MAX_AGE_MS` | `86400000` | Evict clone workspaces older than this (24h) |
+| `ATLAS_CLONE_MAX_BYTES` | `2147483648` | Total disk budget across all workspaces (2 GiB) |
+| `ATLAS_CLONE_SWEEP_MS` | `3600000` | How often the eviction sweep runs |
+
+Cloned repositories are kept under `~/.atlas/clones` after analysis so Code Peek can read source files, and are evicted by age and then by total size.
+
+**AI assistant** — API keys are supplied per request by the browser and are never stored server-side. Only model selection is configured here.
+
+| Variable | Default |
+|---|---|
+| `ATLAS_OPENAI_MODEL` | `gpt-4o` |
+| `ATLAS_ANTHROPIC_MODEL` | `claude-sonnet-5` |
+| `ATLAS_GEMINI_MODEL` | `gemini-2.0-flash` |
+| `ATLAS_AI_MAX_TOKENS` | `8192` |
+| `ATLAS_AI_TIMEOUT_MS` | `120000` |
+
+### Frontend (`frontend/.env`)
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `BACKEND_URL` | `http://localhost:4000` | Backend address used by the Next.js server-side proxy routes |
+| `NEXT_PUBLIC_BACKEND_URL` | `http://localhost:4000` | Backend address used by the browser when the proxy is disabled |
+| `NEXT_PUBLIC_USE_PROXY` | `true` | Route API calls through Next.js instead of hitting the backend directly. Keep this on unless you have a reason not to — it is what lets the backend stay loopback-only. |
+| `PORT` | `3000` | Frontend port |
 
 ---
 
 ## 📚 Core API Reference
 
-The backend operates over a rapid REST + SSE architecture:
+The backend serves REST + SSE under `/api`. Every route is also reachable through the Next.js proxy on port 3000 at the same path.
 
-- `GET /api/health`: Validates server allocation and rate-limit availability.
-- `POST /api/analyze/upload`: Accepts `multipart/form-data` containing a `.zip` repository. Automatically extracts and indexes the directory.
-- `POST /api/analyze/github`: Provide JSON `{ "url": "https://github.com/user/repo" }`. Clones and indexes the repository.
-- `GET /api/analyze/progress`: Server-Sent Events (SSE) endpoint to stream cloning, parsing, and layout updates.
-- `GET /api/code`: Fetches the source code of a specific file inside a repository clone with directory traversal security checks.
+### Analysis
+
+- `POST /api/analyze/upload` — `multipart/form-data` with a `file` field containing a `.zip`, plus an optional `sessionId` for progress streaming. Extracted with Zip-Slip and symlink protection.
+- `POST /api/analyze/github` — JSON `{ "url": "https://github.com/user/repo", "sessionId": "..." }`. Clones (depth 1) and indexes the repository.
+- `GET /api/analyze/github/cached?repoId=owner/repo` — returns a cached analysis only; `404` if absent. Never triggers work.
+- `GET /api/analyze/progress?sessionId=...` — Server-Sent Events stream of cloning/parsing/layout progress.
+
+All three analysis responses share one body, defined once in `shared/types.ts` as `AnalysisResponse`:
+
+```jsonc
+{
+  "nodes": [...],           // React Flow nodes; `data.metadata` and `data.analysis` always present
+  "edges": [...],           // `type` is the renderer, `relation` is import|extends|implements|calls
+  "analysis": {             // godObjects, deadCode, cycles, patterns
+    "godObjects": [], "deadCode": [], "cycles": [], "patterns": []
+  },
+  "godObjectDetails": [],
+  "deadCodeDetails": [],
+  "entryPoint": { "entryFile": "src/index.ts", "framework": "node" },
+  "repoId": "owner/repo"
+}
+```
+
+### Repository & source
+
+- `GET /api/repos/recent` — the most recently analyzed repositories, for the landing page.
+- `GET /api/code?repoId=owner/repo&filePath=src/x.ts` — source of one file inside a clone, for Code Peek. Paths are resolved through `realpath` and must stay inside the repository root, so symlinks in a cloned repo cannot escape it.
+
+### AI assistant
+
+These require two headers: `x-ai-provider` (`openai` | `anthropic` | `gemini`) and `x-ai-api-key`. The key is forwarded to the provider and never persisted.
+
+- `POST /api/ai/chat` — JSON `{ message, repoUrl, history }`. Streams an SSE answer grounded in the repository's architecture graph and any source files named in the message.
+- `POST /api/ai/fix-issue` — JSON `{ issue, repoUrl }`. Streams a suggested fix for a GitHub issue.
+- `GET /api/ai/issues?repoUrl=...` — open issues for a public repository (pull requests filtered out).
+
+### Health
+
+- `GET /api/health` — `{ status, timestamp, analyses: { active, queued } }`.
+
+---
+
+## 🔒 Security notes
+
+Atlas clones arbitrary repositories and serves file contents, and it ships **without authentication**. Before exposing it beyond localhost:
+
+- Put an authenticating proxy in front of it, or keep `HOST=127.0.0.1` and let only the Next.js server reach it.
+- Set `TRUST_PROXY_HOPS` so rate limiting counts real clients rather than the proxy.
+- Set `ALLOWED_ORIGINS` explicitly rather than using `*`.
+
+Cloned repositories are untrusted content. Path handling for both zip extraction and Code Peek goes through `backend/src/api/path-safety.ts`, which resolves symlinks before checking containment; add any new filesystem entry point there rather than writing a new check.
 
 ---
 
@@ -109,9 +222,29 @@ Contributions are absolutely welcome to help push codebase visualization bounds.
 
 1. **Fork the repo** and clone it locally.
 2. **Create a feature branch** (`git checkout -b feature/EpicVisualization`).
-3. **Commit your changes** (`git commit -m 'Added incredible new design pattern inference'`).
+3. **Make your change.** Before opening a PR, run what CI runs:
+   ```bash
+   npm run typecheck -w backend && npm run typecheck -w frontend
+   npm run lint -w frontend
+   npm test -w backend && npm test -w frontend
+   npm run build
+   ```
 4. **Push to the branch** (`git push origin feature/EpicVisualization`).
-5. **Open a Pull Request**! Ensure both frontend UI adjustments and backend parser updates match existing architectural styling in `globals.css` and `types.ts`!
+5. **Open a Pull Request.**
+
+### Conventions worth knowing
+
+- **The API payload is defined once**, in `shared/types.ts` as `AnalysisResponse`. Both sides import it, so adding a field means adding it there first — never redeclare the shape locally. `runGraphPipeline` is typed against it so a missed field fails the build.
+- **Filesystem paths from user input go through `backend/src/api/path-safety.ts`.** Cloned repositories are untrusted content. Don't hand-roll containment checks; extend that module and its tests instead.
+- **Edge `type` is the React Flow renderer, `relation` is the architectural meaning** (`import` / `extends` / `implements` / `calls`). Filter on `relation`.
+- UI styling follows the existing tokens in `globals.css`.
+
+### Keeping your fork up to date
+
+An upstream repository cannot push into its forks — syncing is always initiated from the fork side. Either:
+
+- Use GitHub's **"Sync fork"** button on your fork's page, or run `gh repo sync <you>/Reverse-Architect`, **or**
+- Automate it: copy [`.github/templates/sync-fork.yml`](.github/templates/sync-fork.yml) into your fork at `.github/workflows/sync-fork.yml`. It fast-forwards your default branch from upstream daily and can be run on demand. See the comments in that file — Actions must be enabled on your fork, and GitHub disables scheduled workflows on forks after 60 days of inactivity.
 
 ---
 
