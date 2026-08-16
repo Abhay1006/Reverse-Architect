@@ -1,0 +1,87 @@
+# ============================================================
+#  Keep a fork of Reverse-Architect in sync with upstream
+# ============================================================
+#
+#  THIS FILE DOES NOTHING WHERE IT CURRENTLY LIVES.
+#  It sits in .github/templates/ precisely so GitHub does not run it in the
+#  upstream repository. It is a template for people who have forked this repo.
+#
+#  Why it has to live in your fork:
+#  An upstream repository has no write access to its forks — a fork belongs to
+#  your account. GitHub provides no way for upstream to push into downstream
+#  forks, so the sync must be initiated from your side. That is what this does.
+#
+#  --- Setup (in YOUR fork) ---
+#  1. Copy this file to .github/workflows/sync-fork.yml
+#  2. Settings -> Actions -> General -> allow workflows to run.
+#     Forks have Actions disabled by default.
+#  3. Optional: change the schedule below, or the branch name if your default
+#     branch is not `main`.
+#
+#  --- Caveats ---
+#  * GitHub disables scheduled workflows on a fork after 60 days with no
+#    repository activity. Re-enable them from the Actions tab, or just use the
+#    manual "Run workflow" button when you need a sync.
+#  * This does a FAST-FORWARD only. If you have committed directly to your
+#    fork's default branch, the sync will refuse rather than clobber your work.
+#    Keep your own changes on feature branches and this will never fight you.
+# ============================================================
+
+name: Sync fork with upstream
+
+on:
+  schedule:
+    # 06:00 UTC daily. Pick a random-ish minute — on-the-hour schedules are
+    # heavily contended and GitHub may delay them.
+    - cron: '17 6 * * *'
+  workflow_dispatch: # manual "Run workflow" button
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    # Never run in the upstream repository itself, in case this file is ever
+    # copied into .github/workflows/ there by mistake.
+    if: github.repository != 'Abhay1006/Reverse-Architect'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout fork
+        uses: actions/checkout@v4
+        with:
+          # Full history — a fast-forward needs the real commit graph.
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Sync default branch from upstream
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          UPSTREAM: https://github.com/Abhay1006/Reverse-Architect.git
+          BRANCH: main
+        run: |
+          set -euo pipefail
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git remote add upstream "$UPSTREAM" 2>/dev/null || git remote set-url upstream "$UPSTREAM"
+          git fetch upstream "$BRANCH"
+
+          git checkout "$BRANCH"
+
+          if git merge-base --is-ancestor "upstream/$BRANCH" HEAD; then
+            echo "Already up to date with upstream/$BRANCH."
+            exit 0
+          fi
+
+          # --ff-only: refuses rather than creating a merge commit or discarding
+          # local commits. If this fails you have diverged; rebase manually.
+          if ! git merge --ff-only "upstream/$BRANCH"; then
+            echo "::error::Cannot fast-forward — your $BRANCH has diverged from upstream."
+            echo "Move your local commits onto a feature branch, then re-run this workflow."
+            exit 1
+          fi
+
+          git push origin "$BRANCH"
+          echo "Synced $BRANCH from upstream."

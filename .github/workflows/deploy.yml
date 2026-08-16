@@ -53,29 +53,61 @@ jobs:
           sudo dpkg -i cloudflared.deb
 
       - name: Deploy via SSH over Cloudflare Tunnel
+        env:
+          # A token the tablet can fetch with. GITHUB_TOKEN is scoped to this
+          # repository and expires with the run, which is enough for a private
+          # clone; set DEPLOY_PAT only if you need broader access. The old
+          # bare https:// URL failed outright once the repo went private.
+          GIT_TOKEN: ${{ secrets.DEPLOY_PAT || secrets.GITHUB_TOKEN }}
+          APP_DIR: ${{ secrets.APP_DIR || '~/Reverse-Architect' }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}.git
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o ProxyCommand="cloudflared access ssh --hostname %h" -p 22 ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }} << 'EOF'
-            set -e
 
-            # 1. Navigate to your app directory inside Termux
-            # UPDATE THIS PATH to your exact directory on the tablet if it's different!
-            cd ~/Reverse-Architect
+          # The token is passed through the remote shell's environment rather
+          # than baked into the script or a remote URL, so it never lands in
+          # the tablet's .git/config, reflog, or shell history.
+          ssh -i ~/.ssh/id_rsa \
+              -o StrictHostKeyChecking=no \
+              -o ProxyCommand="cloudflared access ssh --hostname %h" \
+              -p 22 \
+              "${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }}" \
+              "GIT_TOKEN='$GIT_TOKEN' APP_DIR='$APP_DIR' REPO_URL='$REPO_URL' bash -s" << 'EOF'
+            set -euo pipefail
 
-            # 2. Sync your tablet's local clone with your original source repo.
-            # --ff-only so a divergent local tree fails loudly instead of
-            # hanging the SSH session on an interactive merge.
-            git pull --ff-only https://github.com/Abhay1006/Reverse-Architect.git main
+            # 1. Navigate to the app directory on the tablet.
+            #    Override with the APP_DIR repository secret if it differs.
+            cd "${APP_DIR/#\~/$HOME}"
 
-            # 3. Install and build. The backend now emits dist/ via tsc, so the
-            # root build covers both workspaces.
+            # 2. Point origin at the HTTPS URL. The token below is sent as a
+            #    header, which only applies to HTTPS remotes — if the tablet's
+            #    origin were an SSH URL the header would be silently ignored.
+            git remote set-url origin "$REPO_URL" 2>/dev/null \
+              || git remote add origin "$REPO_URL"
+
+            # 3. Fetch using an Authorization header rather than a credentialed
+            #    URL. `git -c` applies it to this command only — nothing is
+            #    persisted to .git/config.
+            AUTH_HEADER="Authorization: Basic $(printf 'x-access-token:%s' "$GIT_TOKEN" | base64 | tr -d '\n')"
+
+            git -c http.extraHeader="$AUTH_HEADER" \
+                fetch --prune origin main
+
+            # 4. A deploy target should mirror origin exactly. reset --hard
+            # discards any edits made directly on the tablet, which is the
+            # intended behaviour here — do development elsewhere.
+            git checkout -B main origin/main
+            git reset --hard origin/main
+
+            # 5. Install and build. The backend emits dist/ via tsc, so the
+            #    root build covers both workspaces.
             npm ci
             npm run build
 
-            # 4. Restart under pm2. Note the single `--name` flag: the previous
-            # `-- name` form passed "name" as a positional argument.
+            # 6. Restart under pm2. Note the single `--name` flag: the previous
+            #    `-- name` form passed "name" as a positional argument.
             pm2 restart reverse-architect --update-env || pm2 start npm --name reverse-architect -- start
             pm2 save
           EOF
@@ -84,16 +116,20 @@ jobs:
         if: always()
         run: shred -u ~/.ssh/id_rsa || rm -f ~/.ssh/id_rsa
 
+      # Runs on the GitHub runner, so it needs a URL reachable from the public
+      # internet — set the HEALTHCHECK_URL secret to your tunnel hostname.
+      # Skipped entirely when that secret is absent, rather than pretending to
+      # check the runner's own localhost.
       - name: Health check
+        if: ${{ secrets.HEALTHCHECK_URL != '' }}
         run: |
           for i in $(seq 1 10); do
-            if curl -fsS "${{ secrets.HEALTHCHECK_URL || 'http://localhost:4000/api/health' }}"; then
+            if curl -fsS "${{ secrets.HEALTHCHECK_URL }}"; then
               echo "Backend healthy"
               exit 0
             fi
             echo "Waiting for backend to come up ($i/10)..."
             sleep 6
           done
-          echo "Health check failed — the deploy may have left the service down."
+          echo "::error::Health check failed — the deploy may have left the service down."
           exit 1
-        continue-on-error: true
