@@ -1,22 +1,15 @@
 "use client";
 
-import React, { useRef, useMemo, useEffect, useState } from "react";
-import ForceGraph3D from "react-force-graph-3d";
+import { useRef, useMemo, useEffect, useState } from "react";
+import ForceGraph3D, {
+  type ForceGraphMethods,
+  type NodeObject,
+  type LinkObject,
+} from "react-force-graph-3d";
 import * as THREE from "three";
 import { Box, IconButton, Tooltip, Typography } from "@mui/material";
-import { CenterFocusStrong as FocusIcon, SettingsBackupRestore as ResetIcon } from "@mui/icons-material";
+import { SettingsBackupRestore as ResetIcon } from "@mui/icons-material";
 import { useAtlasStore, getVisibleNodes, getVisibleEdges } from "../store/atlas-store";
-import type { AtlasNode } from "../types/nodes";
-
-interface ForceGraph3DInstance {
-  cameraPosition: (
-    position: { x: number; y: number; z: number },
-    lookAt: { x: number; y: number; z: number } | null,
-    transitionMs: number
-  ) => void;
-  zoomToFit: (transitionMs: number, padding: number) => void;
-  d3Force: (forceName: string) => { strength: (val: number) => void; distance: (val: number) => void } | undefined;
-}
 
 interface ThreeGraphNode {
   id: string;
@@ -45,9 +38,19 @@ interface ThreeGraphLink {
   isCycle: boolean;
 }
 
+/**
+ * The graph handle, using the library's own exported method type rather than a
+ * hand-written interface — that mismatch is what previously forced an `any`
+ * cast on the ref prop.
+ */
+type ForceGraph3DInstance = ForceGraphMethods<
+  NodeObject<ThreeGraphNode>,
+  LinkObject<ThreeGraphNode, ThreeGraphLink>
+>;
+
 export default function Graph3D() {
   const containerRef = useRef<HTMLDivElement>(null);
-  const fgRef = useRef<ForceGraph3DInstance | null>(null);
+  const fgRef = useRef<ForceGraph3DInstance | undefined>(undefined);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
 
   // WebGL cache to prevent memory leaks
@@ -88,13 +91,16 @@ export default function Graph3D() {
     }
   }, []);
 
-  // WebGL disposal cleanup on unmount
+  // WebGL disposal cleanup on unmount. Capture the Map instances now — reading
+  // `.current` inside the cleanup would see whatever the refs hold at teardown.
   useEffect(() => {
+    const geometries = geometryCache.current;
+    const materials = materialCache.current;
     return () => {
-      geometryCache.current.forEach((geom) => geom.dispose());
-      geometryCache.current.clear();
-      materialCache.current.forEach((mat) => mat.dispose());
-      materialCache.current.clear();
+      geometries.forEach((geom) => geom.dispose());
+      geometries.clear();
+      materials.forEach((mat) => mat.dispose());
+      materials.clear();
     };
   }, []);
 
@@ -195,9 +201,9 @@ export default function Graph3D() {
       
       let color = "rgba(99, 102, 241, 0.5)"; // Default Indigo
       if (isCycle) color = "rgba(239, 68, 68, 0.8)"; // Red cycle
-      else if (edge.label === "implements") color = "rgba(168, 85, 247, 0.5)"; // Purple
-      else if (edge.label === "extends") color = "rgba(236, 72, 153, 0.5)"; // Pink
-      else if (edge.label === "calls") color = "rgba(245, 158, 11, 0.6)"; // Orange
+      else if (edge.data?.relation === "implements") color = "rgba(168, 85, 247, 0.5)"; // Purple
+      else if (edge.data?.relation === "extends") color = "rgba(236, 72, 153, 0.5)"; // Pink
+      else if (edge.data?.relation === "calls") color = "rgba(245, 158, 11, 0.6)"; // Orange
 
       return {
         source: edge.source,
@@ -222,7 +228,7 @@ export default function Graph3D() {
     });
 
     return { nodes, links };
-  }, [visibleNodes, visibleEdges, cycleEdges, searchQuery, heatmapEnabled, analysisResults]);
+  }, [visibleNodes, visibleNodeIds, visibleEdges, cycleEdges, searchQuery, heatmapEnabled, analysisResults]);
 
   // 5. Build premium 3D Mesh object for nodes (with caching & disposal optimization)
   const nodeThreeObject = (node: ThreeGraphNode) => {
@@ -369,13 +375,14 @@ export default function Graph3D() {
     }
   };
 
-  // Force simulation settings
+  // Force simulation settings. Keyed off graphData rather than the ref
+  // itself — reading `ref.current` during render is not a valid dependency.
   useEffect(() => {
     if (fgRef.current) {
       fgRef.current.d3Force("charge")?.strength(-120);
       fgRef.current.d3Force("link")?.distance(60);
     }
-  }, [fgRef.current]);
+  }, [graphData]);
 
   return (
     <Box
@@ -389,7 +396,7 @@ export default function Graph3D() {
       }}
     >
       <ForceGraph3D
-        ref={fgRef as any}
+        ref={fgRef}
         width={dimensions.width}
         height={dimensions.height}
         graphData={graphData}

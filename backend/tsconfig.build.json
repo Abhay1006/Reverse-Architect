@@ -1,0 +1,7 @@
+{
+  // Production build. Extends the base config but compiles only source —
+  // tests and scratch files stay out of dist/.
+  "extends": "./tsconfig.json",
+  "include": ["src/**/*.ts", "../shared/**/*.ts"],
+  "exclude": ["node_modules", "dist", "test"]
+}

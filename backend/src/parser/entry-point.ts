@@ -8,14 +8,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-export interface EntryPointResult {
-  /** Relative path to the entry file from the project root */
-  entryFile: string;
-  /** Detected framework or language environment */
-  framework: 'node' | 'nextjs' | 'vite' | 'express' | 'python' | 'go' | 'rust' | 'java' | 'cpp' | 'unknown';
-  /** The package name from package.json */
-  packageName?: string | undefined;
-}
+// Defined in the shared package so the frontend sees the same framework union.
+export type { EntryPointResult } from 'shared';
+import type { EntryPointResult } from 'shared';
 
 /**
  * Detect the primary entry point of a project.

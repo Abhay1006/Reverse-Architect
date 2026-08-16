@@ -1,0 +1,143 @@
+// ============================================================
+//  Atlas — Path Safety
+//  Every filesystem path that originates from user input (repo ids,
+//  file paths, zip entry names) must pass through here.
+//
+//  This module is imported by the route handlers AND by the tests, so a
+//  regression in containment logic fails the suite. Do not inline copies
+//  of these checks anywhere else.
+// ============================================================
+
+import path from 'path';
+import fs from 'fs';
+import os from 'os';
+
+/** Root directory holding every cloned/extracted repository. */
+export const CLONES_BASE_DIR = path.join(os.homedir(), '.atlas', 'clones');
+
+/** A GitHub repo id: exactly `owner/repo`, no path separators beyond one. */
+const GITHUB_REPO_ID_RE = /^[\w.-]+\/[\w.-]+$/;
+
+/** A zip-upload id, as minted by the upload route. */
+const UPLOAD_ID_RE = /^upload-\d+$/;
+
+/**
+ * True if `id` is a repository identifier we are willing to turn into a path.
+ *
+ * Rejects traversal (`../`), absolute paths, and anything with extra segments.
+ * `.` and `..` are excluded explicitly because `[\w.-]+` would otherwise match
+ * them (e.g. `../..`).
+ */
+export function isValidRepoId(id: unknown): id is string {
+  if (typeof id !== 'string' || id.length === 0 || id.length > 256) return false;
+  if (!GITHUB_REPO_ID_RE.test(id) && !UPLOAD_ID_RE.test(id)) return false;
+  // Guard against segments that are purely dots: `../..`, `./x`, `a/..`
+  return id.split('/').every((segment) => segment !== '.' && segment !== '..' && segment.length > 0);
+}
+
+/** Throws unless `id` is a valid repo identifier. */
+export function assertValidRepoId(id: unknown): string {
+  if (!isValidRepoId(id)) {
+    throw new Error('Invalid repository identifier');
+  }
+  return id;
+}
+
+/**
+ * True if `target` is `root` itself or lives underneath it.
+ * Uses path.relative rather than startsWith, so `/a/repo-evil` is not
+ * considered to be inside `/a/repo`.
+ */
+export function isInside(root: string, target: string): boolean {
+  const rel = path.relative(root, target);
+  if (rel === '') return true;
+  return !rel.startsWith('..' + path.sep) && rel !== '..' && !path.isAbsolute(rel);
+}
+
+/**
+ * Normalize a user-supplied relative path and strip any leading traversal.
+ * The result is still untrusted — always feed it to resolveWithinRoot.
+ */
+export function sanitizeRelativePath(input: string): string {
+  return path.normalize(input).replace(/^(\.\.(\/|\\|$))+/, '');
+}
+
+/**
+ * Resolve `relativePath` inside `rootDir`, following symlinks, and return the
+ * real path only if it is genuinely contained by the real `rootDir`.
+ *
+ * Symlink resolution matters because a cloned repository is attacker-controlled
+ * content: a repo can contain `link -> /home/user/.ssh/id_rsa`, which a purely
+ * lexical check would happily accept.
+ *
+ * @returns the resolved real path, or null if missing or out of bounds.
+ */
+export function resolveWithinRoot(rootDir: string, relativePath: string): string | null {
+  const candidate = path.resolve(rootDir, sanitizeRelativePath(relativePath));
+
+  // Cheap lexical check first.
+  if (!isInside(path.resolve(rootDir), candidate)) return null;
+
+  let realRoot: string;
+  let realTarget: string;
+  try {
+    realRoot = fs.realpathSync(rootDir);
+    realTarget = fs.realpathSync(candidate);
+  } catch {
+    // Missing path, or a broken symlink — treat as not found.
+    return null;
+  }
+
+  return isInside(realRoot, realTarget) ? realTarget : null;
+}
+
+/**
+ * Validate a single zip entry name against the extraction directory.
+ *
+ * @returns the absolute path the entry may be written to.
+ * @throws if the entry would escape the extraction directory (Zip Slip).
+ */
+export function validateZipEntry(extractDirResolved: string, entryName: string): string {
+  const targetPath = path.resolve(extractDirResolved, entryName);
+
+  if (!isInside(extractDirResolved, targetPath)) {
+    throw new Error(`Directory traversal attempt detected in zip file: ${entryName}`);
+  }
+  return targetPath;
+}
+
+/**
+ * Verify that the directory a zip entry is about to be written into has not
+ * been turned into a symlink by an earlier entry in the same archive — the
+ * standard Zip Slip follow-up where `a/` is a symlink and `a/b` escapes.
+ */
+export function assertRealDirWithin(extractDirResolved: string, dir: string): void {
+  let realDir: string;
+  try {
+    realDir = fs.realpathSync(dir);
+  } catch {
+    return; // Not created yet — nothing to follow.
+  }
+  let realRoot: string;
+  try {
+    realRoot = fs.realpathSync(extractDirResolved);
+  } catch {
+    return;
+  }
+  if (!isInside(realRoot, realDir)) {
+    throw new Error(`Directory traversal attempt detected in zip file: ${dir}`);
+  }
+}
+
+/** Absolute path to a repo's working directory. Validates the id first. */
+export function repoDir(repoId: string): string {
+  return path.join(CLONES_BASE_DIR, assertValidRepoId(repoId));
+}
+
+/** Create the clones base directory if it does not exist. */
+export function ensureClonesBaseDir(): string {
+  if (!fs.existsSync(CLONES_BASE_DIR)) {
+    fs.mkdirSync(CLONES_BASE_DIR, { recursive: true });
+  }
+  return CLONES_BASE_DIR;
+}

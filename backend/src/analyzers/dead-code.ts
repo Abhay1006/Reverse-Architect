@@ -12,18 +12,9 @@ import { calculateDegrees } from '../graph/algorithms/degree-analysis.js';
 //  Result type
 // ---------------------------------------------------------------------------
 
-export interface DeadCodeHit {
-  /** The ID of the flagged node */
-  nodeId: string;
-  /** The node's label (display name) */
-  label: string;
-  /** Node type (file, class, interface, function) */
-  nodeType: string;
-  /** File path of the node */
-  filePath: string;
-  /** Outgoing edge count — dead code may still import things */
-  outDegree: number;
-}
+// Defined in the shared package — it is part of the API response body.
+export type { DeadCodeHit } from 'shared';
+import type { DeadCodeHit } from 'shared';
 
 // ---------------------------------------------------------------------------
 //  Heuristic entry-point detection

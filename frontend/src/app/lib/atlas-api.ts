@@ -4,83 +4,25 @@
 //  to trigger project analysis and retrieve graph data.
 // ============================================================
 
-import type { AnalysisResult } from 'shared';
-import type { Node, Edge } from '@xyflow/react';
+import type {
+  AnalysisResult,
+  AnalysisResponse,
+  GodObjectHit,
+  DeadCodeHit,
+  EntryPointResult,
+} from 'shared';
+import type { Edge } from '@xyflow/react';
 import type { AtlasNode } from '../types/nodes';
 
 // ---------------------------------------------------------------------------
-//  Types — mirrors backend serialize.ts ReactFlowGraph
+//  Types — re-exported from the shared wire contract in shared/types.ts.
+//  Do not redeclare these locally; the backend returns exactly these shapes.
 // ---------------------------------------------------------------------------
 
-export interface ReactFlowNodeData {
-  label: string;
-  filePath: string;
-  nodeType: 'file' | 'class' | 'interface' | 'function';
-  metadata: {
-    properties?: string[];
-    methods?: string[];
-    lineCount?: number;
-    exportCount?: number;
-    width?: number;
-    height?: number;
-  };
-  analysis?: {
-    isGodObject?: boolean;
-    isDeadCode?: boolean;
-    isEntryPoint?: boolean;
-  };
-  width: number;
-  height: number;
-  [key: string]: unknown;
-}
-
-export interface GodObjectDetail {
-  nodeId: string;
-  label: string;
-  inDegree: number;
-  outDegree: number;
-  totalDegree: number;
-}
-
-export interface DeadCodeDetail {
-  nodeId: string;
-  label: string;
-  nodeType: string;
-  filePath: string;
-  outDegree: number;
-}
-
-export interface EntryPoint {
-  entryFile: string;
-  framework: 'node' | 'nextjs' | 'vite' | 'express' | 'unknown';
-  packageName?: string;
-}
-
-export interface ReactFlowGraph {
-  nodes: {
-    id: string;
-    type: string;
-    position: { x: number; y: number };
-    width?: number;
-    height?: number;
-    parentId?: string;
-    style?: Record<string, any>;
-    data: ReactFlowNodeData;
-  }[];
-  edges: {
-    id: string;
-    source: string;
-    target: string;
-    type?: string;
-    label?: string;
-    animated?: boolean;
-  }[];
-  analysis: AnalysisResult;
-  godObjectDetails?: GodObjectDetail[];
-  deadCodeDetails?: DeadCodeDetail[];
-  entryPoint?: EntryPoint;
-  repoId?: string;
-}
+export type GodObjectDetail = GodObjectHit;
+export type DeadCodeDetail = DeadCodeHit;
+export type EntryPoint = EntryPointResult;
+export type ReactFlowGraph = AnalysisResponse;
 
 // ---------------------------------------------------------------------------
 //  Configuration
@@ -141,9 +83,11 @@ async function handleResponse(res: Response): Promise<ReactFlowGraph> {
  * Upload a .zip file for analysis.
  * Sends the file as multipart/form-data to POST /api/analyze/upload.
  */
-export async function analyzeUpload(file: File): Promise<ReactFlowGraph> {
+export async function analyzeUpload(file: File, sessionId?: string): Promise<ReactFlowGraph> {
   const formData = new FormData();
   formData.append('file', file);
+  // Sent as a form field so the backend can stream progress for this upload.
+  if (sessionId) formData.append('sessionId', sessionId);
 
   const res = await fetch(`${apiBase()}/upload`, {
     method: 'POST',
@@ -192,12 +136,12 @@ export function toStoreGraph(graph: ReactFlowGraph): {
   analysis: AnalysisResult;
   godObjectDetails: GodObjectDetail[];
   deadCodeDetails: DeadCodeDetail[];
-  entryPoint?: EntryPoint;
-  repoId?: string;
+  entryPoint: EntryPoint | null;
+  repoId?: string | undefined;
 } {
   const nodes: AtlasNode[] = graph.nodes.map((n) => ({
     id: n.id,
-    type: n.type as any,
+    type: n.type as AtlasNode['type'],
     position: n.position,
     ...(n.width ? { width: n.width } : {}),
     ...(n.height ? { height: n.height } : {}),
@@ -215,9 +159,11 @@ export function toStoreGraph(graph: ReactFlowGraph): {
     id: e.id,
     source: e.source,
     target: e.target,
+    // `type` selects the React Flow renderer; the architectural relationship
+    // travels in `data.relation` so it survives into the canvas.
     type: e.type,
     label: e.label,
-    animated: e.animated,
+    data: { relation: e.relation },
   }));
 
   return {

@@ -8,51 +8,18 @@ import { detectDeadCode } from '../analyzers/dead-code.js';
 import { detectCycles } from '../graph/algorithms/cycle-detection.js';
 import { detectPatterns } from '../analyzers/patterns/index.js';
 import { detectAllEntryPoints } from '../parser/entry-point.js';
-import type { ParsedFile } from 'shared';
-
-interface RfNode {
-  id: string;
-  type: string;
-  position: { x: number; y: number };
-  sourcePosition?: string;
-  targetPosition?: string;
-  width?: number;
-  height?: number;
-  parentId?: string;
-  extent?: string;
-  style?: Record<string, string | number>;
-  data: {
-    label: string;
-    filePath: string;
-    metadata: {
-      properties?: string[];
-      methods?: string[];
-      entities?: { name: string; type: string }[];
-      lineCount: number;
-      exportCount: number;
-      maxComplexity: number;
-      importanceScore?: number;
-    };
-    analysis: {
-      isGodObject: boolean;
-      isDeadCode: boolean;
-      isEntryPoint: boolean;
-    };
-  };
-}
-
-interface RfEdge {
-  id: string;
-  source: string;
-  target: string;
-  label?: string | undefined;
-  type: string;
-}
+import type { ParsedFile, AnalysisResponse, WireNode, WireEdge } from 'shared';
 
 /**
  * Shared downstream pipeline: graph building → analysis → layout → serialize.
+ *
+ * The return type is the shared `AnalysisResponse` wire contract, so any field
+ * the frontend expects but the pipeline forgets to emit is a compile error.
  */
-export function runGraphPipeline(parsedFiles: ParsedFile[], entryPoints: ReturnType<typeof detectAllEntryPoints>) {
+export function runGraphPipeline(
+  parsedFiles: ParsedFile[],
+  entryPoints: ReturnType<typeof detectAllEntryPoints>,
+): AnalysisResponse {
   // 3. Build the architecture graph
   const entryFileList = entryPoints.map(ep => ep.entryFile);
   const graph = buildGraph(parsedFiles, entryFileList.length > 0 ? entryFileList : undefined);
@@ -84,11 +51,11 @@ export function runGraphPipeline(parsedFiles: ParsedFile[], entryPoints: ReturnT
   }
 
   // 9. Serialize to React Flow format
-  const initialNodes: RfNode[] = positioned.nodes.map((n) => {
-    let relativeX = n.x;
-    let relativeY = n.y;
+  const initialNodes: WireNode[] = positioned.nodes.map((n) => {
+    const relativeX = n.x;
+    const relativeY = n.y;
 
-    const rfNode: RfNode = {
+    const rfNode: WireNode = {
       id: n.id,
       type: n.type,
       position: { x: relativeX, y: relativeY },
@@ -121,20 +88,25 @@ export function runGraphPipeline(parsedFiles: ParsedFile[], entryPoints: ReturnT
     return rfNode;
   });
 
-  const initialEdges: RfEdge[] = positioned.edges.map((e) => ({
+  const initialEdges: WireEdge[] = positioned.edges.map((e) => ({
     id: e.id,
     source: e.source,
     target: e.target,
     label: e.label,
+    // `type` is the React Flow renderer; `relation` carries the semantics.
     type: 'smoothstep',
+    relation: e.type,
   }));
 
   return {
     nodes: initialNodes,
     edges: initialEdges,
+    // Cycles, patterns, god objects and dead code are all computed above —
+    // this field is what the frontend reads for every analysis overlay.
+    analysis: graph.analysis,
     godObjectDetails: godObjectHits,
     deadCodeDetails: deadCodeHits,
-    entryPoint: entryPoints.length > 0 ? entryPoints[0] : null,
+    entryPoint: entryPoints.length > 0 ? entryPoints[0]! : null,
   };
 }
 

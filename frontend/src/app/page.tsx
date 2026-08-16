@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useSyncExternalStore } from "react";
 import {
   AppBar,
   Toolbar,
@@ -9,8 +9,6 @@ import {
   IconButton,
   Typography,
   Tooltip,
-  Chip,
-  CircularProgress,
   Snackbar,
   Alert,
 } from "@mui/material";
@@ -19,8 +17,6 @@ import {
   FileDownload as ExportIcon,
   Refresh as ReAnalyzeIcon,
   Analytics as AnalysisIcon,
-  Architecture as AtlasIcon,
-  Label as LabelIcon,
 } from "@mui/icons-material";
 import { toPng } from "html-to-image";
 import Dashboard from "./components/Dashboard";
@@ -35,18 +31,27 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import GraphSkeleton from "./components/GraphSkeleton";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 
+/** Never resubscribes — the hydration flag flips exactly once. */
+const noopSubscribe = () => () => {};
+
+/**
+ * True once the client has hydrated. Using useSyncExternalStore rather than a
+ * setState-in-effect avoids the cascading render that pattern causes: React
+ * gets the server value (false) and the client value (true) directly.
+ */
+function useIsHydrated(): boolean {
+  return useSyncExternalStore(
+    noopSubscribe,
+    () => true,
+    () => false,
+  );
+}
+
 export default function Home() {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useIsHydrated();
 
   const nodes = useAtlasStore((state) => state.nodes);
-  const edges = useAtlasStore((state) => state.edges);
-  const analysisResults = useAtlasStore((state) => state.analysisResults);
-  const visibleNodeTypes = useAtlasStore((state) => state.visibleNodeTypes);
   const toggleNodeType = useAtlasStore((state) => state.toggleNodeType);
-  const showEdgeLabels = useAtlasStore((state) => state.showEdgeLabels);
   const toggleEdgeLabels = useAtlasStore((state) => state.toggleEdgeLabels);
   const isLoading = useAtlasStore((state) => state.isLoading);
   const snackbarMessage = useAtlasStore((state) => state.snackbarMessage);

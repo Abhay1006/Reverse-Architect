@@ -64,7 +64,7 @@ export default function GuidedTourOverlay() {
           mb: 2,
         }}
       >
-        We've detected the <b>{entryPoint?.framework}</b> entry point at{" "}
+        We&apos;ve detected the <b>{entryPoint?.framework}</b> entry point at{" "}
         <code>{entryPoint?.entryFile}</code>. Follow the arrows to see how the code
         flows!
       </Typography>

@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import {
-  Node,
   Edge,
   OnNodesChange,
   OnEdgesChange,
@@ -26,6 +25,17 @@ export interface FolderTreeNode {
   nodeId?: string;
   /** Whether this file is the project entry point */
   isEntryPoint?: boolean;
+}
+
+/** The complete result of one analysis, as handed to the store. */
+export interface StoreGraph {
+  nodes: AtlasNode[];
+  edges: Edge[];
+  analysis: AnalysisResult;
+  godObjectDetails: GodObjectDetail[];
+  deadCodeDetails: DeadCodeDetail[];
+  entryPoint: EntryPoint | null;
+  repoId?: string | undefined;
 }
 
 // ── Store Interface ───────────────────────────────────────────────────
@@ -60,8 +70,13 @@ interface AtlasState {
   snackbarMessage: string | null;
 
   // --- Actions ---
-  setGraph: (nodes: AtlasNode[], edges: Edge[], analysis: AnalysisResult, godObjectDetails?: GodObjectDetail[], deadCodeDetails?: DeadCodeDetail[], entryPoint?: EntryPoint, repoId?: string) => void;
-  
+  /**
+   * Replace the whole graph. Takes a single object rather than positional
+   * arguments — a dropped `repoId` used to silently disable Code Peek and the
+   * AI assistant, and positional args made that invisible at the call site.
+   */
+  setGraph: (payload: StoreGraph) => void;
+
   // React Flow required actions
   onNodesChange: OnNodesChange;
   onEdgesChange: OnEdgesChange;
@@ -250,7 +265,7 @@ export const useAtlasStore = create<AtlasState>((set, get) => ({
   heatmapEnabled: false,
   snackbarMessage: null,
 
-  setGraph: (nodes, edges, analysisResults, godObjectDetails, deadCodeDetails, entryPoint, repoId) => {
+  setGraph: ({ nodes, edges, analysis, godObjectDetails, deadCodeDetails, entryPoint, repoId }) => {
     const filePaths = new Set<string>();
     nodes.forEach(n => {
       if (n.type === 'file' && n.data?.filePath) {
@@ -258,11 +273,11 @@ export const useAtlasStore = create<AtlasState>((set, get) => ({
       }
     });
 
-    set({ 
-      nodes, 
-      edges, 
-      analysisResults, 
-      godObjectDetails: godObjectDetails ?? [], 
+    set({
+      nodes,
+      edges,
+      analysisResults: analysis,
+      godObjectDetails: godObjectDetails ?? [],
       deadCodeDetails: deadCodeDetails ?? [],
       entryPoint: entryPoint ?? null,
       activeRepoId: repoId ?? null,
@@ -331,7 +346,7 @@ export const useAtlasStore = create<AtlasState>((set, get) => ({
       // Reset formatting
       set({
         nodes: nodes.map((n) => ({ ...n, style: { ...n.style, opacity: 1 } })),
-        edges: edges.map((e) => ({ ...e, animated: e.type === 'import', style: { ...e.style, opacity: 1 } })),
+        edges: edges.map((e) => ({ ...e, animated: e.data?.relation === 'import', style: { ...e.style, opacity: 1 } })),
       });
       return;
     }

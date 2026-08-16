@@ -2,7 +2,7 @@
 
 import React, { memo } from "react";
 import { NodeProps } from "@xyflow/react";
-import { Box, Typography, Chip } from "@mui/material";
+import { Box, Typography } from "@mui/material";
 import { Extension as PuzzleIcon } from "@mui/icons-material";
 import BaseNode from "./BaseNode";
 import { useAtlasStore } from "../../store/atlas-store";

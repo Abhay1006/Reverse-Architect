@@ -2,6 +2,15 @@ import { describe, it, expect } from 'vitest';
 import { getVisibleNodes, getVisibleEdges } from '../src/app/store/atlas-store';
 import type { AtlasNode } from '../src/app/types/nodes';
 import type { Edge } from '@xyflow/react';
+import type { CustomNodeData } from '../src/app/types/nodes';
+
+/** Node data as the backend actually sends it, so the fixtures stay honest. */
+const nodeData = (filePath: string, label: string): CustomNodeData => ({
+  filePath,
+  label,
+  metadata: { lineCount: 0, exportCount: 0, maxComplexity: 0 },
+  analysis: { isGodObject: false, isDeadCode: false, isEntryPoint: false },
+});
 
 describe('Zustand Store Pure Selectors', () => {
   const mockNodes: AtlasNode[] = [
@@ -9,26 +18,26 @@ describe('Zustand Store Pure Selectors', () => {
       id: 'file1',
       type: 'file',
       position: { x: 0, y: 0 },
-      data: { filePath: 'src/components/Canvas.tsx', label: 'Canvas.tsx' }
+      data: nodeData('src/components/Canvas.tsx', 'Canvas.tsx')
     },
     {
       id: 'class1',
       type: 'class',
       position: { x: 0, y: 0 },
       parentId: 'file1',
-      data: { filePath: 'src/components/Canvas.tsx', label: 'CanvasInner' }
+      data: nodeData('src/components/Canvas.tsx', 'CanvasInner')
     },
     {
       id: 'file2',
       type: 'file',
       position: { x: 0, y: 0 },
-      data: { filePath: 'src/store/atlas-store.ts', label: 'atlas-store.ts' }
+      data: nodeData('src/store/atlas-store.ts', 'atlas-store.ts')
     },
     {
       id: 'group1',
       type: 'group',
       position: { x: 0, y: 0 },
-      data: { label: 'components', filePath: '' }
+      data: nodeData('', 'components')
     }
   ];
 

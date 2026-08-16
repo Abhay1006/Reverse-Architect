@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { Box, Typography, TextField, Button, Paper, List, ListItemButton, Chip } from '@mui/material';
 import { BugReport as BugIcon, Architecture as ArchitectureIcon, PlayArrow as PlayIcon } from '@mui/icons-material';
 import { useAtlasStore } from '../store/atlas-store';
@@ -8,7 +8,6 @@ export default function BugHunterTab({ onGoToGraph }: { onGoToGraph: () => void 
   const nodes = useAtlasStore(s => s.nodes);
   const edges = useAtlasStore(s => s.edges);
   const setFocusedNode = useAtlasStore(s => s.setFocusedNode);
-  const setPanToNode = useAtlasStore(s => s.panToNode);
 
   const [issueText, setIssueText] = useState("");
   const [suspects, setSuspects] = useState<{ node: AtlasNode, score: number, reason: string }[]>([]);
@@ -29,7 +28,7 @@ export default function BugHunterTab({ onGoToGraph }: { onGoToGraph: () => void 
 
     nodes.forEach(n => {
       let score = 0;
-      let matchedTerms: string[] = [];
+      const matchedTerms: string[] = [];
 
       const label = (n.data?.label as string) || "";
       const path = (n.data?.filePath as string) || "";

@@ -7,7 +7,8 @@
     "build": "node -e \"require('child_process').spawnSync('npx', ['next', 'build', ...(process.platform === 'android' ? ['--webpack'] : [])], { stdio: 'inherit' })\"",
     "start": "npx next start",
     "lint": "npx eslint",
-    "test": "npx vitest run"
+    "test": "npx vitest run",
+    "typecheck": "npx tsc --noEmit"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
@@ -20,7 +21,6 @@
     "html-to-image": "^1.11.13",
     "lucide-react": "^1.11.0",
     "next": "16.2.3",
-    "prettier": "^3.8.1",
     "prism-react-renderer": "^2.4.1",
     "react": "19.2.4",
     "react-dom": "19.2.4",
@@ -36,6 +36,7 @@
     "@types/three": "^0.184.1",
     "eslint": "^9.39.4",
     "eslint-config-next": "16.2.3",
+    "prettier": "^3.8.1",
     "typescript": "^5",
     "vitest": "^4.1.9"
   }

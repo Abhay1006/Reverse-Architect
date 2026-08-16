@@ -15,8 +15,7 @@ import { Search as SearchIcon } from "@mui/icons-material";
 import { useAtlasStore } from "../store/atlas-store";
 
 export default function SearchBar() {
-  const { searchQuery, setSearchQuery, nodes, setSelectedNode, panToNode } =
-    useAtlasStore();
+  const { searchQuery, setSearchQuery, nodes, panToNode } = useAtlasStore();
   const [localQuery, setLocalQuery] = useState(searchQuery);
   const [showResults, setShowResults] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
@@ -98,14 +97,17 @@ export default function SearchBar() {
         setSelectedIndex((prev) => Math.max(prev - 1, 0));
       } else if (e.key === "Enter") {
         e.preventDefault();
-        if (results[selectedIndex]) {
-          handleSelectNode(results[selectedIndex].id);
+        const target = results[selectedIndex];
+        if (target) {
+          handleSelectNode(target.id);
         }
       }
     };
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
+    // handleSelectNode is recreated each render but only reads store setters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, showResults, selectedIndex, results]);
 
   // Focus input automatically when opened

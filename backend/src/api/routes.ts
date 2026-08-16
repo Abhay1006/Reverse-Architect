@@ -1,14 +1,23 @@
 import { Router } from 'express';
-import type { Request, Response, NextFunction } from 'express';
+import type { Request, Response } from 'express';
 import path from 'path';
 import fs from 'fs';
-import os from 'os';
 import AdmZip from 'adm-zip';
 import { CacheManager } from '../cache/cache-manager.js';
 import { getRemoteCommitSha } from '../cache/git.js';
 import { progressTracker } from '../progress.js';
 import { analyzeProjectDir } from './analyzer-pipeline.js';
 import { analysisLimiter, upload } from './middleware.js';
+import { withRepoLock, activeAnalyses, queuedAnalyses } from './analysis-queue.js';
+import { toClientError } from './errors.js';
+import {
+  CLONES_BASE_DIR,
+  ensureClonesBaseDir,
+  isValidRepoId,
+  resolveWithinRoot,
+  validateZipEntry,
+  assertRealDirWithin,
+} from './path-safety.js';
 
 export const apiRouter = Router();
 
@@ -38,7 +47,11 @@ function findProjectRoot(extractedDir: string): string {
 
 /** Health check */
 apiRouter.get('/health', (_req: Request, res: Response) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    analyses: { active: activeAnalyses(), queued: queuedAnalyses() },
+  });
 });
 
 /** POST /api/analyze/upload — accept a .zip file */
@@ -56,50 +69,57 @@ apiRouter.post('/analyze/upload', analysisLimiter, upload.single('file'), async 
     return;
   }
 
+  const sid = typeof req.body?.sessionId === 'string' && req.body.sessionId
+    ? req.body.sessionId
+    : 'default-session';
+
   const uploadId = `upload-${Date.now()}`;
-  const clonesBaseDir = path.join(os.homedir(), '.atlas', 'clones');
-  const extractDir = path.join(clonesBaseDir, uploadId);
-  
-  if (!fs.existsSync(clonesBaseDir)) {
-    fs.mkdirSync(clonesBaseDir, { recursive: true });
-  }
+  const extractDir = path.join(ensureClonesBaseDir(), uploadId);
 
   try {
+    progressTracker.emitProgress(sid, { step: 'extracting', message: 'Extracting archive...', progress: 10 });
+
     // Extract the zip safely (protecting against Zip Slip vulnerabilities)
     const zip = new AdmZip(file.path);
     const extractDirResolved = path.resolve(extractDir);
 
     for (const entry of zip.getEntries()) {
-      const targetPath = path.resolve(extractDirResolved, entry.entryName);
-      const relative = path.relative(extractDirResolved, targetPath);
-
-      if (relative.startsWith('..') || path.isAbsolute(relative)) {
-        throw new Error(`Directory traversal attempt detected in zip file: ${entry.entryName}`);
-      }
+      const targetPath = validateZipEntry(extractDirResolved, entry.entryName);
 
       if (entry.isDirectory) {
         fs.mkdirSync(targetPath, { recursive: true });
+        assertRealDirWithin(extractDirResolved, targetPath);
       } else {
-        fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+        const parent = path.dirname(targetPath);
+        fs.mkdirSync(parent, { recursive: true });
+        // An earlier entry may have created `parent` as a symlink pointing
+        // outside the extraction directory — verify before writing into it.
+        assertRealDirWithin(extractDirResolved, parent);
         fs.writeFileSync(targetPath, entry.getData());
       }
     }
 
-    // Find root and analyze
+    // Find root and analyze (serialized against other analyses)
     const projectRoot = findProjectRoot(extractDir);
-    const result = await analyzeProjectDir(projectRoot);
+    progressTracker.emitProgress(sid, { step: 'starting-lsp', message: 'Analyzing project...', progress: 40 });
 
+    const result = await withRepoLock(uploadId, () => analyzeProjectDir(projectRoot));
+
+    progressTracker.emitProgress(sid, { step: 'done', message: 'Analysis complete!', progress: 100 });
     res.json({
       ...result,
       repoId: uploadId,
     });
   } catch (err: unknown) {
     console.error('[/api/analyze/upload] Error:', err);
-    const message = err instanceof Error ? err.message : String(err);
+    const message = toClientError(err);
+    cleanup(extractDir);
+    progressTracker.emitProgress(sid, { step: 'error', message: `Analysis failed: ${message}` });
     res.status(500).json({ error: 'Analysis failed', details: message });
   } finally {
     // Cleanup temp uploaded file (keep the extracted directory for peeking)
     cleanup(file.path);
+    setTimeout(() => progressTracker.cleanup(sid), 5000);
   }
 });
 
@@ -109,7 +129,7 @@ interface GithubRequestBody {
 }
 
 /** POST /api/analyze/github — clone and analyze a GitHub repo */
-apiRouter.post('/analyze/github', analysisLimiter, async (req: Request<{}, {}, GithubRequestBody>, res: Response): Promise<void> => {
+apiRouter.post('/analyze/github', analysisLimiter, async (req: Request<Record<string, never>, unknown, GithubRequestBody>, res: Response): Promise<void> => {
   const { url, sessionId } = req.body;
 
   if (!url || typeof url !== 'string') {
@@ -129,12 +149,17 @@ apiRouter.post('/analyze/github', analysisLimiter, async (req: Request<{}, {}, G
   const cleanUrl = url.trim();
   const repoId = cleanUrl.replace(/^https?:\/\/(www\.)?github\.com\//, '').replace(/\/$/, '');
 
+  if (!isValidRepoId(repoId)) {
+    res.status(400).json({ error: 'URL must be a valid GitHub repository (e.g., https://github.com/user/repo)' });
+    return;
+  }
+
   try {
     // 1. Check cache freshness without cloning
     progressTracker.emitProgress(sid, { step: 'starting-lsp', message: `Checking cache for ${repoId}...` });
     console.log(`[Cache] Checking freshness for ${repoId}...`);
     const latestCommit = getRemoteCommitSha(cleanUrl);
-    
+
     if (latestCommit) {
       const cachedCommit = CacheManager.getLastCommit(repoId);
       if (cachedCommit === latestCommit) {
@@ -156,40 +181,39 @@ apiRouter.post('/analyze/github', analysisLimiter, async (req: Request<{}, {}, G
       console.log(`[Cache] Could not fetch remote commit for ${repoId}. Proceeding with analysis.`);
     }
 
-    // 2. Perform full analysis
-    progressTracker.emitProgress(sid, { step: 'cloning', message: `Cloning repository ${repoId}...` });
-    
-    const clonesBaseDir = path.join(os.homedir(), '.atlas', 'clones');
-    const cloneDir = path.join(clonesBaseDir, repoId);
-    
-    if (!fs.existsSync(clonesBaseDir)) {
-      fs.mkdirSync(clonesBaseDir, { recursive: true });
-    }
-    
-    if (fs.existsSync(cloneDir)) {
-      cleanup(cloneDir);
-    }
+    // 2. Perform full analysis. withRepoLock serializes against other analyses
+    // and collapses concurrent requests for the same repo into one run, so two
+    // callers can't clone into the same directory and delete each other's tree.
+    const cloneDir = path.join(ensureClonesBaseDir(), repoId);
 
-    let analysisResult;
-    try {
-      console.log(`Cloning ${cleanUrl} into ${cloneDir}...`);
-      const { cloneRepo } = await import('../github/clone.js');
-      await cloneRepo(cleanUrl, cloneDir);
+    const analysisResult = await withRepoLock(repoId, async () => {
+      progressTracker.emitProgress(sid, { step: 'cloning', message: `Cloning repository ${repoId}...` });
 
-      progressTracker.emitProgress(sid, { step: 'extracting', message: `Running LSP analysis...`, progress: 50 });
-      analysisResult = await analyzeProjectDir(cloneDir);
-      
-      progressTracker.emitProgress(sid, { step: 'building-graph', message: `Building architecture graph...`, progress: 90 });
-      
-      // 3. Save to cache
-      if (latestCommit) {
-        console.log(`💾 [Cache] Saving result for ${repoId} (commit: ${latestCommit.substring(0, 7)})`);
-        CacheManager.saveResult(repoId, cleanUrl, latestCommit, analysisResult);
+      if (fs.existsSync(cloneDir)) {
+        cleanup(cloneDir);
       }
-    } catch (err) {
-      cleanup(cloneDir);
-      throw err;
-    }
+
+      try {
+        console.log(`Cloning ${cleanUrl} into ${cloneDir}...`);
+        const { cloneRepo } = await import('../github/clone.js');
+        await cloneRepo(cleanUrl, cloneDir);
+
+        progressTracker.emitProgress(sid, { step: 'extracting', message: `Running LSP analysis...`, progress: 50 });
+        const result = await analyzeProjectDir(cloneDir);
+
+        progressTracker.emitProgress(sid, { step: 'building-graph', message: `Building architecture graph...`, progress: 90 });
+
+        // 3. Save to cache
+        if (latestCommit) {
+          console.log(`💾 [Cache] Saving result for ${repoId} (commit: ${latestCommit.substring(0, 7)})`);
+          CacheManager.saveResult(repoId, cleanUrl, latestCommit, result);
+        }
+        return result;
+      } catch (err) {
+        cleanup(cloneDir);
+        throw err;
+      }
+    });
 
     progressTracker.emitProgress(sid, { step: 'done', message: 'Analysis complete!', progress: 100 });
     res.json({
@@ -198,7 +222,7 @@ apiRouter.post('/analyze/github', analysisLimiter, async (req: Request<{}, {}, G
     });
   } catch (err: unknown) {
     console.error('[/api/analyze/github] Error:', err);
-    const message = err instanceof Error ? err.message : String(err);
+    const message = toClientError(err);
     progressTracker.emitProgress(sid, { step: 'error', message: `Analysis failed: ${message}` });
     res.status(500).json({ error: 'Analysis failed', details: message });
   } finally {
@@ -223,59 +247,72 @@ interface CodeRequestQuery {
 }
 
 /** GET /api/code — read file code for peeking */
-apiRouter.get('/code', (req: Request<{}, {}, {}, CodeRequestQuery>, res: Response): void => {
+apiRouter.get('/code', (req: Request<Record<string, never>, unknown, unknown, CodeRequestQuery>, res: Response): void => {
   const { repoId, filePath } = req.query;
   if (!repoId || !filePath) {
     res.status(400).json({ error: 'Missing repoId or filePath' });
     return;
   }
 
-  // Prevent directory traversal attacks
-  const safeRepoId = path.normalize(repoId).replace(/^(\.\.(\/|\\|$))+/, '');
-  const safeFilePath = path.normalize(filePath).replace(/^(\.\.(\/|\\|$))+/, '');
+  if (!isValidRepoId(repoId)) {
+    res.status(400).json({ error: 'Invalid repoId' });
+    return;
+  }
 
-  const clonesBaseDir = path.join(os.homedir(), '.atlas', 'clones');
-  const repoPath = path.join(clonesBaseDir, safeRepoId);
-  
-  let fullFilePath = path.join(repoPath, safeFilePath);
-  
-  if (!fs.existsSync(fullFilePath)) {
-    // If it's a zip upload with nested directories, search for the relative path
-    const findFileRecursively = (dir: string, relPath: string): string | null => {
+  const repoPath = path.join(CLONES_BASE_DIR, repoId);
+
+  // Resolve through symlinks and confirm containment. A cloned repo is
+  // attacker-controlled content, so `link -> /etc/passwd` inside it must not
+  // be readable through this endpoint.
+  let fullFilePath = resolveWithinRoot(repoPath, filePath);
+
+  if (!fullFilePath && fs.existsSync(repoPath)) {
+    // Zip uploads may nest the project one directory deep — search for the
+    // relative path, but re-validate every candidate against the repo root.
+    const findFileRecursively = (dir: string, relPath: string, depth: number): string | null => {
+      if (depth > 8) return null;
       try {
-        const entries = fs.readdirSync(dir, { withFileTypes: true });
-        for (const entry of entries) {
-          if (entry.isDirectory()) {
-            const subDir = path.join(dir, entry.name);
-            const candidate = path.join(subDir, relPath);
-            if (fs.existsSync(candidate)) {
-              return candidate;
-            }
-            const nested = findFileRecursively(subDir, relPath);
-            if (nested) return nested;
+        for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+          if (!entry.isDirectory()) continue;
+          const subDir = path.join(dir, entry.name);
+          const candidate = resolveWithinRoot(subDir, relPath);
+          if (candidate && resolveWithinRoot(repoPath, path.relative(repoPath, candidate))) {
+            return candidate;
           }
+          const nested = findFileRecursively(subDir, relPath, depth + 1);
+          if (nested) return nested;
         }
       } catch {
         // ignore read errors
       }
       return null;
     };
-    
-    if (fs.existsSync(repoPath)) {
-      const nestedPath = findFileRecursively(repoPath, safeFilePath);
-      if (nestedPath) {
-        fullFilePath = nestedPath;
-      }
-    }
+
+    fullFilePath = findFileRecursively(repoPath, filePath, 0);
   }
 
-  if (!fullFilePath.startsWith(repoPath)) {
-    res.status(403).json({ error: 'Access denied' });
+  if (!fullFilePath) {
+    res.status(404).json({ error: 'File not found' });
     return;
   }
 
-  if (!fs.existsSync(fullFilePath) || fs.statSync(fullFilePath).isDirectory()) {
+  let stats: fs.Stats;
+  try {
+    stats = fs.statSync(fullFilePath);
+  } catch {
     res.status(404).json({ error: 'File not found' });
+    return;
+  }
+
+  if (!stats.isFile()) {
+    res.status(404).json({ error: 'File not found' });
+    return;
+  }
+
+  // Code Peek renders source in a drawer — refuse to stream large binaries.
+  const MAX_PEEK_BYTES = 2 * 1024 * 1024;
+  if (stats.size > MAX_PEEK_BYTES) {
+    res.status(413).json({ error: 'File is too large to preview' });
     return;
   }
 
@@ -284,7 +321,7 @@ apiRouter.get('/code', (req: Request<{}, {}, {}, CodeRequestQuery>, res: Respons
     const ext = path.extname(fullFilePath).toLowerCase().substring(1);
     res.json({ code, language: ext });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to read file', details: String(err) });
+    res.status(500).json({ error: 'Failed to read file', details: toClientError(err) });
   }
 });
 
@@ -293,16 +330,19 @@ interface CachedQuery {
 }
 
 /** GET /api/analyze/github/cached — return analysis ONLY if cached */
-apiRouter.get('/analyze/github/cached', (req: Request<{}, {}, {}, CachedQuery>, res: Response) => {
+apiRouter.get('/analyze/github/cached', (req: Request<Record<string, never>, unknown, unknown, CachedQuery>, res: Response) => {
   const repoId = req.query.repoId;
   if (!repoId) {
     return res.status(400).json({ error: 'Missing "repoId" query parameter' });
   }
-  
+  if (!isValidRepoId(repoId)) {
+    return res.status(400).json({ error: 'Invalid repoId' });
+  }
+
   try {
     const cachedResult = CacheManager.getCachedResult(repoId);
     if (cachedResult) {
-      return res.json(cachedResult);
+      return res.json({ ...cachedResult, repoId });
     } else {
       return res.status(404).json({ error: 'Not found in cache' });
     }
@@ -317,10 +357,13 @@ interface ProgressQuery {
 }
 
 /** GET /api/analyze/progress — Server-Sent Events stream for analysis progress */
-apiRouter.get('/analyze/progress', (req: Request<{}, {}, {}, ProgressQuery>, res: Response) => {
+apiRouter.get('/analyze/progress', (req: Request<Record<string, never>, unknown, unknown, ProgressQuery>, res: Response) => {
   const sessionId = req.query.sessionId;
   if (!sessionId) {
     return res.status(400).json({ error: 'Missing sessionId' });
+  }
+  if (sessionId.length > 128) {
+    return res.status(400).json({ error: 'Invalid sessionId' });
   }
 
   res.setHeader('Content-Type', 'text/event-stream');
@@ -340,9 +383,9 @@ apiRouter.get('/analyze/progress', (req: Request<{}, {}, {}, ProgressQuery>, res
     }
   };
 
-  progressTracker.on(`progress:${sessionId}`, onProgress);
+  progressTracker.subscribe(sessionId, onProgress);
 
   req.on('close', () => {
-    progressTracker.off(`progress:${sessionId}`, onProgress);
+    progressTracker.unsubscribe(sessionId, onProgress);
   });
 });

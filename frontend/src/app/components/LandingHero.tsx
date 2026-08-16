@@ -1,73 +1,39 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Typography, TextField, Button, CircularProgress, Chip, Paper } from '@mui/material';
 import { ArrowForward as ArrowForwardIcon, Code as CodeIcon, GitHub as GitHubIcon } from '@mui/icons-material';
-import { getRecentRepos, analyzeGithub, toStoreGraph } from '../lib/atlas-api';
+import { getRecentRepos } from '../lib/atlas-api';
 import { useAtlasStore } from '../store/atlas-store';
-
-function generateSessionId() {
-  return Math.random().toString(36).substring(2, 15);
-}
+import { useGithubAnalysis, getAnalysisErrorMessage } from '../hooks/useAnalysis';
 
 export default function LandingHero() {
   const [url, setUrl] = useState('');
   const isLoading = useAtlasStore((state) => state.isLoading);
-  const setIsLoading = useAtlasStore((state) => state.setIsLoading);
   const progressText = useAtlasStore((state) => state.progressText);
-  const setProgressText = useAtlasStore((state) => state.setProgressText);
   const [recentRepos, setRecentRepos] = useState<{ repo_id: string; repo_name: string; analyzed_at: string; node_count: number; edge_count: number }[]>([]);
-  const setGraph = useAtlasStore((state) => state.setGraph);
   const setSnackbarMessage = useAtlasStore((state) => state.setSnackbarMessage);
+
+  // The hook owns progress streaming and the store update (including repoId).
+  const githubAnalysis = useGithubAnalysis();
 
   useEffect(() => {
     getRecentRepos().then(data => setRecentRepos(data.repos)).catch(console.error);
   }, []);
 
-  const handleAnalyze = async (targetUrl: string = url) => {
+  const handleAnalyze = (targetUrl: string = url) => {
     if (!targetUrl) return;
-    
+
     // Add https://github.com/ prefix if it's just user/repo
     let finalUrl = targetUrl.trim();
     if (!finalUrl.startsWith('http')) {
       finalUrl = `https://github.com/${finalUrl}`;
     }
 
-    const sessionId = generateSessionId();
-    setIsLoading(true);
-    setProgressText('Initializing...');
-
-    const eventSource = new EventSource(`/api/analyze/progress?sessionId=${sessionId}`);
-    eventSource.onmessage = (e) => {
-      try {
-        const event = JSON.parse(e.data);
-        if (event.message) {
-          setProgressText(event.message);
-        }
-        if (event.step === 'done' || event.step === 'error') {
-          eventSource.close();
-        }
-      } catch (err) {
-        console.error('Failed to parse SSE', err);
-      }
-    };
-
-    try {
-      const result = await analyzeGithub(finalUrl, sessionId);
-      const storeGraph = toStoreGraph(result);
-      setGraph(
-        storeGraph.nodes,
-        storeGraph.edges,
-        storeGraph.analysis,
-        storeGraph.godObjectDetails,
-        storeGraph.deadCodeDetails,
-        storeGraph.entryPoint
-      );
-    } catch (err) {
-      console.error('Analysis failed:', err);
-      setSnackbarMessage('Analysis failed. Check console for details.');
-    } finally {
-      eventSource.close();
-      setIsLoading(false);
-    }
+    githubAnalysis.mutate(finalUrl, {
+      onError: (err) => {
+        console.error('Analysis failed:', err);
+        setSnackbarMessage(getAnalysisErrorMessage(err));
+      },
+    });
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
