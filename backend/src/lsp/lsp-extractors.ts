@@ -19,6 +19,7 @@ import {
   resolveGenericImport,
   extractGoMethods,
 } from './text-analyzer.js';
+import { importCandidatePaths } from '../graph/import-candidates.js';
 import type { ParsedFile, ParsedImport } from 'shared';
 
 // ---------------------------------------------------------------------------
@@ -241,14 +242,8 @@ function resolveJsImportTarget(
   const resolved = path.resolve(importDir, moduleSpecifier);
   const normalized = resolved.split(path.sep).join('/');
 
-  if (knownFiles.has(normalized)) return normalized;
-
-  const extensions = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'];
-  for (const ext of extensions) {
-    if (knownFiles.has(normalized + ext)) return normalized + ext;
-  }
-  for (const ext of extensions) {
-    if (knownFiles.has(normalized + '/index' + ext)) return normalized + '/index' + ext;
+  for (const candidate of importCandidatePaths(normalized)) {
+    if (knownFiles.has(candidate)) return candidate;
   }
 
   return undefined;

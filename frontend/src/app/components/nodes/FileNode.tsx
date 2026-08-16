@@ -1,13 +1,11 @@
 "use client";
 
-import React, { memo } from "react";
+import { memo } from "react";
 import { NodeProps } from "@xyflow/react";
 import { Box, Typography } from "@mui/material";
-import { InsertDriveFile as FileTextIcon, Bolt as ZapIcon } from "@mui/icons-material";
+import { Bolt as ZapIcon } from "@mui/icons-material";
 import BaseNode from "./BaseNode";
 import { FileNode as FileNodeType } from "../../types/nodes";
-
-import { useAtlasStore } from "../../store/atlas-store";
 
 const getLanguageDetails = (filePath: string) => {
   const ext = '.' + filePath.split('.').pop()?.toLowerCase();
@@ -94,21 +92,20 @@ const getDirectoryColor = (filePath: string, defaultColor: string) => {
 };
 
 const FileNode = ({ data, selected, sourcePosition, targetPosition }: NodeProps<FileNodeType>) => {
-  const fullPath = data.filePath as string;
-  const expandedFiles = useAtlasStore(s => s.expandedFiles);
-  const isExpanded = expandedFiles.has(fullPath);
+  const fullPath = data.filePath;
 
-  const isEntryPoint = !!(data as any).analysis?.isEntryPoint;
+  const isEntryPoint = !!data.analysis?.isEntryPoint;
   const status = isEntryPoint ? "entry" : "default";
 
-  const entities = (data.metadata as any)?.entities || [];
-  const maxComplexity = (data.metadata as any)?.maxComplexity;
+  const entities = data.metadata?.entities ?? [];
+  const maxComplexity = data.metadata?.maxComplexity;
+  const lineCount = data.metadata?.lineCount;
   const lang = getLanguageDetails(fullPath);
   const dirColor = getDirectoryColor(fullPath, lang.color);
 
   return (
     <BaseNode
-      label={data.label as string}
+      label={data.label}
       selected={selected}
       headerColor={isEntryPoint ? "var(--primary)" : dirColor}
       iconColor={lang.color}
@@ -160,7 +157,7 @@ const FileNode = ({ data, selected, sourcePosition, targetPosition }: NodeProps<
               gap: 0.75
             }}
           >
-            {entities.slice(0, 3).map((entity: any, i: number) => (
+            {entities.slice(0, 3).map((entity, i) => (
               <Box 
                 key={`${entity.name}-${i}`}
                 sx={{ 
@@ -199,21 +196,21 @@ const FileNode = ({ data, selected, sourcePosition, targetPosition }: NodeProps<
         )}
 
         <Box sx={{ display: 'flex', gap: 1, mt: 1.5 }}>
-          {(data.metadata as any)?.maxComplexity ? (
-             <Box sx={{ 
-               bgcolor: (data.metadata as any).maxComplexity > 10 ? 'rgba(239, 68, 68, 0.2)' : 'rgba(255,255,255,0.05)', 
-               color: (data.metadata as any).maxComplexity > 10 ? '#fca5a5' : 'rgba(255,255,255,0.5)',
-               px: 1, py: 0.25, borderRadius: 1, fontSize: '0.5625rem', fontWeight: 700 
+          {maxComplexity ? (
+             <Box sx={{
+               bgcolor: maxComplexity > 10 ? 'rgba(239, 68, 68, 0.2)' : 'rgba(255,255,255,0.05)',
+               color: maxComplexity > 10 ? '#fca5a5' : 'rgba(255,255,255,0.5)',
+               px: 1, py: 0.25, borderRadius: 1, fontSize: '0.5625rem', fontWeight: 700
              }}>
-               Complexity: {(data.metadata as any).maxComplexity}
+               Complexity: {maxComplexity}
              </Box>
           ) : null}
-          {(data.metadata as any)?.lineCount ? (
-             <Box sx={{ 
+          {lineCount ? (
+             <Box sx={{
                bgcolor: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.5)',
-               px: 1, py: 0.25, borderRadius: 1, fontSize: '0.5625rem', fontWeight: 700 
+               px: 1, py: 0.25, borderRadius: 1, fontSize: '0.5625rem', fontWeight: 700
              }}>
-               {(data.metadata as any).lineCount} L
+               {lineCount} L
              </Box>
           ) : null}
         </Box>

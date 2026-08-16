@@ -12,9 +12,12 @@ interface Shortcut {
 }
 
 export function useKeyboardShortcuts(shortcuts: Shortcut[]) {
-  // Use ref to avoid re-binding event listener on shortcut function changes
+  // Use ref to avoid re-binding the event listener when shortcut callbacks
+  // change identity. Assigned in an effect, not during render.
   const shortcutsRef = useRef(shortcuts);
-  shortcutsRef.current = shortcuts;
+  useEffect(() => {
+    shortcutsRef.current = shortcuts;
+  }, [shortcuts]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {

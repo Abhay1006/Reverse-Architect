@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
+import type { AnalysisResponse } from 'shared';
 
 // Path for the SQLite database
 const DB_PATH = process.env.ATLAS_DB_PATH || path.join(os.homedir(), '.atlas', 'cache.db');
@@ -59,13 +60,8 @@ export interface RecentRepo {
   edge_count: number;
 }
 
-export interface AnalysisPayload {
-  nodes: unknown[];
-  edges: unknown[];
-  godObjectDetails?: unknown[];
-  deadCodeDetails?: unknown[];
-  entryPoint?: { entryFile: string; framework: string } | null | undefined;
-}
+/** The cached body is exactly what the analyze endpoints return. */
+export type AnalysisPayload = AnalysisResponse;
 
 export class CacheManager {
   /**

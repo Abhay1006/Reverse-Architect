@@ -1,21 +1,18 @@
 import { Node } from "@xyflow/react";
+import type { WireNodeMetadata, WireNodeAnalysis } from "shared";
 
+/**
+ * Node payload as stored in the canvas. `metadata` and `analysis` come
+ * straight off the wire (see shared/types.ts) — they are always populated by
+ * the backend, so components can read them without casts.
+ *
+ * The index signature is required by React Flow's `Node<T>` constraint.
+ */
 export interface CustomNodeData {
   label: string;
   filePath: string;
-  metadata?: {
-    properties?: string[];
-    methods?: string[];
-    entities?: { name: string; type: string }[];
-    lineCount?: number;
-    exportCount?: number;
-    maxComplexity?: number;
-  };
-  analysis?: {
-    isGodObject?: boolean;
-    isDeadCode?: boolean;
-    isEntryPoint?: boolean;
-  };
+  metadata: WireNodeMetadata;
+  analysis: WireNodeAnalysis;
   [key: string]: unknown;
 }
 

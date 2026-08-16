@@ -1,4 +1,5 @@
 import { execFileSync } from 'child_process';
+import { buildGitEnv } from '../github/clone.js';
 
 /**
  * Gets the latest commit SHA for a remote Git repository without cloning it.
@@ -13,7 +14,8 @@ export function getRemoteCommitSha(repoUrl: string): string | null {
       encoding: 'utf8', 
       stdio: ['ignore', 'pipe', 'ignore'],
       timeout: 10000, // 10 seconds timeout to prevent blocking the event loop
-      env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: 'true' }
+      // Same minimal environment as the clone path — see buildGitEnv.
+      env: buildGitEnv()
     });
     
     if (!output) return null;

@@ -4,6 +4,7 @@ import Canvas from './Canvas';
 import OverviewTab from './OverviewTab';
 import FilesTab from './FilesTab';
 import BugHunterTab from './BugHunterTab';
+import AiAssistantTab from './AiAssistantTab';
 import { useAtlasStore } from '../store/atlas-store';
 
 export default function Dashboard() {
@@ -24,6 +25,7 @@ export default function Dashboard() {
           <Tab label="Graph" sx={{ textTransform: 'none', minHeight: 48, fontWeight: 600 }} />
           <Tab label="Files" sx={{ textTransform: 'none', minHeight: 48, fontWeight: 600 }} />
           <Tab label="Bug Hunter" sx={{ textTransform: 'none', minHeight: 48, fontWeight: 600, color: 'error.main', '&.Mui-selected': { color: 'error.light' } }} />
+          <Tab label="AI Assistant" sx={{ textTransform: 'none', minHeight: 48, fontWeight: 600, color: 'info.main', '&.Mui-selected': { color: 'info.light' } }} />
         </Tabs>
       </Box>
       
@@ -37,6 +39,7 @@ export default function Dashboard() {
 
         {tabIndex === 2 && <FilesTab />}
         {tabIndex === 3 && <BugHunterTab onGoToGraph={() => setTabIndex(1)} />}
+        {tabIndex === 4 && <AiAssistantTab />}
       </Box>
     </Box>
   );

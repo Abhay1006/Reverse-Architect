@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React, { useMemo, useCallback } from "react";
 import {
   Drawer,
   Box,
@@ -13,8 +13,6 @@ import {
   List,
   ListItemButton,
   ListItemText,
-  Badge,
-  Divider,
 } from "@mui/material";
 import {
   Close as CloseIcon,
@@ -292,19 +290,19 @@ export default function AnalysisSidebar({
       .filter((n) => n.type === "file")
       .map((n) => ({
         id: n.id,
-        label: n.data.label as string,
-        score: (n.data.metadata as any)?.importanceScore || 0,
-        path: n.data.filePath as string,
+        label: n.data.label,
+        score: n.data.metadata?.importanceScore ?? 0,
+        path: n.data.filePath,
       }))
       .sort((a, b) => b.score - a.score)
       .slice(0, 5);
   }, [nodes]);
 
   // Resolve node IDs to labels for display
-  const nodeLabel = (id: string) => {
-    const n = nodes.find((node) => node.id === id);
-    return (n?.data as any)?.label ?? id;
-  };
+  const nodeLabel = useCallback(
+    (id: string) => nodes.find((node) => node.id === id)?.data?.label ?? id,
+    [nodes],
+  );
 
   // Build god object display items with connection counts
   const godObjectItems = useMemo(() => {
@@ -319,7 +317,7 @@ export default function AnalysisSidebar({
       id,
       label: nodeLabel(id),
     }));
-  }, [godObjectDetails, analysis, nodes]);
+  }, [godObjectDetails, analysis, nodeLabel]);
 
   const deadCodeItems = useMemo(() => {
     if (deadCodeDetails && deadCodeDetails.length > 0) {
@@ -333,7 +331,7 @@ export default function AnalysisSidebar({
       id,
       label: nodeLabel(id),
     }));
-  }, [deadCodeDetails, analysis, nodes]);
+  }, [deadCodeDetails, analysis, nodeLabel]);
 
   const godObjectCount = godObjectItems.length;
   const deadCodeCount = deadCodeItems.length;
@@ -438,12 +436,12 @@ export default function AnalysisSidebar({
               <Typography variant="caption" sx={{ color: "rgba(255,255,255,0.4)", display: "block" }}>Outgoing</Typography>
               <Typography sx={{ fontWeight: 700, color: "var(--primary)" }}>{neighborCounts.out}</Typography>
             </Box>
-            {(selectedNode.data?.metadata as any)?.lineCount && (
+            {selectedNode.data?.metadata?.lineCount ? (
               <Box>
                 <Typography variant="caption" sx={{ color: "rgba(255,255,255,0.4)", display: "block" }}>Lines</Typography>
-                <Typography sx={{ fontWeight: 700 }}>{(selectedNode.data?.metadata as any).lineCount}</Typography>
+                <Typography sx={{ fontWeight: 700 }}>{selectedNode.data.metadata.lineCount}</Typography>
               </Box>
-            )}
+            ) : null}
           </Box>
 
           {/* Find All References (Incoming Edges) */}

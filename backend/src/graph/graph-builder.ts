@@ -1,4 +1,5 @@
 import * as path from 'path';
+import { importCandidatePaths, SOURCE_EXTENSIONS } from './import-candidates.js';
 import type { ArchGraph, ArchNode, ArchEdge, ParsedFile } from 'shared';
 
 /**
@@ -18,19 +19,13 @@ function manualResolveImport(
   const resolved = path.normalize(path.join(importingDir, moduleSpecifier))
     .split(path.sep).join('/'); // Normalize to forward slashes
 
-  // Try exact match first
-  if (fileMap.has(resolved)) return resolved;
-
-  // Try common extensions
-  const extensions = ['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.py', '.go', '.rs', '.java', '.rb', '.php', '.kt', '.swift', '.cs'];
-  for (const ext of extensions) {
-    const candidate = resolved + ext;
-    if (fileMap.has(candidate)) return candidate;
-  }
-
-  // Try index files (e.g., import from './utils' → './utils/index.js')
-  for (const ext of extensions) {
-    const candidate = resolved + '/index' + ext;
+  // importCandidatePaths handles exact matches, TypeScript's `.js`-means-`.ts`
+  // ESM convention, bare specifiers, and index files.
+  const extensions = [
+    ...SOURCE_EXTENSIONS,
+    '.py', '.go', '.rs', '.java', '.rb', '.php', '.kt', '.swift', '.cs',
+  ];
+  for (const candidate of importCandidatePaths(resolved, extensions)) {
     if (fileMap.has(candidate)) return candidate;
   }
 

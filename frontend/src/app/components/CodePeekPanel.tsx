@@ -29,9 +29,9 @@ export default function CodePeekPanel() {
         }
         const data = await res.json();
         setCode(data.code || "");
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error(err);
-        setError(err.message || "An error occurred while loading the file.");
+        setError(err instanceof Error ? err.message : "An error occurred while loading the file.");
       } finally {
         setLoading(false);
       }

@@ -71,10 +71,11 @@ export function useCanvasNodes() {
         color = "var(--god-object)";
         strokeDasharray = "5,5";
       } else {
-        if (edge.label === "imports") color = "var(--primary)";
-        if (edge.label === "implements") color = "var(--accent)";
-        if (edge.label === "extends") color = "var(--secondary)";
-        if (edge.label === "calls") color = "#f59e0b";
+        const relation = edge.data?.relation;
+        if (relation === "import") color = "var(--primary)";
+        if (relation === "implements") color = "var(--accent)";
+        if (relation === "extends") color = "var(--secondary)";
+        if (relation === "calls") color = "#f59e0b";
       }
 
       return {
@@ -231,11 +232,14 @@ export function useCanvasNodes() {
 
   const finalEdges = useMemo(() => {
     const nodeIds = new Set(finalNodes.map((n) => n.id));
-    let edges = styledEdges.filter((e) => nodeIds.has(e.source) && nodeIds.has(e.target));
+    const edges = styledEdges.filter((e) => nodeIds.has(e.source) && nodeIds.has(e.target));
+
+    // Index once — this used to be two linear scans per edge, i.e. O(N*E).
+    const nodeById = new Map(finalNodes.map((n) => [n.id, n]));
 
     return edges.map((e) => {
-      const sourceNode = finalNodes.find((n) => n.id === e.source);
-      const targetNode = finalNodes.find((n) => n.id === e.target);
+      const sourceNode = nodeById.get(e.source);
+      const targetNode = nodeById.get(e.target);
 
       const sourceOpacity = sourceNode?.style?.opacity !== undefined ? Number(sourceNode.style.opacity) : 1;
       const targetOpacity = targetNode?.style?.opacity !== undefined ? Number(targetNode.style.opacity) : 1;

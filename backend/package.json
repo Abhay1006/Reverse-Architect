@@ -5,8 +5,11 @@
   "main": "index.js",
   "scripts": {
     "dev": "npx tsx watch src/server.ts",
-    "start": "npx tsx src/server.ts",
-    "test": "npx vitest run"
+    "build": "npx tsc -p tsconfig.build.json",
+    "start": "node dist/backend/src/server.js",
+    "cli": "npx tsx src/cli.ts",
+    "test": "npx vitest run",
+    "typecheck": "npx tsc --noEmit"
   },
   "keywords": [],
   "author": "",

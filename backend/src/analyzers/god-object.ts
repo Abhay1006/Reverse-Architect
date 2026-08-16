@@ -19,18 +19,9 @@ export const DEFAULT_GOD_OBJECT_THRESHOLD = 4;
 //  Result type
 // ---------------------------------------------------------------------------
 
-export interface GodObjectHit {
-  /** The ID of the flagged node */
-  nodeId: string;
-  /** The node's label (display name) */
-  label: string;
-  /** Incoming edge count */
-  inDegree: number;
-  /** Outgoing edge count */
-  outDegree: number;
-  /** Total connections (in + out) */
-  totalDegree: number;
-}
+// Defined in the shared package — it is part of the API response body.
+export type { GodObjectHit } from 'shared';
+import type { GodObjectHit } from 'shared';
 
 // ---------------------------------------------------------------------------
 //  Analyzer

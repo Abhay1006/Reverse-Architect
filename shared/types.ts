@@ -150,9 +150,112 @@ export interface PatternMatch {
   confidence: "high" | "medium" | "low";
 }
 
-// --- Complete Graph (API Response) ---
+// --- Complete Graph (internal pipeline representation) ---
 export interface ArchGraph {
   nodes: ArchNode[];
   edges: ArchEdge[];
   analysis: AnalysisResult;
+}
+
+// ============================================================
+//  API Wire Types
+//  The single source of truth for the backend → frontend payload.
+//  Both sides import these, so a missing or renamed field is a
+//  compile error rather than a silently-undefined value.
+// ============================================================
+
+export interface EntryPointResult {
+  /** Relative path to the entry file from the project root */
+  entryFile: string;
+  /** Detected framework or language environment */
+  framework:
+    | "node" | "nextjs" | "vite" | "express"
+    | "python" | "go" | "rust" | "java" | "cpp"
+    | "unknown";
+  /** The package name from package.json */
+  packageName?: string | undefined;
+}
+
+export interface GodObjectHit {
+  nodeId: string;
+  label: string;
+  inDegree: number;
+  outDegree: number;
+  totalDegree: number;
+}
+
+export interface DeadCodeHit {
+  nodeId: string;
+  label: string;
+  nodeType: string;
+  filePath: string;
+  outDegree: number;
+}
+
+export interface WireNodeMetadata {
+  properties?: string[] | undefined;
+  methods?: string[] | undefined;
+  entities?: { name: string; type: string }[] | undefined;
+  lineCount: number;
+  exportCount: number;
+  maxComplexity: number;
+  importanceScore?: number | undefined;
+}
+
+export interface WireNodeAnalysis {
+  isGodObject: boolean;
+  isDeadCode: boolean;
+  isEntryPoint: boolean;
+}
+
+export interface WireNodeData {
+  label: string;
+  filePath: string;
+  metadata: WireNodeMetadata;
+  analysis: WireNodeAnalysis;
+}
+
+export interface WireNode {
+  id: string;
+  type: string;
+  position: { x: number; y: number };
+  sourcePosition?: string;
+  targetPosition?: string;
+  width?: number;
+  height?: number;
+  parentId?: string;
+  extent?: string;
+  style?: Record<string, string | number>;
+  data: WireNodeData;
+}
+
+export interface WireEdge {
+  id: string;
+  source: string;
+  target: string;
+  label?: string | undefined;
+  /** React Flow edge renderer, e.g. "smoothstep". Not the semantic type. */
+  type: string;
+  /**
+   * The architectural relationship this edge represents.
+   * Kept separate from `type` because that field is consumed by React Flow as
+   * a renderer name — overwriting it used to discard the semantics entirely,
+   * so anything filtering on "import"/"extends" silently matched nothing.
+   */
+  relation: ArchEdge['type'];
+}
+
+/**
+ * The exact JSON body returned by POST /api/analyze/upload,
+ * POST /api/analyze/github and GET /api/analyze/github/cached.
+ */
+export interface AnalysisResponse {
+  nodes: WireNode[];
+  edges: WireEdge[];
+  analysis: AnalysisResult;
+  godObjectDetails: GodObjectHit[];
+  deadCodeDetails: DeadCodeHit[];
+  entryPoint: EntryPointResult | null;
+  /** Set by the route handler, not the pipeline. */
+  repoId?: string;
 }
