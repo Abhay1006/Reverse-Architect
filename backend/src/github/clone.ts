@@ -14,6 +14,12 @@ import { simpleGit } from 'simple-git';
  *     a subprocess that checks out untrusted code.
  */
 const GIT_ENV_ALLOWLIST = [
+  // Android/Termux: libtermux-exec.so is LD_PRELOAD-ed so that execve()
+  // works on binaries under $PREFIX. Dropping it does not stop git itself
+  // from starting — node still has the preload when it spawns git — but
+  // git's own exec of its transport helper is then denied by the kernel:
+  //   fatal: cannot exec 'remote-https': Permission denied
+  'LD_PRELOAD',
   'PATH',
   'HOME',
   'TMPDIR',
