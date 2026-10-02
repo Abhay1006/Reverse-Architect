@@ -84,6 +84,13 @@ export default function SearchBar() {
     return () => document.removeEventListener("keydown", down);
   }, [setSearchQuery]);
 
+  const handleSelectNode = (nodeId: string) => {
+    panToNode(nodeId);
+    setIsOpen(false);
+    setLocalQuery("");
+    setSearchQuery("");
+  };
+
   // Handle keyboard navigation for results
   useEffect(() => {
     if (!isOpen || !showResults) return;
@@ -123,13 +130,6 @@ export default function SearchBar() {
     setSearchQuery(value); // Instantly filter canvas
     setShowResults(value.length > 0);
     setSelectedIndex(0); // Reset selection on search
-  };
-
-  const handleSelectNode = (nodeId: string) => {
-    panToNode(nodeId);
-    setIsOpen(false);
-    setLocalQuery("");
-    setSearchQuery("");
   };
 
   const typeColorMap: Record<string, string> = {

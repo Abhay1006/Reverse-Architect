@@ -1,12 +1,13 @@
 // ============================================================
-//  Atlas-TS — CLI Tool
-//  Analyze a project directory and print the architecture graph.
-//  Usage: npx tsx src/cli.ts parse <directory>
+//  Atlas — CLI Tool
+//  Analyze a project directory and print the same JSON the
+//  analyze API returns.
+//  Usage: npx tsx src/cli.ts parse <directory> > graph.json
 // ============================================================
 
-import { analyzeWithLsp } from './lsp/index.js';
-import { buildGraph } from './graph/graph-builder.js';
+import * as fs from 'fs';
 import * as path from 'path';
+import { analyzeProjectDir } from './api/analyzer-pipeline.js';
 
 async function main() {
   const args = process.argv.slice(2);
@@ -19,14 +20,20 @@ async function main() {
   }
 
   const projectPath = path.resolve(process.cwd(), targetDir);
-  console.log(`Parsing project at: ${projectPath}`);
+  if (!fs.existsSync(projectPath) || !fs.statSync(projectPath).isDirectory()) {
+    console.error(`Not a directory: ${projectPath}`);
+    process.exit(1);
+  }
 
-  const parsedFiles = await analyzeWithLsp(projectPath);
+  // The analyzers log progress with console.log. Route all of it to stderr so
+  // stdout carries nothing but the JSON document and can be piped or redirected.
+  console.log = console.error;
+  console.info = console.error;
 
-  console.log('Building graph...');
-  const graph = buildGraph(parsedFiles);
+  console.error(`Parsing project at: ${projectPath}`);
+  const result = await analyzeProjectDir(projectPath);
 
-  console.log(JSON.stringify(graph, null, 2));
+  process.stdout.write(JSON.stringify(result, null, 2) + '\n');
 }
 
 main().catch(err => {

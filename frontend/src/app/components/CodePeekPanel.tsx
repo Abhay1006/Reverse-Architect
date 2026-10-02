@@ -3,42 +3,36 @@
 import React, { useEffect, useState } from "react";
 import { Box, Typography, IconButton, Tooltip, CircularProgress } from "@mui/material";
 import { Close as CloseIcon, ContentCopy as CopyIcon, Check as CheckIcon } from "@mui/icons-material";
+import { useQuery } from "@tanstack/react-query";
 import { useAtlasStore } from "../store/atlas-store";
 import { Highlight, themes } from "prism-react-renderer";
 
 export default function CodePeekPanel() {
   const { codePeekFile, setCodePeekFile, activeRepoId } = useAtlasStore();
-  const [code, setCode] = useState<string>("");
-  const [loading, setLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<boolean>(false);
 
-  useEffect(() => {
-    if (!codePeekFile || !activeRepoId) return;
-
-    setLoading(true);
-    setError(null);
-    setCode("");
-
-    const fetchCode = async () => {
-      try {
-        const url = `/api/code?repoId=${encodeURIComponent(activeRepoId)}&filePath=${encodeURIComponent(codePeekFile.filePath)}`;
-        const res = await fetch(url);
-        if (!res.ok) {
-          throw new Error(`Failed to load file (${res.status})`);
-        }
-        const data = await res.json();
-        setCode(data.code || "");
-      } catch (err: unknown) {
-        console.error(err);
-        setError(err instanceof Error ? err.message : "An error occurred while loading the file.");
-      } finally {
-        setLoading(false);
+  const repoId = activeRepoId;
+  const filePath = codePeekFile?.filePath;
+  const { data: code = "", isFetching: loading, error: queryError } = useQuery({
+    queryKey: ["code", repoId, filePath],
+    enabled: Boolean(repoId && filePath),
+    // Source files of an analyzed snapshot do not change.
+    staleTime: Infinity,
+    retry: false,
+    queryFn: async ({ signal }) => {
+      const url = `/api/code?repoId=${encodeURIComponent(repoId!)}&filePath=${encodeURIComponent(filePath!)}`;
+      const res = await fetch(url, { signal });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `Failed to load file (${res.status})`);
       }
-    };
-
-    fetchCode();
-  }, [codePeekFile, activeRepoId]);
+      const data = await res.json();
+      return (data.code as string) || "";
+    },
+  });
+  const error = queryError
+    ? queryError instanceof Error ? queryError.message : "An error occurred while loading the file."
+    : null;
 
   // Close on Escape key
   useEffect(() => {

@@ -1,5 +1,5 @@
 // ============================================================
-//  Atlas-TS — Frontend API Client
+//  Atlas — Frontend API Client
 //  Communicates with the backend (via Next.js proxy routes)
 //  to trigger project analysis and retrieve graph data.
 // ============================================================
@@ -57,12 +57,15 @@ export class AtlasApiError extends Error {
 
 async function handleResponse(res: Response): Promise<ReactFlowGraph> {
   if (!res.ok) {
+    // The backend answers `{ error: 'Analysis failed', details: '<the reason>' }`;
+    // `details` is what the user needs to see.
     let details: string | undefined;
+    const text = await res.text().catch(() => '');
     try {
-      const body = await res.json();
-      details = body.error ?? body.message ?? JSON.stringify(body);
+      const body = JSON.parse(text);
+      details = body.details ?? body.error ?? body.message ?? text;
     } catch {
-      details = await res.text().catch(() => undefined);
+      details = text || undefined;
     }
     throw new AtlasApiError(
       `Analysis failed (${res.status})`,

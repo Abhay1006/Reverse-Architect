@@ -1,5 +1,5 @@
 // ============================================================
-//  Atlas-TS — LSP Type Helpers
+//  Atlas — LSP Type Helpers
 //  Minimal LSP types for our use case. We re-export key types
 //  from vscode-languageserver-protocol and add our own helpers.
 // ============================================================
