@@ -330,6 +330,10 @@ apiRouter.get('/code', codeLimiter, (req: Request<Record<string, never>, unknown
   if (!fullFilePath && fs.existsSync(repoPath)) {
     // Zip uploads may nest the project one directory deep — search for the
     // relative path, but re-validate every candidate against the repo root.
+    // Candidates are real paths, so take them relative to the root's real
+    // path: when the clones dir sits under a symlink (macOS /var → /private/var)
+    // the lexical root would make every candidate look like it escaped.
+    const realRepoPath = fs.realpathSync(repoPath);
     const findFileRecursively = (dir: string, relPath: string, depth: number): string | null => {
       if (depth > 8) return null;
       try {
@@ -337,7 +341,7 @@ apiRouter.get('/code', codeLimiter, (req: Request<Record<string, never>, unknown
           if (!entry.isDirectory()) continue;
           const subDir = path.join(dir, entry.name);
           const candidate = resolveWithinRoot(subDir, relPath);
-          if (candidate && resolveWithinRoot(repoPath, path.relative(repoPath, candidate))) {
+          if (candidate && resolveWithinRoot(repoPath, path.relative(realRepoPath, candidate))) {
             return candidate;
           }
           const nested = findFileRecursively(subDir, relPath, depth + 1);

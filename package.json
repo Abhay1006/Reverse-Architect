@@ -1,5 +1,6 @@
 {
   "name": "reverse-architect-root",
+  "version": "0.1.0",
   "private": true,
   "workspaces": [
     "frontend",
@@ -7,11 +8,31 @@
     "shared"
   ],
   "scripts": {
-    "dev": "npx concurrently \"npm run dev -w backend\" \"npm run dev -w frontend\"",
+    "dev": "concurrently -n api,web -c blue,magenta \"npm run dev -w backend\" \"npm run dev -w frontend\"",
     "build": "npm run build --workspaces --if-present",
-    "start": "node scripts/ensure-built.mjs && npx concurrently \"npm run start -w backend\" \"npm run start -w frontend\""
+    "start": "node scripts/ensure-built.mjs && concurrently -n api,web -c blue,magenta \"npm run start -w backend\" \"npm run start -w frontend\"",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm test --workspaces --if-present",
+    "test:e2e": "npm run test:e2e -w frontend",
+    "knip": "knip",
+    "check": "npm run typecheck && npm run lint && npm run knip && npm test",
+    "bench": "npm run bench --silent -w backend --",
+    "cli": "npm run cli -w backend --",
+    "prepare": "husky"
   },
   "devDependencies": {
-    "concurrently": "^9.1.2"
+    "concurrently": "^9.1.2",
+    "husky": "^9.1.7",
+    "knip": "^6.41.0",
+    "lint-staged": "^17.6.0"
+  },
+  "engines": {
+    "node": ">=22.12"
+  },
+  "packageManager": "npm@11.20.0",
+  "lint-staged": {
+    "backend/**/*.ts": "eslint --config backend/eslint.config.js --no-warn-ignored",
+    "frontend/**/*.{ts,tsx}": "eslint --config frontend/eslint.config.mjs --no-warn-ignored"
   }
 }

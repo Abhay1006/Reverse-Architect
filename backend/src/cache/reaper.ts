@@ -117,7 +117,7 @@ function remove(dir: string, reason: string): void {
  * Run one eviction pass: first anything older than MAX_AGE_MS, then the
  * oldest remaining workspaces until the total fits within MAX_TOTAL_BYTES.
  */
-export function sweepClones(): void {
+function sweepClones(): void {
   const now = Date.now();
   // A workspace being cloned or analyzed right now is never a candidate, no
   // matter how old its directory looks or how far over budget we are.

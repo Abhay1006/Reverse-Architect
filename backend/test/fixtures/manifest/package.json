@@ -1,0 +1,7 @@
+{
+  "name": "manifest-fixture",
+  "main": "./lib/index.js",
+  "bin": { "tool": "lib/cli.js" },
+  "browser": { "./lib/adapters/http.js": "./lib/null.js" },
+  "exports": { ".": { "import": "./lib/index.js" }, "./package.json": "./package.json", "./*": "./lib/*.js" }
+}

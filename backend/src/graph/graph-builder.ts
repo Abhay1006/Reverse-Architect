@@ -91,7 +91,6 @@ export function buildGraph(files: ParsedFile[], entryFiles?: string[]): ArchGrap
   // Helper to generate consistent Node IDs
   const getFileNodeId = (filePath: string) => `file:${filePath}`;
   const getEntityNodeId = (filePath: string, name: string) => `entity:${filePath}:${name}`;
-  const getGroupNodeId = (groupName: string) => `group:${groupName}`;
 
   // --- Step 1: Node Generation ---
   for (const file of files) {
@@ -155,6 +154,7 @@ export function buildGraph(files: ParsedFile[], entryFiles?: string[]): ArchGrap
           exportCount: 0,
           maxComplexity: Math.max(0, ...cls.methods.map(m => m.complexity))
         },
+        ...(cls.range ? { range: cls.range } : {}),
         position: { x: 0, y: 0 }
       });
     }
@@ -191,6 +191,7 @@ export function buildGraph(files: ParsedFile[], entryFiles?: string[]): ArchGrap
           exportCount: 0,
           maxComplexity: fn.complexity
         },
+        ...(fn.range ? { range: fn.range } : {}),
         position: { x: 0, y: 0 }
       });
     }
@@ -198,6 +199,7 @@ export function buildGraph(files: ParsedFile[], entryFiles?: string[]): ArchGrap
 
   // --- Step 2: Edge Generation ---
   const edgeIds = new Set<string>(); // Track edge IDs to prevent duplicates
+  const importEdges = new Map<string, ArchEdge>();
 
   // Build a reverse lookup: for each import, what names does this file bring in from which file?
   // This is crucial for resolving calls across files
@@ -231,6 +233,7 @@ export function buildGraph(files: ParsedFile[], entryFiles?: string[]): ArchGrap
     importedNamesMap.set(file.filePath, namesMap);
   }
 
+
   for (const file of files) {
     if (!reachableFiles.has(file.filePath)) continue;
 
@@ -244,15 +247,22 @@ export function buildGraph(files: ParsedFile[], entryFiles?: string[]): ArchGrap
 
       if (resolvedTarget && reachableFiles.has(resolvedTarget)) {
         const edgeId = `edge:import:${file.filePath}->${resolvedTarget}`;
-        if (!edgeIds.has(edgeId)) {
+        const existing = importEdges.get(edgeId);
+        if (existing) {
+          // One value import makes the whole dependency a runtime one.
+          if (!imp.typeOnly) delete existing.typeOnly;
+        } else if (!edgeIds.has(edgeId)) {
           edgeIds.add(edgeId);
-          edges.push({
+          const edge: ArchEdge = {
             id: edgeId,
             source: getFileNodeId(file.filePath),
             target: getFileNodeId(resolvedTarget),
             type: 'import',
-            label: 'imports'
-          });
+            label: 'imports',
+            ...(imp.typeOnly ? { typeOnly: true } : {}),
+          };
+          importEdges.set(edgeId, edge);
+          edges.push(edge);
         }
       }
     }

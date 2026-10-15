@@ -25,15 +25,3 @@ export function pathToUri(filePath: string): string {
   }
   return `file:///${normalized}`;
 }
-
-/** Convert a file:// URI back to a file system path. */
-export function uriToPath(uri: string): string {
-  if (uri.startsWith('file:///')) {
-    // On macOS/Linux: file:///Users/... → /Users/...
-    return decodeURIComponent(uri.slice(7));
-  }
-  if (uri.startsWith('file://')) {
-    return decodeURIComponent(uri.slice(7));
-  }
-  return decodeURIComponent(uri);
-}

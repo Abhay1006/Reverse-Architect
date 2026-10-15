@@ -8,7 +8,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { LspManager, type LspManagerOptions } from './lsp-manager.js';
-import { pathToUri, uriToPath, type DocumentSymbol, type Position, type Location, type CallHierarchyItem, type CallHierarchyOutgoingCall } from './lsp-types.js';
+import { pathToUri, type DocumentSymbol, type Position, type Location, type CallHierarchyItem, type CallHierarchyOutgoingCall } from './lsp-types.js';
 
 // ---------------------------------------------------------------------------
 //  Types

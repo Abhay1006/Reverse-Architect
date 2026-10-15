@@ -1,0 +1,38 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "workspaces": {
+    "backend": {
+      "entry": [
+        "test/**/*.test.ts"
+      ],
+      "project": [
+        "src/**/*.ts",
+        "../bench/*.ts"
+      ],
+      "ignoreDependencies": [
+        "typescript-language-server"
+      ]
+    },
+    "frontend": {
+      "entry": [
+        "src/app/**/{page,layout,route}.tsx",
+        "src/app/**/route.ts",
+        "test/**/*.test.ts",
+        "e2e/**/*.ts"
+      ],
+      "project": [
+        "src/**/*.{ts,tsx}"
+      ]
+    },
+    "shared": {}
+  },
+  "ignore": [
+    "bench/corpus/**"
+  ],
+  "rules": {
+    "types": "off"
+  },
+  "ignoreBinaries": [
+    "eslint"
+  ]
+}

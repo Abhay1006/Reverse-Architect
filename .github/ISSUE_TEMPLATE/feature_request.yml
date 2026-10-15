@@ -1,0 +1,21 @@
+name: Feature request
+description: A question you'd like Atlas to answer about a codebase.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: The question
+      description: Start from what you want to know about the code, not from the feature, e.g. "Which modules would be affected if I split this package?"
+    validations:
+      required: true
+  - type: textarea
+    id: today
+    attributes:
+      label: How you answer it today
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Where you'd use it
+      multiple: true
+      options: [Web app, CLI, MCP / coding agent, CI]

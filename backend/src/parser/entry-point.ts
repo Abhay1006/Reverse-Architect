@@ -21,7 +21,7 @@ import type { EntryPointResult } from 'shared';
  * 3. package.json "scripts.start" / "scripts.dev" → parse command
  * 4. Convention scan: index.ts, app.ts, server.ts, etc.
  */
-export function detectEntryPoint(projectPath: string): EntryPointResult | null {
+function detectEntryPoint(projectPath: string): EntryPointResult | null {
   // Try to find and read package.json
   const pkgJsonPath = findPackageJson(projectPath);
   if (!pkgJsonPath) {
@@ -357,4 +357,59 @@ function conventionScan(dir: string): EntryPointResult | null {
   }
 
   return null;
+}
+
+/**
+ * Every project file that a package.json points at (`main`, `module`,
+ * `browser` replacements, `exports`, `bin`, …), relative to `projectPath`.
+ * Such files are used by definition even when no source file imports them:
+ * bundlers and the runtime load them through the manifest.
+ *
+ * Reads the root manifest and those of immediate subdirectories, matching
+ * {@link detectAllEntryPoints}.
+ */
+export function manifestReferencedFiles(projectPath: string): string[] {
+  const dirs = [projectPath];
+  try {
+    for (const entry of fs.readdirSync(projectPath, { withFileTypes: true })) {
+      if (entry.isDirectory() && entry.name !== 'node_modules' && !entry.name.startsWith('.')) {
+        dirs.push(path.join(projectPath, entry.name));
+      }
+    }
+  } catch {
+    // unreadable root: just the root manifest, if any
+  }
+
+  const found = new Set<string>();
+  for (const dir of dirs) {
+    const pkgPath = findPackageJson(dir);
+    if (!pkgPath) continue;
+    let pkg: unknown;
+    try {
+      pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+    } catch {
+      continue;
+    }
+    const fields = ['main', 'module', 'browser', 'exports', 'bin', 'types', 'react-native'] as const;
+    const values: string[] = [];
+    const collect = (v: unknown) => {
+      if (typeof v === 'string') values.push(v);
+      else if (v && typeof v === 'object') for (const [k, inner] of Object.entries(v)) {
+        // `browser` maps original → replacement; both sides name files.
+        if (k.startsWith('.')) values.push(k);
+        collect(inner);
+      }
+    };
+    for (const field of fields) collect((pkg as Record<string, unknown>)[field]);
+
+    for (const value of values) {
+      if (value.includes('*')) continue; // subpath patterns name no single file
+      const ext = path.extname(value);
+      if (ext && !/^\.[cm]?[jt]sx?$/.test(ext)) continue; // package.json, .css, .d.ts targets resolve below
+      if (!/^\.{0,2}\/|^[\w@-]/.test(value)) continue;
+      const resolved = resolveEntryFile(path.dirname(pkgPath), value);
+      if (resolved) found.add(path.relative(projectPath, resolved).split(path.sep).join('/'));
+    }
+  }
+  return [...found].sort();
 }

@@ -6,6 +6,7 @@ import AdmZip from 'adm-zip';
 import request from 'supertest';
 import type { Express } from 'express';
 import type { AnalysisResponse } from 'shared';
+import { ANALYZER_VERSION } from '../src/analyzer-version.js';
 
 // Configuration is read at import time, so point the cache and the clone
 // workspace at a temporary directory before the app is imported.
@@ -95,6 +96,12 @@ describe('GET /api/analyze/github/cached', () => {
       nodes: [], edges: [],
       analysis: { godObjects: [], deadCode: [], cycles: [], patterns: [] },
       godObjectDetails: [], deadCodeDetails: [], entryPoint: null,
+      findings: [],
+      coverage: {
+        filesByAnalyzer: { lsp: 0, text: 0, schema: 0, unknown: 0 },
+        filesParsed: 0, filesInGraph: 0, graphScope: 'all-files', entryFiles: [], limitations: [],
+      },
+      analyzerVersion: ANALYZER_VERSION,
     };
     CacheManager.saveResult('octo/widget', 'https://github.com/octo/widget', 'a'.repeat(40), result);
 

@@ -25,10 +25,10 @@ describe('DFS Traversal', () => {
       discoverNode: (nodeId) => {
         visitOrder.push(nodeId);
       },
-      onBackEdge: (source, target) => {
+      onBackEdge: () => {
         cycleDetected = true;
       },
-      finishNode: (nodeId) => {
+      finishNode: () => {
         // finished
       }
     });

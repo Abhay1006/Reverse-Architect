@@ -49,7 +49,7 @@ function release(): void {
 /**
  * Run `task` under the global analysis concurrency limit.
  */
-export async function withAnalysisSlot<T>(task: () => Promise<T>): Promise<T> {
+async function withAnalysisSlot<T>(task: () => Promise<T>): Promise<T> {
   await acquire();
   try {
     return await task();

@@ -19,6 +19,7 @@ import type {
   ParsedProperty,
   ParsedParameter,
   ParsedImport,
+  SourceRange,
 } from 'shared';
 
 // ---------------------------------------------------------------------------
@@ -110,6 +111,7 @@ export function adaptSymbolsToParsedFile(
 
   return {
     kind: 'file',
+    analyzer: 'lsp',
     name: path.basename(filePath),
     filePath, // Will be made relative by the caller
     imports: resolvedImports,
@@ -200,6 +202,7 @@ function adaptClass(sym: DocumentSymbol, filePath: string): ParsedClass {
     implements: implementsList,
     decorators,
     lineCount,
+    range: toSourceRange(sym),
   };
 }
 
@@ -290,6 +293,17 @@ function adaptFunction(sym: DocumentSymbol, filePath: string): ParsedFunction {
     complexity,
     calledFunctions,
     namePosition: { ...sym.selectionRange.start },
+    range: toSourceRange(sym),
+  };
+}
+
+/** LSP positions are 0-based; SourceRange lines are 1-based like editors show. */
+function toSourceRange(sym: DocumentSymbol): SourceRange {
+  return {
+    startLine: sym.range.start.line + 1,
+    startCol: sym.range.start.character,
+    endLine: sym.range.end.line + 1,
+    endCol: sym.range.end.character,
   };
 }
 
@@ -381,14 +395,16 @@ export function parseImportsFromText(text: string, lang?: Lang): ParsedImport[] 
   if (syntaxes.has('es')) {
     // import { x, y } from 'module';  import Default from 'module';
     // import * as ns from 'module';    import 'module';  import type { x } from 'module';
-    const importRegex = /\bimport\s+(?:type\s+)?(?:(?:(\w+)(?:\s*,\s*)?)?(?:\{([^}]*)\})?(?:\*\s+as\s+(\w+))?(?:\s+from\s+)?)?['"]([^'"]+)['"]/g;
+    const importRegex = /\bimport\s+(type\s+)?(?:(?:(\w+)(?:\s*,\s*)?)?(?:\{([^}]*)\})?(?:\*\s+as\s+(\w+))?(?:\s+from\s+)?)?['"]([^'"]+)['"]/g;
     while ((match = importRegex.exec(text)) !== null) {
       imports.push({
         kind: 'import',
-        moduleSpecifier: match[4]!,
-        defaultImport: match[1] || undefined,
-        namedImports: splitNamedImports(match[2] || ''),
-        namespaceImport: match[3] || undefined,
+        moduleSpecifier: match[5]!,
+        defaultImport: match[2] || undefined,
+        namedImports: splitNamedImports(match[3] || ''),
+        namespaceImport: match[4] || undefined,
+        // `import type` is erased at compile time: no runtime dependency.
+        ...(match[1] ? { typeOnly: true } : {}),
       });
     }
 
@@ -411,7 +427,7 @@ export function parseImportsFromText(text: string, lang?: Lang): ParsedImport[] 
     while ((match = dynamicImportRegex.exec(text)) !== null) {
       // Destructuring renames with `:` rather than `as`.
       const namedImports = (match[1] || '').split(',').map(s => s.trim().split(/\s*:\s*/)[0]?.trim() || '').filter(Boolean);
-      imports.push({ kind: 'import', moduleSpecifier: match[2]!, namedImports });
+      imports.push({ kind: 'import', moduleSpecifier: match[2]!, namedImports, dynamic: true });
     }
   }
 
@@ -421,6 +437,15 @@ export function parseImportsFromText(text: string, lang?: Lang): ParsedImport[] 
     while ((match = requireRegex.exec(text)) !== null) {
       const namedImports = (match[2] || '').split(',').map(s => s.trim().split(/\s*:\s*/)[0]?.trim() || '').filter(Boolean);
       imports.push({ kind: 'import', moduleSpecifier: match[3]!, defaultImport: match[1] || undefined, namedImports });
+    }
+    // Any other require(): `module.exports = require('./lib')`, `require('./x')(app)`.
+    // Specifiers already captured with their bindings above are skipped.
+    const bound = new Set(imports.filter(i => !i.dynamic && !i.isReExport).map(i => i.moduleSpecifier));
+    const bareRequireRegex = /\brequire\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
+    while ((match = bareRequireRegex.exec(text)) !== null) {
+      if (bound.has(match[1]!)) continue;
+      bound.add(match[1]!);
+      imports.push({ kind: 'import', moduleSpecifier: match[1]!, namedImports: [] });
     }
   }
 

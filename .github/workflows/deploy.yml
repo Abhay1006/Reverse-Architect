@@ -23,18 +23,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Typecheck
-        run: |
-          npm run typecheck -w backend
-          npm run typecheck -w frontend
-
-      - name: Lint
-        run: npm run lint -w frontend
-
-      - name: Test
-        run: |
-          npm test -w backend
-          npm test -w frontend
+      - name: Typecheck, lint, dead code, tests
+        run: npm run check
 
       - name: Build
         run: npm run build

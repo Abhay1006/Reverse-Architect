@@ -122,7 +122,9 @@ export async function handleAIStream(options: StreamOptions, res: Response): Pro
             if (parsed.delta?.type === 'text_delta') {
               return parsed.delta.text;
             }
-          } catch {}
+          } catch {
+            // Not JSON (keep-alive or partial line): skip it.
+          }
         }
         return null;
       });
