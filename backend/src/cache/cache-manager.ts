@@ -6,7 +6,9 @@ import type { AnalysisResponse } from 'shared';
 import { ANALYZER_VERSION } from '../analyzer-version.js';
 
 // Path for the SQLite database
-const DB_PATH = process.env.ATLAS_DB_PATH || path.join(os.homedir(), '.atlas', 'cache.db');
+// A leading `~` is expanded so the value from .env.example works as written.
+const DB_PATH = (process.env.ATLAS_DB_PATH || path.join(os.homedir(), '.atlas', 'cache.db'))
+  .replace(/^~(?=$|[\\/])/, os.homedir());
 
 // Ensure directory exists
 const dbDir = path.dirname(DB_PATH);
@@ -94,6 +96,7 @@ export class CacheManager {
   static saveResult(repoId: string, url: string, commitSha: string, result: AnalysisPayload): void {
     const resultJson = JSON.stringify(result);
     const nodeCount = result.nodes?.length || 0;
+    const fileCount = result.nodes?.filter((n) => n.type === 'file').length || 0;
     const edgeCount = result.edges?.length || 0;
     const repoName = url.replace(/^https?:\/\/(www\.)?github\.com\//, '');
 
@@ -121,7 +124,7 @@ export class CacheManager {
     `);
 
     const transaction = db.transaction(() => {
-      insertRepo.run({ id: repoId, url, commit: commitSha, fileCount: nodeCount });
+      insertRepo.run({ id: repoId, url, commit: commitSha, fileCount });
       insertCache.run({ id: repoId, json: resultJson });
       
       // Cleanup old recent entries for this repo to avoid duplicates
@@ -145,5 +148,10 @@ export class CacheManager {
    */
   static getRecentRepos(limit: number = 5): RecentRepo[] {
     return db.prepare('SELECT * FROM recent_analyses ORDER BY analyzed_at DESC LIMIT ?').all(limit) as RecentRepo[];
+  }
+
+  /** Close the database (graceful shutdown). */
+  static close(): void {
+    if (db.open) db.close();
   }
 }

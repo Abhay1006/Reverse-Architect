@@ -20,8 +20,8 @@ import type {
   WireNode,
 } from 'shared';
 import { analyzeProjectDir } from '../api/analyzer-pipeline.js';
-import { resolveWithinRoot } from '../api/path-safety.js';
-import { cloneRepo, parseGithubUrl } from '../github/clone.js';
+import { parseGithubRepoUrl, resolveWithinRoot } from '../api/path-safety.js';
+import { cloneRepo } from '../github/clone.js';
 
 export const FINDING_KINDS: readonly FindingKind[] = ['cycle', 'hotspot', 'god-object', 'dead-code', 'pattern'];
 export const CONFIDENCE_LEVELS: readonly Confidence[] = ['high', 'medium', 'low'];
@@ -50,7 +50,7 @@ export interface LoadedAnalysis {
  * until `dispose()` so source can still be read afterwards.
  */
 export async function analyzeTarget(target: string): Promise<LoadedAnalysis> {
-  const github = parseGithubUrl(target);
+  const github = parseGithubRepoUrl(target);
   if (github) {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'reverse-architect-'));
     const root = path.join(dir, 'repo');
@@ -61,7 +61,7 @@ export async function analyzeTarget(target: string): Promise<LoadedAnalysis> {
       fs.rmSync(dir, { recursive: true, force: true });
     };
     try {
-      await cloneRepo(github.url, root);
+      await cloneRepo(github.cloneUrl, root);
       return { target, root, result: await analyzeProjectDir(root), dispose };
     } catch (err) {
       dispose();

@@ -1,5 +1,5 @@
 // ============================================================
-//  Atlas-TS — LSP Client
+//  Atlas — LSP Client
 //  High-level API wrapping LspManager. Provides clean methods
 //  for querying document symbols, call hierarchy, references,
 //  hover info, and definitions from the language server.

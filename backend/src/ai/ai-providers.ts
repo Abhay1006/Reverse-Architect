@@ -19,8 +19,8 @@ export interface StreamOptions {
  */
 const MODELS = {
   openai: process.env.ATLAS_OPENAI_MODEL ?? 'gpt-4o',
-  anthropic: process.env.ATLAS_ANTHROPIC_MODEL ?? 'claude-sonnet-5',
-  gemini: process.env.ATLAS_GEMINI_MODEL ?? 'gemini-2.0-flash',
+  anthropic: process.env.ATLAS_ANTHROPIC_MODEL ?? 'claude-sonnet-5-5',
+  gemini: process.env.ATLAS_GEMINI_MODEL ?? 'gemini-3.5-flash',
 } as const;
 
 const MAX_OUTPUT_TOKENS = parseInt(process.env.ATLAS_AI_MAX_TOKENS ?? '8192', 10);

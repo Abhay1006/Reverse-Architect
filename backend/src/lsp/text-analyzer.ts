@@ -8,29 +8,14 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { parseImportsFromText, extractCalledFunctionsFromText } from './lsp-adapter.js';
 import { estimateComplexityFromText } from './lsp-complexity.js';
+import { detectLang, type Lang } from './lang.js';
 import type { ParsedFile, ParsedClass, ParsedInterface, ParsedFunction, ParsedImport } from 'shared';
 
 // ---------------------------------------------------------------------------
 //  Language Detection
 // ---------------------------------------------------------------------------
 
-export type Lang = 'ts' | 'js' | 'py' | 'go' | 'java' | 'rs' | 'c' | 'cs' | 'rb' | 'php' | 'kt' | 'swift' | 'scala' | 'dart' | 'lua' | 'elixir' | 'unknown';
-
-export function detectLang(ext: string): Lang {
-  const map: Record<string, Lang> = {
-    '.ts': 'ts', '.tsx': 'ts', '.js': 'js', '.jsx': 'js', '.mjs': 'js', '.cjs': 'js',
-    '.py': 'py', '.pyw': 'py', '.go': 'go', '.java': 'java', '.rs': 'rs',
-    '.c': 'c', '.h': 'c', '.cpp': 'c', '.hpp': 'c', '.cc': 'c', '.cxx': 'c',
-    '.cs': 'cs', '.rb': 'rb', '.php': 'php', '.kt': 'kt', '.kts': 'kt',
-    '.swift': 'swift', '.scala': 'scala', '.dart': 'dart', '.lua': 'lua',
-    '.ex': 'elixir', '.exs': 'elixir',
-  };
-  return map[ext] || 'unknown';
-}
-
-export function isJsTsLang(lang: Lang): boolean {
-  return lang === 'ts' || lang === 'js';
-}
+export { detectLang, isJsTsLang, type Lang } from './lang.js';
 
 // ---------------------------------------------------------------------------
 //  Detect project primary language
@@ -61,7 +46,7 @@ export function analyzeFileWithText(filePath: string): ParsedFile {
   try { content = fs.readFileSync(filePath, 'utf-8'); } catch { content = ''; }
 
   const lines = content.split('\n');
-  const imports = parseImportsFromText(content);
+  const imports = parseImportsFromText(content, lang);
   if (lang === 'go') imports.push(...parseGoImportBlocks(content));
   const classes = extractClasses(content, lang);
   const interfaces = extractInterfaces(content, lang);

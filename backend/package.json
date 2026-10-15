@@ -50,7 +50,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.1",
-    "adm-zip": "^0.5.17",
+    "adm-zip": "^0.6.1",
     "better-sqlite3": "^12.9.0",
     "cors": "^2.8.6",
     "dagre": "^0.8.5",
@@ -65,16 +65,17 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
-    "@types/adm-zip": "^0.5.8",
     "@types/better-sqlite3": "^7.6.13",
     "@types/cors": "^2.8.19",
     "@types/dagre": "^0.7.54",
     "@types/express": "^5.0.6",
     "@types/multer": "^2.1.0",
     "@types/node": "^25.5.2",
+    "@types/supertest": "^7.2.1",
     "eslint": "^9.39.5",
     "globals": "^17.13.0",
     "shared": "*",
+    "supertest": "^7.3.0",
     "tsx": "^4.21.0",
     "typescript-eslint": "^8.71.2",
     "vitest": "^4.1.9"

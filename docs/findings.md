@@ -67,10 +67,10 @@ Ranks functions and classes by `complexity × (1 + fan-in)` and keeps the top 25
 
 ### `god-object`: highly coupled
 
-Nodes whose total degree (in + out edges) exceeds 4.
+Files and classes whose total degree (in + out edges) is more than two standard deviations above the mean for files and classes in the same codebase, and above 10. The threshold adapts to the codebase, so a small project does not flag every file that imports five others.
 
-- **Medium:** among the 10 most-connected nodes **and** degree > 12.
-- **Low:** everything else.
+- **Medium:** the 10 most-connected of those.
+- **Low:** the rest.
 
 Degree counts dependencies, not responsibilities: a shared types module is legitimately depended on by many files.
 

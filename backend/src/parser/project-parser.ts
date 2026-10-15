@@ -1,5 +1,5 @@
 // ============================================================
-//  Atlas-TS — Database Schema Parser
+//  Atlas — Database Schema Parser
 //  Parses .prisma and .sql files to extract table definitions.
 //  (The old ts-morph parseProject function has been replaced
 //   by the LSP pipeline in backend/src/lsp/)

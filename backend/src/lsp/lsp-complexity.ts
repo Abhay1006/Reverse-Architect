@@ -1,5 +1,5 @@
 // ============================================================
-//  Atlas-TS — LSP Complexity Estimator
+//  Atlas — LSP Complexity Estimator
 //  Estimates cyclomatic complexity from source text within a
 //  given line range, without needing ts-morph AST access.
 //  Uses pattern matching on decision-point keywords.
@@ -12,18 +12,15 @@ import * as fs from 'fs';
  * Each match adds 1 to the complexity score (base = 1).
  */
 const DECISION_PATTERNS: RegExp[] = [
-  /\bif\s*\(/g,
-  /\belse\s+if\s*\(/g,
-  /\bfor\s*\(/g,
-  /\bfor\s*\.\.\./g,        // for...of / for...in
-  /\bwhile\s*\(/g,
-  /\bdo\s*\{/g,
+  /\bif\s*\(/g,                // also covers `else if (` — counting that separately double-counted it
+  /\bfor\s*(?:await\s*)?\(/g,  // for, for...of, for...in, for await
+  /\bwhile\s*\(/g,             // while and do...while
   /\bcase\s+/g,
-  /\bcatch\s*\(/g,
-  /\?\s*[^:?]/g,             // Ternary operator (simple heuristic)
-  /&&/g,                      // Logical AND
-  /\|\|/g,                    // Logical OR
-  /\?\?/g,                    // Nullish coalescing
+  /\bcatch\s*[({]/g,
+  /(?<!\?)\?(?![.?:])/g,        // ternary — but not optional chaining (?.), ?? or optional members (x?: T)
+  /&&/g,                         // Logical AND
+  /\|\|/g,                       // Logical OR
+  /\?\?/g,                       // Nullish coalescing
 ];
 
 /**

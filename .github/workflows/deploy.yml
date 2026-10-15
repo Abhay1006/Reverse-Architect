@@ -32,8 +32,10 @@ jobs:
   deploy:
     needs: verify
     runs-on: ubuntu-latest
-    # Step-level `if:` can't read `secrets`, so expose it as an env var.
     env:
+      # Secrets cannot be referenced in a step-level `if:` — doing so made
+      # GitHub reject this whole workflow file, so no job ever ran. Expose the
+      # value as an env var and test that instead.
       HEALTHCHECK_URL: ${{ secrets.HEALTHCHECK_URL }}
 
     steps:
@@ -54,16 +56,30 @@ jobs:
           GIT_TOKEN: ${{ secrets.DEPLOY_PAT || secrets.GITHUB_TOKEN }}
           APP_DIR: ${{ secrets.APP_DIR || '~/Reverse-Architect' }}
           REPO_URL: ${{ github.server_url }}/${{ github.repository }}.git
+          # The tablet's SSH host key, one known_hosts line for SSH_HOST.
+          # Copy it from a machine that has connected before:
+          #   ssh-keygen -F <SSH_HOST> -f ~/.ssh/known_hosts
+          # Pinning it is what stops anyone between the runner and the tablet
+          # from impersonating it — StrictHostKeyChecking=no accepted any key.
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
         run: |
+          if [ -z "$SSH_KNOWN_HOSTS" ]; then
+            echo "::error::The SSH_KNOWN_HOSTS secret is not set. Add the tablet's host key (see the comment in this step) so the deploy can verify it."
+            exit 1
+          fi
+
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
 
           # The token is passed through the remote shell's environment rather
           # than baked into the script or a remote URL, so it never lands in
           # the tablet's .git/config, reflog, or shell history.
           ssh -i ~/.ssh/id_rsa \
-              -o StrictHostKeyChecking=no \
+              -o StrictHostKeyChecking=yes \
+              -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
               -o ProxyCommand="cloudflared access ssh --hostname %h" \
               -p 22 \
               "${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }}" \
@@ -107,7 +123,7 @@ jobs:
 
       - name: Remove deploy key from runner
         if: always()
-        run: shred -u ~/.ssh/id_rsa || rm -f ~/.ssh/id_rsa
+        run: shred -u ~/.ssh/id_rsa 2>/dev/null || rm -f ~/.ssh/id_rsa
 
       # Runs on the GitHub runner, so it needs a URL reachable from the public
       # internet — set the HEALTHCHECK_URL secret to your tunnel hostname.

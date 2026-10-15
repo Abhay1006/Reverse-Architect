@@ -1,22 +1,8 @@
 import { simpleGit } from 'simple-git';
-import { isValidRepoId } from '../api/path-safety.js';
-
-/** Strict form of a GitHub repository URL; anything else is rejected (SSRF guard). */
-const GITHUB_URL_RE = /^https?:\/\/(www\.)?github\.com\/[\w.-]+\/[\w.-]+\/?$/;
+import { buildChildEnv } from '../child-env.js';
 
 /**
- * Parse a GitHub repository URL into its clone URL and `owner/repo` id.
- * @returns null unless `input` is exactly `https://github.com/owner/repo`.
- */
-export function parseGithubUrl(input: string): { url: string; repoId: string } | null {
-  const url = input.trim();
-  if (!GITHUB_URL_RE.test(url)) return null;
-  const repoId = url.replace(/^https?:\/\/(www\.)?github\.com\//, '').replace(/\/$/, '');
-  return isValidRepoId(repoId) ? { url, repoId } : null;
-}
-
-/**
- * Environment variables passed through to git.
+ * Build the minimal environment git needs, plus our own safety settings.
  *
  * This is an allow-list rather than `{ ...process.env }` for two reasons:
  *
@@ -28,31 +14,11 @@ export function parseGithubUrl(input: string): { url: string; repoId: string } |
  *  2. A server has no business forwarding its whole ambient environment into
  *     a subprocess that checks out untrusted code.
  */
-const GIT_ENV_ALLOWLIST = [
-  'PATH',
-  'HOME',
-  'TMPDIR',
-  'LANG',
-  'LC_ALL',
-  // Windows
-  'SystemRoot',
-  'SYSTEMROOT',
-  'USERPROFILE',
-  // Proxies
-  'HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY',
-  'http_proxy', 'https_proxy', 'no_proxy',
-  // TLS trust stores
-  'GIT_SSL_CAINFO', 'GIT_SSL_CAPATH', 'SSL_CERT_FILE', 'SSL_CERT_DIR',
-] as const;
-
-/** Build the minimal environment git needs, plus our own safety settings. */
 export function buildGitEnv(): Record<string, string> {
-  const env: Record<string, string> = {};
-
-  for (const key of GIT_ENV_ALLOWLIST) {
-    const value = process.env[key];
-    if (value !== undefined) env[key] = value;
-  }
+  const env = buildChildEnv([
+    // TLS trust stores
+    'GIT_SSL_CAINFO', 'GIT_SSL_CAPATH', 'SSL_CERT_FILE', 'SSL_CERT_DIR',
+  ]);
 
   // Never block on an interactive credential prompt — fail the clone instead.
   // This replaces the old GIT_ASKPASS='true', which simple-git rejects.
@@ -62,28 +28,31 @@ export function buildGitEnv(): Record<string, string> {
 }
 
 /**
- * Clones a GitHub repository to a target directory using simple-git.
- * Supports private repositories via an environment variable `GITHUB_TOKEN`.
+ * git `-c` arguments that authenticate against GitHub with GITHUB_TOKEN.
  *
- * The token is passed as an HTTP header rather than embedded in the remote
- * URL. A URL-embedded token is written verbatim into the clone's .git/config
- * and shows up in git's error output, which this server forwards to clients.
+ * The token travels as an HTTP header rather than in the remote URL. A
+ * URL-embedded token is written verbatim into the clone's .git/config and
+ * shows up in git's error output, which this server forwards to clients.
+ * Returns an empty list when no token is configured or the URL is not HTTPS.
+ */
+export function githubAuthConfig(url: string): string[] {
+  const token = process.env.GITHUB_TOKEN;
+  if (!token || !url.startsWith('https://')) return [];
+  // git's http.extraHeader accepts a Basic credential; GitHub treats the
+  // token as the username with an empty password.
+  const basic = Buffer.from(`x-access-token:${token}`).toString('base64');
+  return [`http.extraHeader=Authorization: Basic ${basic}`];
+}
+
+/**
+ * Clones a GitHub repository to a target directory using simple-git.
+ * Supports private repositories via `GITHUB_TOKEN` (see githubAuthConfig).
  *
  * @param url The GitHub repository URL.
  * @param targetDir The absolute path where the repo should be cloned.
  */
 export async function cloneRepo(url: string, targetDir: string): Promise<void> {
-  const token = process.env.GITHUB_TOKEN;
-
-  const configArgs: string[] = [];
-  if (token && url.startsWith('https://')) {
-    // git's http.extraHeader accepts a Basic credential; GitHub treats the
-    // token as the username with an empty password.
-    const basic = Buffer.from(`x-access-token:${token}`).toString('base64');
-    configArgs.push(`http.extraHeader=Authorization: Basic ${basic}`);
-  }
-
-  const git = simpleGit({ config: configArgs }).env(buildGitEnv());
+  const git = simpleGit({ config: githubAuthConfig(url) }).env(buildGitEnv());
 
   // Clone with depth 1 to speed up analysis and reduce disk usage
   await git.clone(url, targetDir, {

@@ -1,6 +1,5 @@
 import { NextResponse, NextRequest } from 'next/server';
-
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:4000';
+import { BACKEND_URL, backendUnreachable, clientHeaders, relayResponse } from '../../lib/backend-proxy';
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -13,23 +12,11 @@ export async function GET(req: NextRequest) {
 
   try {
     const res = await fetch(`${BACKEND_URL}/api/code?repoId=${encodeURIComponent(repoId)}&filePath=${encodeURIComponent(filePath)}`, {
-      cache: 'no-store'
+      cache: 'no-store',
+      headers: clientHeaders(req),
     });
-
-    if (!res.ok) {
-      return NextResponse.json(
-        { error: `Backend returned ${res.status}` },
-        { status: res.status }
-      );
-    }
-
-    const data = await res.json();
-    return NextResponse.json(data);
+    return relayResponse(res.status, await res.text());
   } catch (err) {
-    console.error('Error proxying code peek request:', err);
-    return NextResponse.json(
-      { error: 'Failed to connect to backend' },
-      { status: 500 }
-    );
+    return backendUnreachable('/api/code', err);
   }
 }

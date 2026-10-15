@@ -233,17 +233,6 @@ export function buildGraph(files: ParsedFile[], entryFiles?: string[]): ArchGrap
     importedNamesMap.set(file.filePath, namesMap);
   }
 
-  const importedEntityIds = new Set<string>();
-  for (const namesMap of importedNamesMap.values()) {
-    for (const [name, targetPath] of namesMap) {
-      const target = fileMap.get(targetPath);
-      if (!target) continue;
-      const declares = target.classes.some(c => c.name === name) ||
-                       target.interfaces.some(i => i.name === name) ||
-                       target.functions.some(f => f.name === name);
-      if (declares) importedEntityIds.add(getEntityNodeId(targetPath, name));
-    }
-  }
 
   for (const file of files) {
     if (!reachableFiles.has(file.filePath)) continue;
@@ -548,7 +537,6 @@ export function buildGraph(files: ParsedFile[], entryFiles?: string[]): ArchGrap
   return {
     nodes,
     edges,
-    importedEntityIds: [...importedEntityIds],
     analysis: {
       godObjects: [],
       deadCode: [],
@@ -556,4 +544,65 @@ export function buildGraph(files: ParsedFile[], entryFiles?: string[]): ArchGrap
       patterns: []
     }
   };
+}
+
+/**
+ * Entity node IDs that some file imports by name.
+ *
+ * Call edges only come from code inside functions and methods, so an entity
+ * used at module top level — `root.render(<App />)`, `app.use(router)` — had
+ * no incoming edge and was reported as dead code. An import that names the
+ * entity is evidence it is used.
+ */
+export function findImportedEntityIds(files: ParsedFile[]): Set<string> {
+  const fileMap = new Map<string, ParsedFile>();
+  for (const file of files) fileMap.set(file.filePath, file);
+
+  const entityId = (filePath: string, name: string) => `entity:${filePath}:${name}`;
+  const declares = (file: ParsedFile, name: string) =>
+    file.classes.some((c) => c.name === name) ||
+    file.interfaces.some((i) => i.name === name) ||
+    file.functions.some((f) => f.name === name);
+  const exportedNames = (file: ParsedFile) => [
+    ...file.classes.filter((c) => c.isExported).map((c) => c.name),
+    ...file.interfaces.filter((i) => i.isExported).map((i) => i.name),
+    ...file.functions.filter((f) => f.isExported).map((f) => f.name),
+  ];
+
+  const referenced = new Set<string>();
+
+  for (const file of files) {
+    for (const imp of file.imports) {
+      let target = imp.resolvedPath;
+      if (!target && imp.moduleSpecifier.startsWith('.')) {
+        target = manualResolveImport(file.filePath, imp.moduleSpecifier, fileMap);
+      }
+      const targetFile = target ? fileMap.get(target) : undefined;
+      if (!targetFile) continue;
+
+      for (const name of imp.namedImports) {
+        if (declares(targetFile, name)) referenced.add(entityId(targetFile.filePath, name));
+      }
+
+      if (imp.defaultImport) {
+        if (declares(targetFile, imp.defaultImport)) {
+          referenced.add(entityId(targetFile.filePath, imp.defaultImport));
+        } else {
+          // `export default function Foo` imported as `Bar` — same rule the
+          // edge builder uses: the first exported function, else class.
+          const fallback = targetFile.functions.find((f) => f.isExported)?.name
+            ?? targetFile.classes.find((c) => c.isExported)?.name;
+          if (fallback) referenced.add(entityId(targetFile.filePath, fallback));
+        }
+      }
+
+      // `import * as ns` and `export * from` expose everything the target exports.
+      const wholeModule = Boolean(imp.namespaceImport) || (imp.isReExport && imp.namedImports.length === 0);
+      if (wholeModule) {
+        for (const name of exportedNames(targetFile)) referenced.add(entityId(targetFile.filePath, name));
+      }
+    }
+  }
+
+  return referenced;
 }

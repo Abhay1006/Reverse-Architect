@@ -12,6 +12,9 @@ import {
   resolveWithinRoot,
   isInside,
   isValidRepoId,
+  newUploadId,
+  normalizeRepoId,
+  parseGithubRepoUrl,
 } from '../src/api/path-safety.js';
 
 describe('Security Sanitization', () => {
@@ -75,7 +78,11 @@ describe('Security Sanitization', () => {
     });
 
     it('should accept an upload id', () => {
-      expect(isValidRepoId('upload-1699999999999')).toBe(true);
+      expect(isValidRepoId(newUploadId())).toBe(true);
+    });
+
+    it('should reject the old timestamp upload ids, which could be enumerated', () => {
+      expect(isValidRepoId('upload-1699999999999')).toBe(false);
     });
 
     it('should reject traversal attempts', () => {
@@ -92,6 +99,47 @@ describe('Security Sanitization', () => {
       expect(isValidRepoId('')).toBe(false);
       expect(isValidRepoId(undefined)).toBe(false);
       expect(isValidRepoId(42)).toBe(false);
+    });
+  });
+
+  describe('newUploadId', () => {
+    it('should mint distinct, unguessable ids', () => {
+      const a = newUploadId();
+      const b = newUploadId();
+      expect(a).not.toBe(b);
+      expect(a).toMatch(/^upload-[0-9a-f-]{36}$/);
+    });
+  });
+
+  describe('normalizeRepoId / parseGithubRepoUrl', () => {
+    it('should give every spelling of a repository the same id', () => {
+      const ids = [
+        'https://github.com/Facebook/React',
+        'https://github.com/facebook/react.git',
+        'https://www.github.com/facebook/react/',
+        'http://github.com/FACEBOOK/react.git/',
+      ].map((u) => parseGithubRepoUrl(u)?.repoId);
+      expect(new Set(ids)).toEqual(new Set(['facebook/react']));
+    });
+
+    it('should build the clone URL from the normalized id', () => {
+      expect(parseGithubRepoUrl('https://github.com/User/Repo.git')?.cloneUrl).toBe('https://github.com/user/repo');
+    });
+
+    it('should keep dots that are part of the repo name', () => {
+      expect(parseGithubRepoUrl('https://github.com/user/my.repo')?.repoId).toBe('user/my.repo');
+    });
+
+    it('should reject anything that is not exactly owner/repo on github.com', () => {
+      expect(parseGithubRepoUrl('https://github.com/user')).toBeNull();
+      expect(parseGithubRepoUrl('https://github.com/user/repo/tree/main')).toBeNull();
+      expect(parseGithubRepoUrl('https://evil.com/github.com/user/repo')).toBeNull();
+      expect(parseGithubRepoUrl('https://github.com/../../etc')).toBeNull();
+    });
+
+    it('should leave upload ids untouched', () => {
+      const id = newUploadId();
+      expect(normalizeRepoId(id)).toBe(id);
     });
   });
 

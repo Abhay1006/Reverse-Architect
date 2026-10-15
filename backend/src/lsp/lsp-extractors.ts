@@ -260,77 +260,34 @@ async function enhanceWithCallHierarchy(
   let enhancedCount = 0;
   let skippedCount = 0;
 
+  // The language server already told us where each symbol's name is
+  // (DocumentSymbol.selectionRange). Re-finding it by regex picked up call
+  // sites and same-named functions instead of the declaration.
+  const enhance = async (
+    absolutePath: string,
+    symbol: { namePosition?: { line: number; character: number }; calledFunctions?: string[] },
+  ): Promise<void> => {
+    if (!symbol.namePosition) { skippedCount++; return; }
+    try {
+      const items = await client.prepareCallHierarchy(absolutePath, symbol.namePosition);
+      if (items.length === 0) { skippedCount++; return; }
+      const outgoing = await client.getOutgoingCalls(items[0]!);
+      if (outgoing.length > 0) {
+        symbol.calledFunctions = outgoing.map(call => call.to.name);
+        enhancedCount++;
+      }
+    } catch { skippedCount++; }
+  };
+
   for (const file of parsedFiles) {
     const absolutePath = path.resolve(projectPath, file.filePath);
-    const ext = path.extname(absolutePath);
-    if (!isJsTsLang(detectLang(ext))) continue; // Skip non-JS/TS
+    if (!isJsTsLang(detectLang(path.extname(absolutePath)))) continue; // Skip non-JS/TS
 
-    for (const fn of file.functions) {
-      try {
-        const position = findSymbolPosition(absolutePath, fn.name);
-        if (!position) { skippedCount++; continue; }
-        const items = await client.prepareCallHierarchy(absolutePath, position);
-        if (items.length === 0) { skippedCount++; continue; }
-        const outgoing = await client.getOutgoingCalls(items[0]!);
-        if (outgoing.length > 0) {
-          fn.calledFunctions = outgoing.map(call => call.to.name);
-          enhancedCount++;
-        }
-      } catch { skippedCount++; }
-    }
-
+    for (const fn of file.functions) await enhance(absolutePath, fn);
     for (const cls of file.classes) {
-      for (const method of cls.methods) {
-        try {
-          const position = findSymbolPosition(absolutePath, method.name, cls.name);
-          if (!position) { skippedCount++; continue; }
-          const items = await client.prepareCallHierarchy(absolutePath, position);
-          if (items.length === 0) { skippedCount++; continue; }
-          const outgoing = await client.getOutgoingCalls(items[0]!);
-          if (outgoing.length > 0) {
-            method.calledFunctions = outgoing.map(call => call.to.name);
-            enhancedCount++;
-          }
-        } catch { skippedCount++; }
-      }
+      for (const method of cls.methods) await enhance(absolutePath, method);
     }
   }
 
   console.log(`[LSP] Call hierarchy: enhanced ${enhancedCount}, skipped ${skippedCount}`);
-}
-
-function findSymbolPosition(
-  filePath: string, symbolName: string, parentName?: string,
-): { line: number; character: number } | null {
-  try {
-    const content = fs.readFileSync(filePath, 'utf-8');
-    const lines = content.split('\n');
-    let startLine = 0;
-    if (parentName) {
-      for (let i = 0; i < lines.length; i++) {
-        if (lines[i]!.includes(`class ${parentName}`) || lines[i]!.includes(`interface ${parentName}`)) {
-          startLine = i; break;
-        }
-      }
-    }
-    const patterns = [
-      new RegExp(`\\b(?:async\\s+)?(?:function\\s+)?${escapeRegExp(symbolName)}\\s*[<(]`),
-      new RegExp(`\\b${escapeRegExp(symbolName)}\\s*=\\s*(?:async\\s+)?(?:\\([^)]*\\)|\\w+)\\s*=>`),
-      new RegExp(`\\b${escapeRegExp(symbolName)}\\s*\\(`),
-    ];
-    for (let i = startLine; i < lines.length; i++) {
-      for (const pattern of patterns) {
-        const match = pattern.exec(lines[i]!);
-        if (match) {
-          const charIndex = lines[i]!.indexOf(symbolName, match.index);
-          return { line: i, character: charIndex >= 0 ? charIndex : match.index };
-        }
-      }
-    }
-    return null;
-  } catch { return null; }
-}
-
-function escapeRegExp(str: string): string {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

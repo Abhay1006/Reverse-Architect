@@ -1,22 +1,17 @@
 "use client";
 
-import React, { useMemo, useCallback } from "react";
+import React from "react";
 import {
   Drawer,
   Box,
   Typography,
   IconButton,
   Chip,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
   List,
   ListItemButton,
-  ListItemText,
 } from "@mui/material";
 import {
   Close as CloseIcon,
-  ExpandMore as ExpandMoreIcon,
   InsertDriveFile as FileIcon,
   Class as ClassIcon,
   Extension as InterfaceIcon,
@@ -25,320 +20,36 @@ import {
   VisibilityOff as DeadCodeIcon,
   Autorenew as CycleIcon,
   Layers as PatternsIcon,
-  FilterCenterFocus as FocusIcon,
 } from "@mui/icons-material";
 import { useAtlasStore } from "../store/atlas-store";
+import { StatCard, IssueAccordion, EdgeStat } from "./analysis/SidebarParts";
+import SelectedNodeDetails from "./analysis/SelectedNodeDetails";
+import { useAnalysisSummary } from "./analysis/useAnalysisSummary";
 
 interface AnalysisSidebarProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-/* ── Stat Card ─────────────────────────────────────────────────────────── */
-
-function StatCard({
-  icon,
-  label,
-  value,
-  color,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: number;
-  color: string;
-}) {
-  return (
-    <Box
-      sx={{
-        display: "flex",
-        alignItems: "center",
-        gap: 1.25,
-        p: "10px 12px",
-        background: "rgba(255,255,255,0.03)",
-        border: "1px solid rgba(255,255,255,0.05)",
-        borderRadius: 2.5,
-        transition: "all 0.2s",
-        "&:hover": {
-          background: "rgba(255,255,255,0.05)",
-          borderColor: "rgba(255,255,255,0.08)",
-        },
-      }}
-    >
-      <Box
-        sx={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          width: 32,
-          height: 32,
-          borderRadius: 2,
-          background: `color-mix(in srgb, ${color} 12%, transparent)`,
-          color: color,
-          flexShrink: 0,
-        }}
-      >
-        {icon}
-      </Box>
-      <Box sx={{ display: "flex", flexDirection: "column" }}>
-        <Typography
-          sx={{
-            fontSize: 18,
-            fontWeight: 700,
-            color: "rgba(255,255,255,0.9)",
-            lineHeight: 1,
-            letterSpacing: "-0.02em",
-          }}
-        >
-          {value}
-        </Typography>
-        <Typography
-          sx={{
-            fontSize: "0.625rem",
-            fontWeight: 500,
-            color: "rgba(255,255,255,0.35)",
-            mt: 0.25,
-          }}
-        >
-          {label}
-        </Typography>
-      </Box>
-    </Box>
-  );
-}
-
-/* ── Issue Accordion ──────────────────────────────────────────────────── */
-
-function IssueAccordion({
-  icon,
-  label,
-  count,
-  color,
-  items,
-  onItemClick,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  count: number;
-  color: string;
-  items: { id: string; label: string; sublabel?: string }[];
-  onItemClick?: (id: string) => void;
-}) {
-  return (
-    <Accordion disabled={count === 0} disableGutters>
-      <AccordionSummary expandIcon={count > 0 ? <ExpandMoreIcon sx={{ fontSize: 18, color: "text.secondary" }} /> : undefined}>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1, flex: 1 }}>
-          <Box sx={{ color, display: "flex", alignItems: "center" }}>{icon}</Box>
-          <Typography sx={{ fontSize: "0.75rem", fontWeight: 500, color: "rgba(255,255,255,0.7)" }}>
-            {label}
-          </Typography>
-          <Box sx={{ ml: "auto", mr: 1 }}>
-            <Chip
-              label={count}
-              size="small"
-              sx={{
-                height: 20,
-                fontSize: "0.625rem",
-                fontWeight: 700,
-                bgcolor: count > 0 ? color : "rgba(255,255,255,0.05)",
-                color: count > 0 ? "#fff" : "rgba(255,255,255,0.3)",
-                minWidth: 28,
-              }}
-            />
-          </Box>
-        </Box>
-      </AccordionSummary>
-      {items.length > 0 && (
-        <AccordionDetails sx={{ pt: 0, px: 1, pb: 1 }}>
-          <List dense disablePadding>
-            {items.map((item, idx) => (
-              <ListItemButton
-                key={`${item.id}-${idx}`}
-                onClick={() => onItemClick?.(item.id)}
-                sx={{
-                  borderRadius: 1.5,
-                  py: 0.75,
-                  px: 1.5,
-                  "&:hover": { background: "rgba(255,255,255,0.05)" },
-                }}
-              >
-                <ListItemText
-                  primary={
-                    <Typography sx={{ fontSize: "0.8125rem", color: "rgba(255,255,255,0.8)" }}>
-                      {item.label}
-                    </Typography>
-                  }
-                  secondary={
-                    item.sublabel ? (
-                      <Typography sx={{ fontSize: "0.625rem", color: "rgba(255,255,255,0.3)" }}>
-                        {item.sublabel}
-                      </Typography>
-                    ) : undefined
-                  }
-                />
-                <Typography
-                  sx={{
-                    fontSize: "0.625rem",
-                    fontWeight: 700,
-                    color: "rgba(255,255,255,0.4)",
-                    textTransform: "uppercase",
-                    opacity: 0,
-                    transition: "opacity 0.15s",
-                    ".MuiListItemButton-root:hover &": { opacity: 1 },
-                  }}
-                >
-                  View
-                </Typography>
-              </ListItemButton>
-            ))}
-          </List>
-        </AccordionDetails>
-      )}
-    </Accordion>
-  );
-}
-
-/* ── Edge Stat ────────────────────────────────────────────────────────── */
-
-function EdgeStat({
-  label,
-  count,
-  color,
-}: {
-  label: string;
-  count: number;
-  color: string;
-}) {
-  return (
-    <Box
-      sx={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        p: "6px 10px",
-        background: "rgba(255,255,255,0.02)",
-        borderRadius: 2,
-      }}
-    >
-      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-        <Box
-          sx={{
-            width: 8,
-            height: 8,
-            borderRadius: "50%",
-            background: color,
-          }}
-        />
-        <Typography sx={{ fontSize: "0.75rem", fontWeight: 500, color: "rgba(255,255,255,0.6)" }}>
-          {label}
-        </Typography>
-      </Box>
-      <Typography sx={{ fontSize: "0.75rem", fontWeight: 700, color: "rgba(255,255,255,0.7)" }}>
-        {count}
-      </Typography>
-    </Box>
-  );
-}
-
-/* ── Main Sidebar ─────────────────────────────────────────────────────── */
-
 export default function AnalysisSidebar({
   isOpen,
   onClose,
 }: AnalysisSidebarProps) {
-  const nodes = useAtlasStore((s) => s.nodes);
-  const edges = useAtlasStore((s) => s.edges);
-  const analysis = useAtlasStore((s) => s.analysisResults);
-  const godObjectDetails = useAtlasStore((s) => s.godObjectDetails);
-  const deadCodeDetails = useAtlasStore((s) => s.deadCodeDetails);
   const panToNode = useAtlasStore((s) => s.panToNode);
-  const selectedNodeId = useAtlasStore((s) => s.selectedNodeId);
-  const setFocusedNode = useAtlasStore((s) => s.setFocusedNode);
-
-  const selectedNode = useMemo(() => 
-    nodes.find(n => n.id === selectedNodeId), 
-  [nodes, selectedNodeId]);
-
-  // Neighbor counts for selected node
-  const neighborCounts = useMemo(() => {
-    if (!selectedNodeId) return { in: 0, out: 0 };
-    let incoming = 0;
-    let outgoing = 0;
-    edges.forEach(e => {
-      if (e.source === selectedNodeId) outgoing++;
-      if (e.target === selectedNodeId) incoming++;
-    });
-    return { in: incoming, out: outgoing };
-  }, [edges, selectedNodeId]);
-
-  const stats = useMemo(() => {
-    const files = nodes.filter((n) => n.type === "file").length;
-    const classes = nodes.filter((n) => n.type === "class").length;
-    const interfaces = nodes.filter((n) => n.type === "interface").length;
-    const functions = nodes.filter((n) => n.type === "function").length;
-    return {
-      files,
-      classes,
-      interfaces,
-      functions,
-      total: nodes.length,
-      edges: edges.length,
-    };
-  }, [nodes, edges]);
-
-  const topFiles = useMemo(() => {
-    return nodes
-      .filter((n) => n.type === "file")
-      .map((n) => ({
-        id: n.id,
-        label: n.data.label,
-        score: n.data.metadata?.importanceScore ?? 0,
-        path: n.data.filePath,
-      }))
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 5);
-  }, [nodes]);
-
-  // Resolve node IDs to labels for display
-  const nodeLabel = useCallback(
-    (id: string) => nodes.find((node) => node.id === id)?.data?.label ?? id,
-    [nodes],
-  );
-
-  // Build god object display items with connection counts
-  const godObjectItems = useMemo(() => {
-    if (godObjectDetails && godObjectDetails.length > 0) {
-      return godObjectDetails.map((d) => ({
-        id: d.nodeId,
-        label: d.label,
-        sublabel: `${d.totalDegree} connections (${d.inDegree} in, ${d.outDegree} out)`,
-      }));
-    }
-    return (analysis?.godObjects ?? []).map((id) => ({
-      id,
-      label: nodeLabel(id),
-    }));
-  }, [godObjectDetails, analysis, nodeLabel]);
-
-  const deadCodeItems = useMemo(() => {
-    if (deadCodeDetails && deadCodeDetails.length > 0) {
-      return deadCodeDetails.map((d) => ({
-        id: d.nodeId,
-        label: d.label,
-        sublabel: `[${d.nodeType}] ${d.filePath}`,
-      }));
-    }
-    return (analysis?.deadCode ?? []).map((id) => ({
-      id,
-      label: nodeLabel(id),
-    }));
-  }, [deadCodeDetails, analysis, nodeLabel]);
-
-  const godObjectCount = godObjectItems.length;
-  const deadCodeCount = deadCodeItems.length;
-  const cycleCount = analysis?.cycles?.length ?? 0;
-  const patternCount = analysis?.patterns?.length ?? 0;
-  const totalIssues =
-    godObjectCount + deadCodeCount + cycleCount + patternCount;
+  const {
+    analysis,
+    stats,
+    topFiles,
+    nodeLabel,
+    godObjectItems,
+    deadCodeItems,
+    edgeCounts,
+    godObjectCount,
+    deadCodeCount,
+    cycleCount,
+    patternCount,
+    totalIssues,
+  } = useAnalysisSummary();
 
   return (
     <Drawer
@@ -401,106 +112,7 @@ export default function AnalysisSidebar({
       </Box>
 
       {/* ── Selected Node Details ───────────────────────── */}
-      {selectedNode && (
-        <Box sx={{ px: 2.5, py: 2.5, bgcolor: "rgba(99, 102, 241, 0.08)", borderBottom: "1px solid rgba(99, 102, 241, 0.2)" }}>
-          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", mb: 2 }}>
-            <Box>
-              <Typography variant="caption" sx={{ color: "var(--primary)", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.1em" }}>
-                {selectedNode.type} Details
-              </Typography>
-              <Typography sx={{ fontSize: "1.125rem", color: "white", fontWeight: 800, lineHeight: 1.2 }}>
-                {selectedNode.data?.label}
-              </Typography>
-            </Box>
-            <IconButton 
-              size="small" 
-              onClick={() => setFocusedNode(selectedNode.id)}
-              sx={{ 
-                bgcolor: "var(--primary)", 
-                color: "white", 
-                "&:hover": { bgcolor: "var(--secondary)", transform: "scale(1.1)" },
-                transition: "all 0.2s"
-              }}
-              title="Enter Focus Mode"
-            >
-              <FocusIcon fontSize="small" />
-            </IconButton>
-          </Box>
-          
-          <Box sx={{ display: "flex", gap: 2, mb: 3 }}>
-            <Box>
-              <Typography variant="caption" sx={{ color: "rgba(255,255,255,0.4)", display: "block" }}>Incoming</Typography>
-              <Typography sx={{ fontWeight: 700, color: "var(--accent)" }}>{neighborCounts.in}</Typography>
-            </Box>
-            <Box>
-              <Typography variant="caption" sx={{ color: "rgba(255,255,255,0.4)", display: "block" }}>Outgoing</Typography>
-              <Typography sx={{ fontWeight: 700, color: "var(--primary)" }}>{neighborCounts.out}</Typography>
-            </Box>
-            {selectedNode.data?.metadata?.lineCount ? (
-              <Box>
-                <Typography variant="caption" sx={{ color: "rgba(255,255,255,0.4)", display: "block" }}>Lines</Typography>
-                <Typography sx={{ fontWeight: 700 }}>{selectedNode.data.metadata.lineCount}</Typography>
-              </Box>
-            ) : null}
-          </Box>
-
-          {/* Find All References (Incoming Edges) */}
-          <Box>
-            <Typography 
-              variant="caption" 
-              sx={{ 
-                color: "rgba(255,255,255,0.4)", 
-                fontWeight: 700, 
-                textTransform: "uppercase", 
-                letterSpacing: "0.05em",
-                display: "block",
-                mb: 1
-              }}
-            >
-              References ({neighborCounts.in})
-            </Typography>
-            {neighborCounts.in === 0 ? (
-              <Typography sx={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.2)", fontStyle: "italic" }}>
-                No incoming references found
-              </Typography>
-            ) : (
-              <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
-                {edges
-                  .filter(e => e.target === selectedNodeId)
-                  .map((e, idx) => {
-                    const sourceNode = nodes.find(n => n.id === e.source);
-                    if (!sourceNode) return null;
-                    return (
-                      <ListItemButton
-                        key={`${e.id}-${idx}`}
-                        onClick={() => panToNode(sourceNode.id)}
-                        sx={{
-                          py: 0.5,
-                          px: 1,
-                          borderRadius: 1,
-                          bgcolor: "rgba(255,255,255,0.03)",
-                          "&:hover": { bgcolor: "rgba(255,255,255,0.08)" }
-                        }}
-                      >
-                        <Box sx={{ display: "flex", alignItems: "center", gap: 1, width: "100%" }}>
-                          <Typography sx={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.8)", flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                            {sourceNode.data?.label}
-                          </Typography>
-                          <Chip 
-                            label={e.type || e.label || "ref"} 
-                            size="small" 
-                            sx={{ height: 16, fontSize: "0.5625rem", bgcolor: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.4)" }} 
-                          />
-                        </Box>
-                      </ListItemButton>
-                    );
-                  })
-                }
-              </Box>
-            )}
-          </Box>
-        </Box>
-      )}
+      <SelectedNodeDetails />
 
       {/* ── Project Summary ────────────────────────────── */}
       <Box sx={{ px: 2.5, py: 2, borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
@@ -743,45 +355,10 @@ export default function AnalysisSidebar({
           Connections
         </Typography>
         <Box sx={{ display: "flex", flexDirection: "column", gap: 0.75 }}>
-          <EdgeStat
-            label="Imports"
-            count={
-              edges.filter(
-                (e) =>
-                  e.label === "imports" ||
-                  e.type === "import" ||
-                  (!e.label && !e.type)
-              ).length
-            }
-            color="var(--primary)"
-          />
-          <EdgeStat
-            label="Calls"
-            count={
-              edges.filter(
-                (e) => e.label === "calls" || e.type === "calls"
-              ).length
-            }
-            color="#f59e0b"
-          />
-          <EdgeStat
-            label="Extends"
-            count={
-              edges.filter(
-                (e) => e.label === "extends" || e.type === "extends"
-              ).length
-            }
-            color="var(--secondary)"
-          />
-          <EdgeStat
-            label="Implements"
-            count={
-              edges.filter(
-                (e) => e.label === "implements" || e.type === "implements"
-              ).length
-            }
-            color="var(--accent)"
-          />
+          <EdgeStat label="Imports" count={edgeCounts.import} color="var(--primary)" />
+          <EdgeStat label="Calls" count={edgeCounts.calls} color="#f59e0b" />
+          <EdgeStat label="Extends" count={edgeCounts.extends} color="var(--secondary)" />
+          <EdgeStat label="Implements" count={edgeCounts.implements} color="var(--accent)" />
         </Box>
       </Box>
     </Drawer>

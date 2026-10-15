@@ -21,7 +21,8 @@ Usage:
   reverse-architect cycles | hotspots | god-objects | dead-code | patterns <target>
   reverse-architect search   <target> <query>    Find files and symbols by name
   reverse-architect deps     <target> <node>     What <node> depends on (--dependents: what depends on it)
-  reverse-architect export   <target>            Mermaid diagram (or --format json for the full graph)
+  reverse-architect export   <target>            Mermaid diagram (or --format json for the full graph;
+                                                 \`parse <target>\` is the same as \`export --format json\`)
   reverse-architect mcp                          Run as an MCP server over stdio
 
 <target> is a directory or a https://github.com/<owner>/<repo> URL.
@@ -106,7 +107,10 @@ async function main(argv: string[]): Promise<number> {
     out(PACKAGE_VERSION);
     return 0;
   }
-  const [command, target, extra] = positionals;
+  const [rawCommand, target, extra] = positionals;
+  // `parse <dir>` predates the subcommands: the full analysis as JSON.
+  const command = rawCommand === 'parse' ? 'export' : rawCommand;
+  const format = rawCommand === 'parse' ? 'json' : (oneOf(values.format, ['mermaid', 'json'] as const, 'format') ?? 'mermaid');
   if (values.help || !command) {
     out(HELP);
     return values.help ? 0 : 2;
@@ -131,7 +135,6 @@ async function main(argv: string[]): Promise<number> {
   const offset = int(values.offset, 'offset');
   const minConfidence = oneOf<Confidence>(values['min-confidence'], q.CONFIDENCE_LEVELS, 'min-confidence') ?? 'medium';
   const kind = KIND_COMMANDS[command] ?? oneOf<FindingKind>(values.kind, q.FINDING_KINDS, 'kind');
-  const format = oneOf(values.format, ['mermaid', 'json'] as const, 'format') ?? 'mermaid';
   const depth = int(values.depth, 'depth');
   const maxNodes = int(values['max-nodes'], 'max-nodes');
 

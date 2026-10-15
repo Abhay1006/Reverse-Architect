@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { detectGodObjects } from '../src/analyzers/god-object.js';
+import { detectGodObjects, adaptiveGodObjectThreshold, MIN_GOD_OBJECT_DEGREE } from '../src/analyzers/god-object.js';
 import { detectDeadCode } from '../src/analyzers/dead-code.js';
 import type { ArchGraph } from '../../shared/types.js';
 
@@ -22,6 +22,27 @@ const mockGraph: ArchGraph = {
 };
 
 describe('God Object Analyzer', () => {
+  it('should use an adaptive threshold with a floor by default', () => {
+    // The mock graph's busiest node has degree 4 — below the floor, so nothing is flagged.
+    expect(detectGodObjects(mockGraph)).toHaveLength(0);
+    expect(adaptiveGodObjectThreshold([])).toBe(MIN_GOD_OBJECT_DEGREE);
+    // One hub among many small nodes stands out; the small ones do not.
+    const degrees = [...Array(40).fill(2), 60];
+    const threshold = adaptiveGodObjectThreshold(degrees);
+    expect(threshold).toBeGreaterThanOrEqual(MIN_GOD_OBJECT_DEGREE);
+    expect(threshold).toBeLessThan(60);
+  });
+
+  it('should only flag files and classes', () => {
+    const fn = { id: 'f', label: 'helper', type: 'function' as const, filePath: 'src/h.ts', metadata: { lineCount: 1, exportCount: 0, maxComplexity: 1 }, position: { x: 0, y: 0 } };
+    const graph: ArchGraph = {
+      nodes: [fn],
+      edges: Array.from({ length: 20 }, (_, i) => ({ id: `e${i}`, source: 'f', target: `x${i}`, type: 'calls' as const })),
+      analysis: { godObjects: [], deadCode: [], cycles: [], patterns: [] },
+    };
+    expect(detectGodObjects(graph, 1)).toHaveLength(0);
+  });
+
   it('should flag node as god object if degree exceeds threshold', () => {
     // With threshold = 3, GodClass (degree 4) should be flagged
     const hits = detectGodObjects(mockGraph, 3);
@@ -47,12 +68,48 @@ describe('Dead Code Analyzer', () => {
     expect(hitIds).not.toContain('6'); // EntryFile (excluded by heuristic)
   });
 
-  it('excludes explicit entry points in addition to the naming heuristic', () => {
+  it('should respect explicit entry points in addition to the naming heuristics', () => {
+    // '2' (UnusedClass) is passed explicitly; '6' (src/main.ts) still matches the heuristic.
     const hits = detectDeadCode(mockGraph, ['2']);
     const hitIds = hits.map(h => h.nodeId);
 
-    expect(hitIds).not.toContain('2'); // Explicit entry point
-    expect(hitIds).not.toContain('6'); // Still recognised by name (main.ts)
+    expect(hitIds).not.toContain('2'); // Explicitly excluded
+    expect(hitIds).not.toContain('6'); // Heuristic entry point
     expect(hitIds).toContain('3');
+  });
+
+  it('should not flag entities referenced without an edge', () => {
+    const hits = detectDeadCode(mockGraph, [], new Set(['3']));
+    expect(hits.map(h => h.nodeId)).not.toContain('3');
+  });
+
+  it('should treat root-level entry files, tests and configs as entry points', () => {
+    const file = (id: string, filePath: string) => ({
+      id, label: filePath, type: 'file' as const, filePath,
+      metadata: { lineCount: 1, exportCount: 0, maxComplexity: 1 }, position: { x: 0, y: 0 },
+    });
+    const graph: ArchGraph = {
+      nodes: [
+        file('root-index', 'index.ts'),
+        file('test', 'src/foo.test.ts'),
+        file('tests-dir', 'tests/helpers.ts'),
+        file('config', 'vite.config.ts'),
+        file('orphan', 'src/orphan.ts'),
+      ],
+      edges: [],
+      analysis: { godObjects: [], deadCode: [], cycles: [], patterns: [] },
+    };
+    expect(detectDeadCode(graph).map(h => h.nodeId)).toEqual(['orphan']);
+  });
+
+  it('should skip anonymous symbols such as route callbacks', () => {
+    const graph: ArchGraph = {
+      nodes: [
+        { id: 'cb', label: "router.get('/x') callback", type: 'function', filePath: 'src/r.ts', metadata: { lineCount: 1, exportCount: 0, maxComplexity: 1 }, position: { x: 0, y: 0 } },
+      ],
+      edges: [],
+      analysis: { godObjects: [], deadCode: [], cycles: [], patterns: [] },
+    };
+    expect(detectDeadCode(graph)).toHaveLength(0);
   });
 });

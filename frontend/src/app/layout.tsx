@@ -14,9 +14,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Atlas.TS — Architecture Visualizer",
+  title: "Atlas — Architecture Visualizer",
   description:
-    "Reverse-engineer and visualize your TypeScript & JavaScript project architecture. Detect god objects, dead code, circular dependencies, and design patterns.",
+    "Reverse-engineer and visualize the architecture of TypeScript, JavaScript, Python, Go, Java and other codebases. Detect god objects, dead code, circular dependencies, and design patterns.",
 };
 
 export default function RootLayout({

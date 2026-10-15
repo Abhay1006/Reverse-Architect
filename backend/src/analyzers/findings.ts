@@ -21,7 +21,7 @@ import type {
   PatternMatch,
 } from 'shared';
 import type { HotspotHit } from './hotspots.js';
-import { DEFAULT_GOD_OBJECT_THRESHOLD } from './god-object.js';
+import { MIN_GOD_OBJECT_DEGREE } from './god-object.js';
 
 /** Tests, tooling, docs and examples: never reachable from the app's entry points, by design. */
 const NON_RUNTIME_FILE = new RegExp([
@@ -235,10 +235,17 @@ function godObjectFindings(hits: GodObjectHit[], nodes: Map<string, ArchNode>): 
     kind: 'god-object',
     title: `Highly coupled: ${h.label} (${h.totalDegree} connections)`,
     nodeIds: [h.nodeId],
-    confidence: rank < GOD_OBJECT_TOP_N && h.totalDegree > 3 * DEFAULT_GOD_OBJECT_THRESHOLD ? 'medium' : 'low',
+    // Every hit is already an outlier (see detectGodObjects); only the most
+    // connected are surfaced by default.
+    confidence: rank < GOD_OBJECT_TOP_N ? 'medium' : 'low',
     evidence: [
       withLocation({ basis: 'observed', rule: 'god-object/degree', detail: `${h.inDegree} incoming and ${h.outDegree} outgoing edge(s)` }, nodes.get(h.nodeId)),
-      { basis: 'inferred', rule: 'god-object/rank', detail: `#${rank + 1} most connected node; total degree ${h.totalDegree} exceeds the threshold of ${DEFAULT_GOD_OBJECT_THRESHOLD}` },
+      {
+        basis: 'inferred',
+        rule: 'god-object/outlier',
+        detail: `#${rank + 1} most connected; total degree ${h.totalDegree} is more than two standard deviations above ` +
+          `the mean for files and classes in this codebase (and above ${MIN_GOD_OBJECT_DEGREE})`,
+      },
     ],
     limitations: ['Degree counts dependencies, not responsibilities; shared utilities and type modules are legitimately depended on by many files.'],
   }));

@@ -38,7 +38,7 @@ If the change alters the analysis output, bump `ANALYZER_VERSION` in `backend/sr
 - **Edge `type` is the React Flow renderer; `relation` is the architectural meaning** (`import` / `extends` / `implements` / `calls`). Filter on `relation`.
 - **The CLI and MCP server are thin adapters** over `backend/src/query/`. Add a question there once, then expose it in both.
 - **Anything that writes JSON to stdout imports `stdio-guard.js` first**, so progress logging can't corrupt it.
-- UI styling follows the existing tokens in `globals.css`.
+- UI styling uses MUI with the existing tokens in `globals.css`; server data goes through React Query. See [`frontend/README.md`](frontend/README.md).
 
 ## Keeping your fork up to date
 

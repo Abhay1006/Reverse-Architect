@@ -1,5 +1,5 @@
 // ============================================================
-//  Atlas-TS — JSON-RPC Message Framing for LSP Communication
+//  Atlas — JSON-RPC Message Framing for LSP Communication
 //  Handles the Content-Length based protocol used by LSP servers.
 // ============================================================
 

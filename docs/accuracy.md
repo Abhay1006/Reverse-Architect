@@ -51,9 +51,9 @@ Analyzed at the commits shown. Counts are findings at medium confidence or above
 
 | Repository | Files parsed | Graph scope | Cycles | Hotspots | Highly coupled | Possibly unused |
 |---|---|---|---|---|---|---|
-| [expressjs/express](https://github.com/expressjs/express) @ `a419aa7` | 141 | entry points (7 library files) | 0 | 5 | 1 | 0 |
-| [axios/axios](https://github.com/axios/axios) @ `790b2ca` | 273 | all files ¹ | 0 | 25 | 10 | 1 |
-| [sindresorhus/ky](https://github.com/sindresorhus/ky) @ `3541888` | 98 | all files ² | 0 | 4 | 10 | 0 |
+| [expressjs/express](https://github.com/expressjs/express) @ `a419aa7` | 141 | entry points (7 library files) | 0 | 5 | 0 | 0 |
+| [axios/axios](https://github.com/axios/axios) @ `790b2ca` | 273 | all files ¹ | 0 | 25 | 8 | 1 |
+| [sindresorhus/ky](https://github.com/sindresorhus/ky) @ `3541888` | 98 | all files ² | 0 | 4 | 3 | 0 |
 
 ¹ axios's `package.json` start script runs `sandbox/server.js`, which reaches 1 of 83 source files, so Atlas analyses every file and says why in `coverage.limitations`.
 ² ky's `exports` point at build output that isn't in the repository, so no entry point is detected.
@@ -61,8 +61,8 @@ Analyzed at the commits shown. Counts are findings at medium confidence or above
 What was checked by hand:
 
 - **axios, unused file:** `lib/helpers/deprecatedMethod.js` is reported as possibly unused. Nothing in the repository references it: a true positive. An earlier version also flagged `lib/helpers/null.js`, which `package.json` swaps in through its `browser` field. Files named by `package.json` are now never reported.
-- **ky, cycles:** 8 cycles exist only through `import type` links and are reported at low confidence as type-level cycles. Before that rule, 4 of them were reported as high-confidence circular dependencies.
-- **Express, cycles:** 5 candidate cycles are all low confidence: call edges between files that never import each other (`res.render` matched to `app.render`), and `render ↔ tryRender` recursion inside one file.
+- **ky, cycles:** 11 cycles exist only through `import type` links (re-exports included) and are reported at low confidence as type-level cycles. Before that rule, 4 of them were reported as high-confidence circular dependencies.
+- **Express, cycles:** the one candidate is `render ↔ tryRender`, recursion inside one file, reported at low confidence. Before call edges were resolved from the language server's symbol positions, name collisions such as `res.render` matched to `app.render` produced 4 more candidates. Those are now also caught by the rule that a JS/TS call into a file the caller never imports is low confidence.
 
 Not checked: the absence of runtime cycles in these repositories was not verified independently, and the hotspot and coupling rankings are rankings, not defects.
 

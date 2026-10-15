@@ -1,5 +1,5 @@
 // ============================================================
-//  Atlas-TS — LSP Server Manager
+//  Atlas — LSP Server Manager
 //  Spawns and manages the lifecycle of a Language Server process.
 //  Communicates over stdio using JSON-RPC with Content-Length
 //  framing. Handles initialize/shutdown handshake.
@@ -10,6 +10,7 @@ import path from 'path';
 import { createRequire } from 'module';
 import { encodeMessage, MessageReader } from './jsonrpc.js';
 import { pathToUri } from './lsp-types.js';
+import { buildChildEnv } from '../child-env.js';
 
 // ---------------------------------------------------------------------------
 //  Types
@@ -34,6 +35,17 @@ export interface LspManagerOptions {
 // ---------------------------------------------------------------------------
 //  Manager
 // ---------------------------------------------------------------------------
+
+/** Every manager with a running server process, for graceful shutdown. */
+const liveManagers = new Set<LspManager>();
+
+/**
+ * Shut down every running language server. Called on SIGTERM/SIGINT so a
+ * restart does not leave orphaned typescript-language-server processes.
+ */
+export async function shutdownAllLspServers(): Promise<void> {
+  await Promise.allSettled([...liveManagers].map((m) => m.shutdown()));
+}
 
 export class LspManager {
   private process: ChildProcess | null = null;
@@ -74,9 +86,12 @@ export class LspManager {
     const spawnCmd = isJs ? process.execPath : serverBin;
     const spawnArgs = isJs ? [serverBin, '--stdio'] : ['--stdio'];
 
+    liveManagers.add(this);
     this.process = spawn(spawnCmd, spawnArgs, {
       stdio: ['pipe', 'pipe', 'pipe'],
-      env: { ...process.env },
+      // The server loads untrusted project files — don't hand it GITHUB_TOKEN
+      // or anything else secret from our environment.
+      env: buildChildEnv(['NODE_OPTIONS', 'NODE_EXTRA_CA_CERTS']),
     });
 
     // Set up message reader on stdout
@@ -97,11 +112,13 @@ export class LspManager {
       this.rejectAllPending(new Error(`LSP server exited unexpectedly (code=${code})`));
       this.process = null;
       this.initialized = false;
+      liveManagers.delete(this);
     });
 
     this.process.on('error', (err) => {
       console.error('[LSP] Process error:', err.message);
       this.rejectAllPending(err);
+      liveManagers.delete(this);
     });
 
     // Send initialize request
@@ -165,7 +182,10 @@ export class LspManager {
    * Gracefully shut down the LSP server.
    */
   async shutdown(): Promise<void> {
-    if (!this.process) return;
+    if (!this.process) {
+      liveManagers.delete(this);
+      return;
+    }
 
     try {
       // Send shutdown request
@@ -200,6 +220,7 @@ export class LspManager {
     this.process = null;
     this.initialized = false;
     this.pendingRequests.clear();
+    liveManagers.delete(this);
   }
 
   /** Check if the server is running and initialized. */
@@ -289,16 +310,19 @@ export class LspManager {
       return;
     }
 
-    // Server-initiated notification (diagnostics, log messages, etc.)
-    if (msg.method) {
-      this.handleServerNotification(msg.method, msg.params);
-      return;
-    }
-
-    // Server-initiated request (window/workDoneProgress/create, etc.)
+    // Server-initiated request (window/workDoneProgress/create,
+    // workspace/configuration, ...). This must be checked before the
+    // notification case: both carry `method`, only a request carries `id`,
+    // and an unanswered request leaves the server waiting forever.
     if ('id' in msg && msg.method) {
       // Respond with null to acknowledge
       this.respondToServerRequest(msg.id, null);
+      return;
+    }
+
+    // Server-initiated notification (diagnostics, log messages, etc.)
+    if (msg.method) {
+      this.handleServerNotification(msg.method, msg.params);
       return;
     }
   }
