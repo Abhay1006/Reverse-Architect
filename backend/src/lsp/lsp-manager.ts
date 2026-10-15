@@ -71,7 +71,7 @@ export class LspManager {
     this.log(`Project root: ${rootPath}`);
 
     const isJs = serverBin.endsWith('.js') || serverBin.endsWith('.mjs');
-    const spawnCmd = isJs ? 'node' : serverBin;
+    const spawnCmd = isJs ? process.execPath : serverBin;
     const spawnArgs = isJs ? [serverBin, '--stdio'] : ['--stdio'];
 
     this.process = spawn(spawnCmd, spawnArgs, {
@@ -110,6 +110,11 @@ export class LspManager {
       processId: process.pid,
       rootUri,
       rootPath,
+      // Pin tsserver to our own TypeScript. Left unset, the language server
+      // prefers a `node_modules/typescript` found in (or above) the analysed
+      // workspace — so a repository that commits a crafted tsserver.js would
+      // get it executed. A valid explicit path takes precedence over that.
+      initializationOptions: { tsserver: { path: bundledTsserverPath() } },
       capabilities: {
         textDocument: {
           documentSymbol: {
@@ -323,7 +328,7 @@ export class LspManager {
   }
 
   private rejectAllPending(error: Error): void {
-    for (const [id, pending] of this.pendingRequests) {
+    for (const pending of this.pendingRequests.values()) {
       clearTimeout(pending.timer);
       pending.reject(error);
     }
@@ -352,5 +357,18 @@ export class LspManager {
     if (this.options.verbose) {
       console.log(`[LspManager] ${msg}`);
     }
+  }
+}
+
+/**
+ * Absolute path to the tsserver shipped with Atlas's own `typescript`
+ * dependency. Throws rather than letting the language server fall back to
+ * a TypeScript inside the (untrusted) analysed project.
+ */
+export function bundledTsserverPath(): string {
+  try {
+    return createRequire(import.meta.url).resolve('typescript/lib/tsserver.js');
+  } catch {
+    throw new Error('Atlas\'s bundled TypeScript was not found; refusing to let the language server use one from the analysed project.');
   }
 }
