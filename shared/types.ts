@@ -1,5 +1,5 @@
 // ============================================================
-//  Atlas-TS — Shared Types
+//  Atlas — Shared Types
 //  Used by both backend and frontend
 //  🔄 Extended with optional LSP-enhanced fields
 // ============================================================
@@ -33,6 +33,8 @@ export interface ParsedMethod {
   visibility: "public" | "protected" | "private" | "unknown";
   complexity: number;
   calledFunctions?: string[];
+  /** Position of the symbol's name (0-based), as reported by the language server. */
+  namePosition?: { line: number; character: number };
   /** LSP: precise position range of this method in the source file */
   range?: SourceRange;
   /** LSP: fully qualified type signature from hover */
@@ -73,6 +75,8 @@ export interface ParsedFunction {
   lineCount: number;
   complexity: number;
   calledFunctions?: string[];
+  /** Position of the symbol's name (0-based), as reported by the language server. */
+  namePosition?: { line: number; character: number };
   /** LSP: source range of the function declaration */
   range?: SourceRange;
 }
@@ -91,6 +95,8 @@ export interface ParsedImport {
   defaultImport?: string | undefined;
   namedImports: string[];
   namespaceImport?: string | undefined;
+  /** `export * from '...'` / `export { a } from '...'` rather than an import. */
+  isReExport?: boolean;
   /** LSP: the URI that definition resolved to */
   definitionUri?: string;
 }

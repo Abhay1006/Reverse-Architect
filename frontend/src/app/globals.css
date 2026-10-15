@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════
-   Atlas.TS — Global Styles
+   Atlas — Global Styles
    Only React Flow overrides and CSS variables remain.
    All component styling is now handled by MUI's sx prop.
    ═══════════════════════════════════════════════════════════════════════ */

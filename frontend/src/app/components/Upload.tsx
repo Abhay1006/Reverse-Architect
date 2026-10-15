@@ -21,8 +21,6 @@ import {
   GitHub as GitHubIcon,
   Close as CloseIcon,
 } from "@mui/icons-material";
-import { useFormik } from "formik";
-import * as Yup from "yup";
 import { useUploadAnalysis, useGithubAnalysis, getAnalysisErrorMessage } from "../hooks/useAnalysis";
 
 interface UploadProps {
@@ -30,20 +28,27 @@ interface UploadProps {
   onClose: () => void;
 }
 
-const githubUrlSchema = Yup.object({
-  githubUrl: Yup.string()
-    .url("Please enter a valid URL")
-    .matches(
-      /github\.com\/[\w.-]+\/[\w.-]+/,
-      "Must be a valid GitHub repository URL (e.g. https://github.com/user/repo)"
-    )
-    .required("GitHub URL is required"),
-});
+/** Returns an error message for an invalid GitHub URL, or null when valid. */
+function validateGithubUrl(value: string): string | null {
+  const url = value.trim();
+  if (!url) return "GitHub URL is required";
+  try {
+    new URL(url);
+  } catch {
+    return "Please enter a valid URL";
+  }
+  if (!/github\.com\/[\w.-]+\/[\w.-]+/.test(url)) {
+    return "Must be a valid GitHub repository URL (e.g. https://github.com/user/repo)";
+  }
+  return null;
+}
 
 export default function Upload({ isOpen, onClose }: UploadProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
+  const [githubUrl, setGithubUrl] = useState("");
+  const [githubUrlTouched, setGithubUrlTouched] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const uploadMutation = useUploadAnalysis();
@@ -51,20 +56,21 @@ export default function Upload({ isOpen, onClose }: UploadProps) {
 
   const isAnalyzing = uploadMutation.isPending || githubMutation.isPending;
 
-  // Formik for GitHub URL form
-  const formik = useFormik({
-    initialValues: { githubUrl: "" },
-    validationSchema: githubUrlSchema,
-    onSubmit: (values) => {
-      setFileError(null);
-      githubMutation.mutate(values.githubUrl, {
-        onSuccess: () => {
-          formik.resetForm();
-          onClose();
-        },
-      });
-    },
-  });
+  const githubUrlError = validateGithubUrl(githubUrl);
+
+  const handleGithubSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setGithubUrlTouched(true);
+    if (githubUrlError) return;
+    setFileError(null);
+    githubMutation.mutate(githubUrl, {
+      onSuccess: () => {
+        setGithubUrl("");
+        setGithubUrlTouched(false);
+        onClose();
+      },
+    });
+  };
 
   // ── Drag & Drop handlers ──────────────────────────────────────────────
 
@@ -90,7 +96,7 @@ export default function Upload({ isOpen, onClose }: UploadProps) {
   // ── File validation ───────────────────────────────────────────────────
 
   const handleFileSelected = (file: File) => {
-    if (!file.name.endsWith(".zip")) {
+    if (!file.name.toLowerCase().endsWith(".zip")) {
       setFileError("Please upload a .zip file.");
       return;
     }
@@ -251,18 +257,18 @@ export default function Upload({ isOpen, onClose }: UploadProps) {
           <Box sx={{ flex: 1, borderTop: "1px solid rgba(255,255,255,0.06)" }} />
         </Box>
 
-        {/* GitHub URL Form (Formik) */}
-        <form onSubmit={formik.handleSubmit}>
+        {/* GitHub URL Form */}
+        <form onSubmit={handleGithubSubmit} noValidate>
           <TextField
             id="githubUrl"
             name="githubUrl"
             fullWidth
             placeholder="https://github.com/username/repo"
-            value={formik.values.githubUrl}
-            onChange={formik.handleChange}
-            onBlur={formik.handleBlur}
-            error={formik.touched.githubUrl && Boolean(formik.errors.githubUrl)}
-            helperText={formik.touched.githubUrl && formik.errors.githubUrl}
+            value={githubUrl}
+            onChange={(e) => setGithubUrl(e.target.value)}
+            onBlur={() => setGithubUrlTouched(true)}
+            error={githubUrlTouched && Boolean(githubUrlError)}
+            helperText={githubUrlTouched ? githubUrlError : undefined}
             disabled={isAnalyzing}
             slotProps={{
               input: {
@@ -280,14 +286,14 @@ export default function Upload({ isOpen, onClose }: UploadProps) {
             type="submit"
             fullWidth
             variant="contained"
-            disabled={isAnalyzing || !formik.values.githubUrl.trim()}
+            disabled={isAnalyzing || !githubUrl.trim()}
             sx={{
               py: 1.5,
               borderRadius: 3,
               fontSize: "0.8125rem",
               fontWeight: 600,
               background:
-                isAnalyzing || !formik.values.githubUrl.trim()
+                isAnalyzing || !githubUrl.trim()
                   ? "rgba(255,255,255,0.03)"
                   : "linear-gradient(135deg, #4f46e5, #7c3aed)",
               "&:hover": {
@@ -339,8 +345,8 @@ export default function Upload({ isOpen, onClose }: UploadProps) {
         }}
       >
         <Box sx={{ display: "flex", gap: 1 }}>
-          <Chip label="TypeScript" size="small" variant="outlined" sx={{ fontSize: "0.625rem", height: 20 }} />
-          <Chip label="JavaScript" size="small" variant="outlined" sx={{ fontSize: "0.625rem", height: 20 }} />
+          <Chip label="TypeScript / JavaScript" size="small" variant="outlined" sx={{ fontSize: "0.625rem", height: 20 }} />
+          <Chip label="Python, Go, Java & more" size="small" variant="outlined" sx={{ fontSize: "0.625rem", height: 20 }} />
         </Box>
         <Button
           onClick={onClose}

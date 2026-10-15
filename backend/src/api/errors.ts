@@ -17,6 +17,10 @@ const URL_CREDENTIALS_RE = /(https?:\/\/)[^/\s@]+@/gi;
 export function scrubSecrets(input: string): string {
   let out = input.replace(URL_CREDENTIALS_RE, '$1***@');
 
+  // An HTTP Basic credential (how the token is handed to git) is just the
+  // token in base64 — scrub the header value as well as the raw token.
+  out = out.replace(/(Authorization:\s*(?:Basic|Bearer)\s+)\S+/gi, '$1***');
+
   const token = process.env.GITHUB_TOKEN;
   if (token && token.length >= 8) {
     out = out.split(token).join('***');
@@ -28,4 +32,20 @@ export function scrubSecrets(input: string): string {
 export function toClientError(err: unknown): string {
   const raw = err instanceof Error ? err.message : String(err);
   return scrubSecrets(raw);
+}
+
+/** An error that carries the HTTP status the client should receive. */
+export class HttpError extends Error {
+  constructor(
+    public readonly status: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'HttpError';
+  }
+}
+
+/** HTTP status for an unknown thrown value: its own status if it has one, else 500. */
+export function statusOf(err: unknown): number {
+  return err instanceof HttpError ? err.status : 500;
 }

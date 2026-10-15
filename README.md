@@ -96,12 +96,12 @@ The backend `start` script runs `node dist/backend/src/server.js` — it does **
 |---|---|
 | `npm run dev` | Both services in watch mode |
 | `npm run build` | Build both workspaces |
-| `npm start` | Build, then run both in production mode |
+| `npm start` | Run both in production mode. Builds first only if there is no build yet — after pulling changes, run `npm run build` |
 | `npm test -w backend` | Backend unit tests (vitest) |
 | `npm test -w frontend` | Frontend store/selector tests |
 | `npm run typecheck -w backend` | `tsc --noEmit` |
 | `npm run lint -w frontend` | ESLint |
-| `npm run cli -w backend -- parse <dir>` | Analyze a local directory and print the graph as JSON |
+| `npm run cli -w backend -- parse <dir>` | Analyze a local directory and print the same JSON the API returns (logs go to stderr) |
 
 ---
 
@@ -121,8 +121,9 @@ cp frontend/.env.example frontend/.env
 | `PORT` | `4000` | API port |
 | `HOST` | `127.0.0.1` | Bind address. The API is loopback-only by default because it clones arbitrary repositories and serves file contents **with no authentication**. Set `0.0.0.0` only if you deliberately expose it. |
 | `ALLOWED_ORIGINS` | *(none)* | Comma-separated browser origins allowed to call the API directly. Only needed when the frontend runs with `NEXT_PUBLIC_USE_PROXY=false`. `*` allows any origin (not recommended). |
-| `TRUST_PROXY_HOPS` | `0` | Number of reverse proxies in front of the server. Required for per-IP rate limiting to work behind a tunnel or nginx. Never set higher than the real hop count — clients could otherwise spoof `X-Forwarded-For`. |
+| `TRUST_PROXY_HOPS` | `0` | Number of reverse proxies in front of the backend whose `X-Forwarded-For` should be trusted. Without it, every request through the Next.js proxy looks like one client and the per-IP rate limits apply to all users together. See [Rate limiting behind a proxy](#rate-limiting-behind-a-proxy). Never set higher than the real hop count — clients could otherwise spoof `X-Forwarded-For`. |
 | `ATLAS_DB_PATH` | `~/.atlas/cache.db` | SQLite cache location |
+| `ATLAS_CLONES_DIR` | `~/.atlas/clones` | Where cloned repositories and extracted uploads are kept |
 | `GITHUB_TOKEN` | *(none)* | Optional PAT for cloning private repositories. Sent as an HTTP header, never embedded in the remote URL. |
 
 **Resource limits**
@@ -134,16 +135,18 @@ cp frontend/.env.example frontend/.env
 | `ATLAS_CLONE_MAX_AGE_MS` | `86400000` | Evict clone workspaces older than this (24h) |
 | `ATLAS_CLONE_MAX_BYTES` | `2147483648` | Total disk budget across all workspaces (2 GiB) |
 | `ATLAS_CLONE_SWEEP_MS` | `3600000` | How often the eviction sweep runs |
+| `ATLAS_UPLOAD_MAX_UNCOMPRESSED_BYTES` | `524288000` | Largest total size an uploaded `.zip` may expand to (500 MiB). Larger archives are refused before anything is written |
+| `ATLAS_UPLOAD_MAX_ENTRIES` | `20000` | Most entries an uploaded `.zip` may contain |
 
-Cloned repositories are kept under `~/.atlas/clones` after analysis so Code Peek can read source files, and are evicted by age and then by total size.
+Cloned repositories are kept under `ATLAS_CLONES_DIR` after analysis so Code Peek can read source files. They are evicted by age, then by total size. Browsing a repository or loading it from cache counts as use. A workspace that is being cloned or analyzed is never evicted. If a cached repository's clone has been evicted, the next request re-clones it without re-running the analysis.
 
 **AI assistant** — API keys are supplied per request by the browser and are never stored server-side. Only model selection is configured here.
 
 | Variable | Default |
 |---|---|
 | `ATLAS_OPENAI_MODEL` | `gpt-4o` |
-| `ATLAS_ANTHROPIC_MODEL` | `claude-sonnet-5` |
-| `ATLAS_GEMINI_MODEL` | `gemini-2.0-flash` |
+| `ATLAS_ANTHROPIC_MODEL` | `claude-sonnet-5-5` |
+| `ATLAS_GEMINI_MODEL` | `gemini-3.5-flash` |
 | `ATLAS_AI_MAX_TOKENS` | `8192` |
 | `ATLAS_AI_TIMEOUT_MS` | `120000` |
 
@@ -151,7 +154,7 @@ Cloned repositories are kept under `~/.atlas/clones` after analysis so Code Peek
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `BACKEND_URL` | `http://localhost:4000` | Backend address used by the Next.js server-side proxy routes |
+| `BACKEND_URL` | `http://localhost:4000` | Backend address used by every Next.js proxy route (falls back to `NEXT_PUBLIC_BACKEND_URL` if unset) |
 | `NEXT_PUBLIC_BACKEND_URL` | `http://localhost:4000` | Backend address used by the browser when the proxy is disabled |
 | `NEXT_PUBLIC_USE_PROXY` | `true` | Route API calls through Next.js instead of hitting the backend directly. Keep this on unless you have a reason not to — it is what lets the backend stay loopback-only. |
 | `PORT` | `3000` | Frontend port |
@@ -164,8 +167,8 @@ The backend serves REST + SSE under `/api`. Every route is also reachable throug
 
 ### Analysis
 
-- `POST /api/analyze/upload` — `multipart/form-data` with a `file` field containing a `.zip`, plus an optional `sessionId` for progress streaming. Extracted with Zip-Slip and symlink protection.
-- `POST /api/analyze/github` — JSON `{ "url": "https://github.com/user/repo", "sessionId": "..." }`. Clones (depth 1) and indexes the repository.
+- `POST /api/analyze/upload` — `multipart/form-data` with a `file` field containing a `.zip` (up to 50 MB), plus an optional `sessionId` for progress streaming. Extracted with Zip-Slip, symlink and decompression-bomb protection. The returned `repoId` is `upload-<uuid>`.
+- `POST /api/analyze/github` — JSON `{ "url": "https://github.com/user/repo", "sessionId": "..." }`. Clones (depth 1) and indexes the repository. The repository id is normalized (lowercase, no `.git`), so every spelling of a URL shares one cache entry. With `GITHUB_TOKEN` set, private repositories are cloned and cached too.
 - `GET /api/analyze/github/cached?repoId=owner/repo` — returns a cached analysis only; `404` if absent. Never triggers work.
 - `GET /api/analyze/progress?sessionId=...` — Server-Sent Events stream of cloning/parsing/layout progress.
 
@@ -196,11 +199,15 @@ These require two headers: `x-ai-provider` (`openai` | `anthropic` | `gemini`) a
 
 - `POST /api/ai/chat` — JSON `{ message, repoUrl, history }`. Streams an SSE answer grounded in the repository's architecture graph and any source files named in the message.
 - `POST /api/ai/fix-issue` — JSON `{ issue, repoUrl }`. Streams a suggested fix for a GitHub issue.
-- `GET /api/ai/issues?repoUrl=...` — open issues for a public repository (pull requests filtered out).
+- `GET /api/ai/issues?repoUrl=...` — open issues for a repository (pull requests filtered out). Uses `GITHUB_TOKEN` when set: 5,000 requests/hour instead of 60, and private repositories work.
 
 ### Health
 
 - `GET /api/health` — `{ status, timestamp, analyses: { active, queued } }`.
+
+### Errors
+
+Every error is JSON: `{ "error": "...", "details"?: "..." }`. `details` carries the specific reason, such as "Repository is too large to analyze". The Next.js proxy relays it unchanged. Status codes: `400` for bad input, `403` for a disallowed CORS origin, `404`, `413` for an upload that is too large or would expand too far, `429` for rate limits, and `500` for analysis failures.
 
 ---
 
@@ -209,10 +216,17 @@ These require two headers: `x-ai-provider` (`openai` | `anthropic` | `gemini`) a
 Atlas clones arbitrary repositories and serves file contents, and it ships **without authentication**. Before exposing it beyond localhost:
 
 - Put an authenticating proxy in front of it, or keep `HOST=127.0.0.1` and let only the Next.js server reach it.
-- Set `TRUST_PROXY_HOPS` so rate limiting counts real clients rather than the proxy.
+- Set `TRUST_PROXY_HOPS` so rate limiting counts real clients rather than the proxy (see below).
 - Set `ALLOWED_ORIGINS` explicitly rather than using `*`.
 
-Cloned repositories are untrusted content. Path handling for both zip extraction and Code Peek goes through `backend/src/api/path-safety.ts`, which resolves symlinks before checking containment; add any new filesystem entry point there rather than writing a new check.
+Cloned repositories are untrusted content. Path handling for both zip extraction and Code Peek goes through `backend/src/api/path-safety.ts`, which resolves symlinks before checking containment; add any new filesystem entry point there rather than writing a new check. Child processes (git, the language server) get an allow-listed environment from `backend/src/child-env.ts`, so `GITHUB_TOKEN` and other secrets never reach code that reads untrusted files.
+
+### Rate limiting behind a proxy
+
+The backend limits each client IP: 100 API requests per 15 minutes, 30 analyses per hour, and 600 Code Peek reads per 15 minutes (`/api/health` is exempt). Behind the Next.js proxy, the backend sees only the proxy's address. To make the limits per user:
+
+- **Next.js behind Cloudflare Tunnel, nginx or another proxy** — that proxy appends the real client address to `X-Forwarded-For`, and the Next.js proxy routes forward it. Set `TRUST_PROXY_HOPS=1` on the backend.
+- **Next.js exposed directly to the internet** — Next.js does not add the caller's address to `X-Forwarded-For`, so a client could put anything there. Leave `TRUST_PROXY_HOPS=0`. The limits then apply to all users together, so put a proxy in front if you need per-user limits.
 
 ---
 
@@ -237,7 +251,19 @@ Contributions are absolutely welcome to help push codebase visualization bounds.
 - **The API payload is defined once**, in `shared/types.ts` as `AnalysisResponse`. Both sides import it, so adding a field means adding it there first — never redeclare the shape locally. `runGraphPipeline` is typed against it so a missed field fails the build.
 - **Filesystem paths from user input go through `backend/src/api/path-safety.ts`.** Cloned repositories are untrusted content. Don't hand-roll containment checks; extend that module and its tests instead.
 - **Edge `type` is the React Flow renderer, `relation` is the architectural meaning** (`import` / `extends` / `implements` / `calls`). Filter on `relation`.
-- UI styling follows the existing tokens in `globals.css`.
+- UI styling uses MUI with the existing tokens in `globals.css`; server data goes through React Query. See [`frontend/README.md`](frontend/README.md).
+
+### Deploying with the included workflow
+
+`.github/workflows/deploy.yml` runs typecheck, lint, tests and the build on every push to `main`, then deploys over SSH through a Cloudflare tunnel. It needs these repository secrets:
+
+| Secret | Purpose |
+|---|---|
+| `SSH_HOST`, `SSH_USERNAME`, `SSH_KEY` | Where and how to connect |
+| `SSH_KNOWN_HOSTS` | The host's SSH key as a `known_hosts` line, so the runner can verify it is talking to the real host. Copy it from a machine that has connected before: `ssh-keygen -F <SSH_HOST> -f ~/.ssh/known_hosts` |
+| `APP_DIR` *(optional)* | Checkout location on the host (default `~/Reverse-Architect`) |
+| `DEPLOY_PAT` *(optional)* | Token for the fetch, if `GITHUB_TOKEN` is not enough |
+| `HEALTHCHECK_URL` *(optional)* | Public URL of `/api/health`, checked after the deploy |
 
 ### Keeping your fork up to date
 

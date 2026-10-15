@@ -5,13 +5,18 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import http from 'http';
-
-const BACKEND_URL =
-  process.env.BACKEND_URL ?? 'http://localhost:4000';
+import https from 'https';
+import { BACKEND_URL, backendUnreachable, clientHeaders, relayResponse } from '../../../lib/backend-proxy';
 
 export async function POST(request: NextRequest) {
+  let body: { url?: unknown; sessionId?: unknown };
   try {
-    const body = await request.json();
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'Request body is not valid JSON' }, { status: 400 });
+  }
+
+  try {
 
     if (!body.url || typeof body.url !== 'string') {
       return NextResponse.json(
@@ -31,13 +36,17 @@ export async function POST(request: NextRequest) {
     const bodyData = JSON.stringify({ url: body.url, sessionId: body.sessionId });
     const urlObj = new URL(`${BACKEND_URL}/api/analyze/github`);
 
+    // node:http rather than fetch: an analysis can take longer than undici's
+    // five-minute headers timeout.
+    const transport = urlObj.protocol === 'https:' ? https : http;
     const backendRes = await new Promise<{ status: number; body: string }>((resolve, reject) => {
-      const req = http.request({
+      const req = transport.request({
         hostname: urlObj.hostname,
         port: urlObj.port,
         path: urlObj.pathname + urlObj.search,
         method: 'POST',
         headers: {
+          ...clientHeaders(request),
           'Content-Type': 'application/json',
           'Content-Length': Buffer.byteLength(bodyData),
         },
@@ -63,23 +72,8 @@ export async function POST(request: NextRequest) {
       req.end();
     });
 
-    if (backendRes.status < 200 || backendRes.status >= 300) {
-      return NextResponse.json(
-        { error: 'Backend analysis failed', details: backendRes.body },
-        { status: backendRes.status },
-      );
-    }
-
-    const data = JSON.parse(backendRes.body);
-    return NextResponse.json(data);
+    return relayResponse(backendRes.status, backendRes.body);
   } catch (err) {
-    console.error('[/api/analyze/github] Proxy error:', err);
-    return NextResponse.json(
-      {
-        error: 'Failed to connect to analysis backend',
-        details: err instanceof Error ? err.message : String(err),
-      },
-      { status: 502 },
-    );
+    return backendUnreachable('/api/analyze/github', err);
   }
 }

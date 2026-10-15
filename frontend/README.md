@@ -1,36 +1,32 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Atlas — frontend
 
-## Getting Started
+The Next.js client for Atlas. See the [root README](../README.md) for setup, configuration and the API reference. Install and run everything from the repository root.
 
-First, run the development server:
+## Layout
+
+| Path | What lives there |
+|---|---|
+| `src/app/page.tsx` | The single-page app shell |
+| `src/app/components/` | UI. Larger features are split into folders (`ai/`, `analysis/`, `canvas/`, `nodes/`) of hooks plus presentational components |
+| `src/app/store/atlas-store.ts` | Zustand store: graph, selection, filters |
+| `src/app/hooks/useAnalysis.ts` | Analysis mutations, which own the progress stream and the store update |
+| `src/app/lib/atlas-api.ts` | Browser-side API client |
+| `src/app/lib/backend-proxy.ts` | Server-only helpers shared by the proxy routes |
+| `src/app/api/**/route.ts` | Proxy routes that forward to the backend, so the backend can stay bound to loopback |
+
+## Conventions
+
+- **Server data goes through React Query** (`useQuery` / `useMutation`). Don't fetch inside `useEffect` and copy the result into state.
+- **Styling uses MUI** (`sx` props) with the color tokens in `globals.css`. Use MUI components for new UI rather than adding another component or form library.
+- **Proxy routes** read the backend address from `BACKEND_URL` via `lib/backend-proxy.ts`. They relay the backend's status and JSON body unchanged, so its `{ error, details }` reaches the UI.
+
+## Scripts
+
+Run from the repository root:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm run dev -w frontend        # next dev
+npm run lint -w frontend       # eslint
+npm run typecheck -w frontend  # tsc --noEmit
+npm test -w frontend           # vitest
 ```
-
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.

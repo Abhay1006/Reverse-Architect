@@ -1,7 +1,7 @@
 import path from 'path';
 import { analyzeWithLsp, clearFileCache } from '../lsp/index.js';
 import { parseDatabaseSchemas } from '../parser/project-parser.js';
-import { buildGraph } from '../graph/graph-builder.js';
+import { buildGraph, findImportedEntityIds } from '../graph/graph-builder.js';
 import { computeLayout } from '../graph/layout.js';
 import { detectGodObjects } from '../analyzers/god-object.js';
 import { detectDeadCode } from '../analyzers/dead-code.js';
@@ -18,8 +18,16 @@ import type { ParsedFile, AnalysisResponse, WireNode, WireEdge } from 'shared';
  */
 export function runGraphPipeline(
   parsedFiles: ParsedFile[],
-  entryPoints: ReturnType<typeof detectAllEntryPoints>,
+  detectedEntryPoints: ReturnType<typeof detectAllEntryPoints>,
 ): AnalysisResponse {
+  // Entry points often name compiled output ("node dist/server.js"), which is
+  // never parsed. Point them at the source file that produces it.
+  const parsedPaths = parsedFiles.map((f) => f.filePath);
+  const entryPoints = detectedEntryPoints.map((ep) => ({
+    ...ep,
+    entryFile: mapEntryToSource(ep.entryFile, parsedPaths) ?? ep.entryFile,
+  }));
+
   // 3. Build the architecture graph
   const entryFileList = entryPoints.map(ep => ep.entryFile);
   const graph = buildGraph(parsedFiles, entryFileList.length > 0 ? entryFileList : undefined);
@@ -28,8 +36,13 @@ export function runGraphPipeline(
   const godObjectHits = detectGodObjects(graph);
   graph.analysis.godObjects = godObjectHits.map((h) => h.nodeId);
 
-  // 5. Run dead-code detection and populate analysis
-  const deadCodeHits = detectDeadCode(graph);
+  // 5. Run dead-code detection and populate analysis. The detected entry
+  // points and imported-by-name entities are not dead even with no edges in.
+  const deadCodeHits = detectDeadCode(
+    graph,
+    entryFileList.map((f) => `file:${f}`),
+    findImportedEntityIds(parsedFiles),
+  );
   graph.analysis.deadCode = deadCodeHits.map((h) => h.nodeId);
 
   // 6. Run cycle detection
@@ -108,6 +121,36 @@ export function runGraphPipeline(
     deadCodeDetails: deadCodeHits,
     entryPoint: entryPoints.length > 0 ? entryPoints[0]! : null,
   };
+}
+
+/** Directories that hold build output rather than source. */
+const OUTPUT_DIRS = new Set(['dist', 'build', 'out', 'lib', '.next']);
+
+/**
+ * Map an entry file to a parsed source file.
+ *
+ * Returns `entryFile` itself when it was parsed. For a compiled path such as
+ * `dist/backend/src/server.js`, returns the parsed file with the longest
+ * matching path suffix ignoring extensions (`src/server.ts`). Returns null
+ * when nothing matches.
+ */
+export function mapEntryToSource(entryFile: string, parsedPaths: string[]): string | null {
+  if (parsedPaths.includes(entryFile)) return entryFile;
+
+  const firstSegment = entryFile.split('/')[0] ?? '';
+  if (!OUTPUT_DIRS.has(firstSegment)) return null;
+
+  const stripExt = (p: string) => p.replace(/\.[^./]+$/, '');
+  const entryStem = stripExt(entryFile);
+
+  let best: string | null = null;
+  for (const candidate of parsedPaths) {
+    const stem = stripExt(candidate);
+    if (entryStem.endsWith('/' + stem) && (!best || stem.length > stripExt(best).length)) {
+      best = candidate;
+    }
+  }
+  return best;
 }
 
 /**

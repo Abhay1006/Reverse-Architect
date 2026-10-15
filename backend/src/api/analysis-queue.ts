@@ -87,3 +87,11 @@ export function activeAnalyses(): number {
 export function queuedAnalyses(): number {
   return waiters.length;
 }
+
+/**
+ * True while an analysis (or re-clone) holds the lock for `key`. The clone
+ * reaper uses this so it never deletes a workspace that is being written.
+ */
+export function isInFlight(key: string): boolean {
+  return inFlight.has(key);
+}

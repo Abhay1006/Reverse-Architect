@@ -1,8 +1,7 @@
 {
   "name": "backend",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Atlas analysis API: parses a repository and serves its architecture graph.",
   "scripts": {
     "dev": "npx tsx watch src/server.ts",
     "build": "npx tsc -p tsconfig.build.json",
@@ -16,20 +15,19 @@
   "license": "ISC",
   "type": "module",
   "devDependencies": {
-    "@types/node": "^25.5.2",
-    "ts-node": "^10.9.2",
-    "tsx": "^4.21.0",
-    "typescript": "^6.0.3",
-    "vitest": "^4.1.9"
-  },
-  "dependencies": {
-    "@types/adm-zip": "^0.5.8",
     "@types/better-sqlite3": "^7.6.13",
     "@types/cors": "^2.8.19",
     "@types/dagre": "^0.7.54",
     "@types/express": "^5.0.6",
     "@types/multer": "^2.1.0",
-    "adm-zip": "^0.5.17",
+    "@types/node": "^25.5.2",
+    "@types/supertest": "^7.2.1",
+    "supertest": "^7.3.0",
+    "tsx": "^4.21.0",
+    "vitest": "^4.1.9"
+  },
+  "dependencies": {
+    "adm-zip": "^0.6.1",
     "better-sqlite3": "^12.9.0",
     "cors": "^2.8.6",
     "dagre": "^0.8.5",
@@ -37,8 +35,8 @@
     "express-rate-limit": "^8.3.2",
     "multer": "^2.1.1",
     "simple-git": "^3.36.0",
+    "typescript": "^6.0.3",
     "typescript-language-server": "^5.1.3",
-    "vscode-jsonrpc": "^8.2.1",
     "vscode-languageserver-protocol": "^3.17.5"
   }
 }

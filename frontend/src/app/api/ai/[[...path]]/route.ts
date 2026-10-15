@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:4000';
+import { BACKEND_URL, clientHeaders } from '../../../lib/backend-proxy';
 
 export async function GET(req: NextRequest) {
   return handleProxy(req);
@@ -15,7 +14,7 @@ async function handleProxy(req: NextRequest) {
   const targetPath = url.pathname; // e.g. /api/ai/chat or /api/ai/issues
   const targetUrl = `${BACKEND_URL}${targetPath}${url.search}`;
 
-  const headers = new Headers();
+  const headers = new Headers(clientHeaders(req));
   req.headers.forEach((value, key) => {
     // Forward relevant headers, especially our custom key/provider headers
     if (key.startsWith('x-ai-') || key === 'content-type' || key === 'user-agent') {

@@ -1,5 +1,5 @@
 // ============================================================
-//  Atlas-TS — LSP → ParsedFile Adapter
+//  Atlas — LSP → ParsedFile Adapter
 //  Converts LSP DocumentSymbol[] responses into the ParsedFile
 //  format expected by the graph builder. This is the compatibility
 //  bridge between the new LSP layer and the existing pipeline.
@@ -9,6 +9,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { SymbolKind, type DocumentSymbol } from './lsp-types.js';
 import { estimateComplexity } from './lsp-complexity.js';
+import { detectLangFromPath, type Lang } from './lang.js';
 import type {
   ParsedFile,
   ParsedClass,
@@ -288,6 +289,7 @@ function adaptFunction(sym: DocumentSymbol, filePath: string): ParsedFunction {
     lineCount,
     complexity,
     calledFunctions,
+    namePosition: { ...sym.selectionRange.start },
   };
 }
 
@@ -319,6 +321,7 @@ function adaptMethod(sym: DocumentSymbol, filePath: string): ParsedMethod {
     visibility,
     complexity,
     calledFunctions,
+    namePosition: { ...sym.selectionRange.start },
   };
 }
 
@@ -333,143 +336,194 @@ function adaptMethod(sym: DocumentSymbol, filePath: string): ParsedMethod {
 export function extractImportsFromSource(filePath: string): ParsedImport[] {
   try {
     const lines = getFileLines(filePath);
-    return parseImportsFromText(lines.join('\n'));
+    return parseImportsFromText(lines.join('\n'), detectLangFromPath(filePath));
   } catch {
     return [];
   }
 }
 
+/** Which import syntaxes apply to each language. */
+type ImportSyntax = 'es' | 'commonjs' | 'python' | 'go' | 'jvm' | 'c' | 'rust' | 'ruby' | 'php' | 'csharp' | 'swift' | 'lua';
+
+const IMPORT_SYNTAX: Partial<Record<Lang, ImportSyntax[]>> = {
+  ts: ['es', 'commonjs'],
+  js: ['es', 'commonjs'],
+  py: ['python'],
+  go: ['go'],
+  java: ['jvm'],
+  kt: ['jvm'],
+  scala: ['jvm'],
+  c: ['c'],
+  rs: ['rust'],
+  rb: ['ruby'],
+  php: ['php'],
+  cs: ['csharp'],
+  swift: ['swift'],
+  dart: ['es'],
+  lua: ['lua'],
+};
+
+const ALL_SYNTAXES: ImportSyntax[] = ['es', 'commonjs', 'python', 'go', 'jvm', 'c', 'rust', 'ruby', 'php', 'csharp', 'swift', 'lua'];
+
 /**
  * Parse import statements from source text.
- * Supports: ES modules, CommonJS require(), Python, Go, Java, C/C++, Rust, Ruby, PHP, C#, Kotlin, Swift
+ *
+ * Only the syntaxes of `lang` are applied. Running every language's patterns
+ * over every file produced false matches — Go's `import "x"` pattern, for one,
+ * re-recorded every JS side-effect import a second time. When `lang` is
+ * omitted or unknown, all syntaxes are tried.
  */
-export function parseImportsFromText(text: string): ParsedImport[] {
+export function parseImportsFromText(text: string, lang?: Lang): ParsedImport[] {
   const imports: ParsedImport[] = [];
-
-  // --- ES Module imports ---
-  // Match: import { x, y } from 'module';
-  // Match: import Default from 'module';
-  // Match: import * as ns from 'module';
-  // Match: import 'module';
-  // Match: import type { x } from 'module';
-  const importRegex = /import\s+(?:type\s+)?(?:(?:(\w+)(?:\s*,\s*)?)?(?:\{([^}]*)\})?(?:\*\s+as\s+(\w+))?(?:\s+from\s+)?)?['"]([^'"]+)['"]/g;
-
+  const syntaxes = new Set<ImportSyntax>((lang && IMPORT_SYNTAX[lang]) || ALL_SYNTAXES);
   let match;
-  while ((match = importRegex.exec(text)) !== null) {
-    const defaultImport = match[1] || undefined;
-    const namedImportStr = match[2] || '';
-    const namespaceImport = match[3] || undefined;
-    const moduleSpecifier = match[4]!;
 
-    const namedImports = namedImportStr
-      .split(',')
-      .map(s => {
-        const parts = s.trim().split(/\s+as\s+/);
-        return parts[0]?.trim() || '';
-      })
-      .filter(Boolean);
+  if (syntaxes.has('es')) {
+    // import { x, y } from 'module';  import Default from 'module';
+    // import * as ns from 'module';    import 'module';  import type { x } from 'module';
+    const importRegex = /\bimport\s+(?:type\s+)?(?:(?:(\w+)(?:\s*,\s*)?)?(?:\{([^}]*)\})?(?:\*\s+as\s+(\w+))?(?:\s+from\s+)?)?['"]([^'"]+)['"]/g;
+    while ((match = importRegex.exec(text)) !== null) {
+      imports.push({
+        kind: 'import',
+        moduleSpecifier: match[4]!,
+        defaultImport: match[1] || undefined,
+        namedImports: splitNamedImports(match[2] || ''),
+        namespaceImport: match[3] || undefined,
+      });
+    }
 
-    imports.push({
-      kind: 'import',
-      moduleSpecifier,
-      defaultImport,
-      namedImports,
-      namespaceImport,
-    });
+    // Re-exports: export * from 'm';  export * as ns from 'm';  export { a, b as c } from 'm';
+    // Without these, barrel (index) files had no outgoing edges and everything
+    // behind them dropped out of the reachability walk.
+    const reExportRegex = /\bexport\s+(?:type\s+)?(?:\*(?:\s+as\s+(\w+))?|\{([^}]*)\})\s*from\s*['"]([^'"]+)['"]/g;
+    while ((match = reExportRegex.exec(text)) !== null) {
+      imports.push({
+        kind: 'import',
+        moduleSpecifier: match[3]!,
+        namedImports: splitNamedImports(match[2] || ''),
+        namespaceImport: match[1] || undefined,
+        isReExport: true,
+      });
+    }
+
+    // Dynamic imports: import('./lazy') / const { a, b } = await import("./lazy")
+    const dynamicImportRegex = /(?:(?:const|let|var)\s*\{([^}]*)\}\s*=\s*)?(?:await\s+)?\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
+    while ((match = dynamicImportRegex.exec(text)) !== null) {
+      // Destructuring renames with `:` rather than `as`.
+      const namedImports = (match[1] || '').split(',').map(s => s.trim().split(/\s*:\s*/)[0]?.trim() || '').filter(Boolean);
+      imports.push({ kind: 'import', moduleSpecifier: match[2]!, namedImports });
+    }
   }
 
-  // --- CommonJS require() ---
-  // Match: const x = require('module')
-  // Match: const { a, b } = require('module')
-  const requireRegex = /(?:const|let|var)\s+(?:(\w+)|(?:\{([^}]*)\}))\s*=\s*require\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
-  while ((match = requireRegex.exec(text)) !== null) {
-    const defaultImport = match[1] || undefined;
-    const namedImportStr = match[2] || '';
-    const moduleSpecifier = match[3]!;
-    const namedImports = namedImportStr.split(',').map(s => s.trim().split(/\s*:\s*/)[0]?.trim() || '').filter(Boolean);
-    imports.push({ kind: 'import', moduleSpecifier, defaultImport, namedImports });
+  if (syntaxes.has('commonjs')) {
+    // const x = require('module');  const { a, b } = require('module')
+    const requireRegex = /(?:const|let|var)\s+(?:(\w+)|(?:\{([^}]*)\}))\s*=\s*require\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
+    while ((match = requireRegex.exec(text)) !== null) {
+      const namedImports = (match[2] || '').split(',').map(s => s.trim().split(/\s*:\s*/)[0]?.trim() || '').filter(Boolean);
+      imports.push({ kind: 'import', moduleSpecifier: match[3]!, defaultImport: match[1] || undefined, namedImports });
+    }
   }
 
-  // --- Python ---
-  // Match: from module import x, y
-  const pyFromRegex = /^from\s+([\w.]+)\s+import\s+(.+)$/gm;
-  while ((match = pyFromRegex.exec(text)) !== null) {
-    const moduleSpecifier = match[1]!.replace(/\./g, '/');
-    const namedImports = match[2]!.split(',').map(s => s.trim().split(/\s+as\s+/)[0]?.trim() || '').filter(Boolean);
-    imports.push({ kind: 'import', moduleSpecifier, namedImports });
-  }
-  // Match: import module
-  const pyImportRegex = /^import\s+([\w.]+)(?:\s+as\s+(\w+))?$/gm;
-  while ((match = pyImportRegex.exec(text)) !== null) {
-    const mod = match[1]!;
-    // Skip if it looks like an ES module import (has quotes after it)
-    if (/['"]/.test(mod)) continue;
-    imports.push({ kind: 'import', moduleSpecifier: mod.replace(/\./g, '/'), defaultImport: match[2] || mod.split('.').pop(), namedImports: [] });
+  if (syntaxes.has('python')) {
+    // from module import x, y
+    const pyFromRegex = /^from\s+([\w.]+)\s+import\s+(.+)$/gm;
+    while ((match = pyFromRegex.exec(text)) !== null) {
+      const namedImports = match[2]!.split(',').map(s => s.trim().split(/\s+as\s+/)[0]?.trim() || '').filter(Boolean);
+      imports.push({ kind: 'import', moduleSpecifier: match[1]!.replace(/\./g, '/'), namedImports });
+    }
+    // import module
+    const pyImportRegex = /^import\s+([\w.]+)(?:\s+as\s+(\w+))?$/gm;
+    while ((match = pyImportRegex.exec(text)) !== null) {
+      const mod = match[1]!;
+      imports.push({ kind: 'import', moduleSpecifier: mod.replace(/\./g, '/'), defaultImport: match[2] || mod.split('.').pop(), namedImports: [] });
+    }
   }
 
-  // --- Go ---
-  // Match: import "package" or import alias "package"
-  const goImportRegex = /import\s+(?:(\w+)\s+)?"([^"]+)"/g;
-  while ((match = goImportRegex.exec(text)) !== null) {
-    imports.push({ kind: 'import', moduleSpecifier: match[2]!, defaultImport: match[1], namedImports: [] });
+  if (syntaxes.has('go')) {
+    // import "package" / import alias "package" / lines inside an import ( ... ) block
+    const goImportRegex = /import\s+(?:(\w+)\s+)?"([^"]+)"/g;
+    while ((match = goImportRegex.exec(text)) !== null) {
+      imports.push({ kind: 'import', moduleSpecifier: match[2]!, defaultImport: match[1], namedImports: [] });
+    }
   }
 
-  // --- Java / Kotlin ---
-  // Match: import com.example.ClassName;
-  const javaImportRegex = /^import\s+(?:static\s+)?([\w.]+(?:\.\*)?)\s*;/gm;
-  while ((match = javaImportRegex.exec(text)) !== null) {
-    const spec = match[1]!;
-    const parts = spec.split('.');
-    const name = parts.pop()!;
-    imports.push({ kind: 'import', moduleSpecifier: parts.join('/'), namedImports: name === '*' ? [] : [name] });
+  if (syntaxes.has('jvm')) {
+    // Java: import com.example.ClassName;   Kotlin/Scala: same, semicolon optional
+    const jvmImportRegex = /^import\s+(?:static\s+)?([\w.]+(?:\.\*)?)\s*;?\s*$/gm;
+    while ((match = jvmImportRegex.exec(text)) !== null) {
+      const parts = match[1]!.split('.');
+      const name = parts.pop()!;
+      imports.push({ kind: 'import', moduleSpecifier: parts.join('/'), namedImports: name === '*' ? [] : [name] });
+    }
   }
 
-  // --- C/C++ ---
-  // Match: #include "file.h" (project-local includes)
-  const cIncludeRegex = /^\s*#include\s+"([^"]+)"/gm;
-  while ((match = cIncludeRegex.exec(text)) !== null) {
-    imports.push({ kind: 'import', moduleSpecifier: './' + match[1]!, namedImports: [] });
+  if (syntaxes.has('c')) {
+    // #include "file.h" (project-local includes)
+    const cIncludeRegex = /^\s*#include\s+"([^"]+)"/gm;
+    while ((match = cIncludeRegex.exec(text)) !== null) {
+      imports.push({ kind: 'import', moduleSpecifier: './' + match[1]!, namedImports: [] });
+    }
   }
 
-  // --- Rust ---
-  // Match: use crate::module::item;
-  const rustUseRegex = /^use\s+((?:crate|super|self)(?:::\w+)+)(?:::\{([^}]+)\})?/gm;
-  while ((match = rustUseRegex.exec(text)) !== null) {
-    const modPath = match[1]!.replace(/::/g, '/').replace(/^crate\//, './');
-    const namedImports = match[2] ? match[2].split(',').map(s => s.trim()).filter(Boolean) : [];
-    imports.push({ kind: 'import', moduleSpecifier: modPath, namedImports });
+  if (syntaxes.has('rust')) {
+    // use crate::module::item;
+    const rustUseRegex = /^use\s+((?:crate|super|self)(?:::\w+)+)(?:::\{([^}]+)\})?/gm;
+    while ((match = rustUseRegex.exec(text)) !== null) {
+      const modPath = match[1]!.replace(/::/g, '/').replace(/^crate\//, './');
+      const namedImports = match[2] ? match[2].split(',').map(s => s.trim()).filter(Boolean) : [];
+      imports.push({ kind: 'import', moduleSpecifier: modPath, namedImports });
+    }
   }
 
-  // --- Ruby ---
-  // Match: require 'file' or require_relative 'file'
-  const rubyRequireRegex = /require(?:_relative)?\s+['"]([^'"]+)['"]/g;
-  while ((match = rubyRequireRegex.exec(text)) !== null) {
-    imports.push({ kind: 'import', moduleSpecifier: match[1]!, namedImports: [] });
+  if (syntaxes.has('ruby')) {
+    // require 'file' / require_relative 'file'
+    const rubyRequireRegex = /require(?:_relative)?\s+['"]([^'"]+)['"]/g;
+    while ((match = rubyRequireRegex.exec(text)) !== null) {
+      imports.push({ kind: 'import', moduleSpecifier: match[1]!, namedImports: [] });
+    }
   }
 
-  // --- PHP ---
-  // Match: use Namespace\Class;
-  const phpUseRegex = /^use\s+([\w\\]+)(?:\s+as\s+(\w+))?\s*;/gm;
-  while ((match = phpUseRegex.exec(text)) !== null) {
-    const spec = match[1]!.replace(/\\/g, '/');
-    imports.push({ kind: 'import', moduleSpecifier: spec, defaultImport: match[2], namedImports: [] });
+  if (syntaxes.has('php')) {
+    // use Namespace\Class;
+    const phpUseRegex = /^use\s+([\w\\]+)(?:\s+as\s+(\w+))?\s*;/gm;
+    while ((match = phpUseRegex.exec(text)) !== null) {
+      imports.push({ kind: 'import', moduleSpecifier: match[1]!.replace(/\\/g, '/'), defaultImport: match[2], namedImports: [] });
+    }
   }
 
-  // --- C# ---
-  // Match: using Namespace.SubNamespace;
-  const csUsingRegex = /^using\s+(?:static\s+)?([\w.]+)\s*;/gm;
-  while ((match = csUsingRegex.exec(text)) !== null) {
-    imports.push({ kind: 'import', moduleSpecifier: match[1]!.replace(/\./g, '/'), namedImports: [] });
+  if (syntaxes.has('csharp')) {
+    // using Namespace.SubNamespace;
+    const csUsingRegex = /^using\s+(?:static\s+)?([\w.]+)\s*;/gm;
+    while ((match = csUsingRegex.exec(text)) !== null) {
+      imports.push({ kind: 'import', moduleSpecifier: match[1]!.replace(/\./g, '/'), namedImports: [] });
+    }
   }
 
-  // --- Swift ---
-  // Match: import Module
-  const swiftImportRegex = /^import\s+(\w+)\s*$/gm;
-  while ((match = swiftImportRegex.exec(text)) !== null) {
-    imports.push({ kind: 'import', moduleSpecifier: match[1]!, namedImports: [] });
+  if (syntaxes.has('swift')) {
+    // import Module
+    const swiftImportRegex = /^import\s+(\w+)\s*$/gm;
+    while ((match = swiftImportRegex.exec(text)) !== null) {
+      imports.push({ kind: 'import', moduleSpecifier: match[1]!, namedImports: [] });
+    }
+  }
+
+  if (syntaxes.has('lua')) {
+    // require("module") / require "module"
+    const luaRequireRegex = /\brequire\s*\(?\s*['"]([^'"]+)['"]/g;
+    while ((match = luaRequireRegex.exec(text)) !== null) {
+      imports.push({ kind: 'import', moduleSpecifier: match[1]!, namedImports: [] });
+    }
   }
 
   return imports;
+}
+
+/** `a, b as c, type d` → ['a', 'b', 'd'] (the local alias is not what the target exports). */
+function splitNamedImports(list: string): string[] {
+  return list
+    .split(',')
+    .map(s => s.trim().replace(/^type\s+/, '').split(/\s+as\s+/)[0]?.trim() || '')
+    .filter(Boolean);
 }
 
 // ---------------------------------------------------------------------------
@@ -639,6 +693,15 @@ export function extractCalledFunctionsFromText(text: string): string[] {
     if (!KEYWORDS.has(name)) {
       calledFunctions.add(name);
     }
+  }
+
+  // JSX component usage: <Navbar /> renders Navbar, which is a reference just
+  // like Navbar(). Without this every React component looked unused. The `<`
+  // must follow an expression boundary (or `return`), which keeps generic type
+  // arguments such as useState<Props>() and List<Foo> from matching.
+  const jsxPattern = /(?:^|[(>{}?:=,;&|]|\breturn)\s*<([A-Z]\w*)(?=[\s/>])/gm;
+  while ((match = jsxPattern.exec(cleaned)) !== null) {
+    calledFunctions.add(match[1]!);
   }
 
   return Array.from(calledFunctions);

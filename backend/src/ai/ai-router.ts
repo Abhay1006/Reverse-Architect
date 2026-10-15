@@ -4,7 +4,7 @@ import { CacheManager } from '../cache/cache-manager.js';
 import { buildRepoContext, findAndLoadRelevantFiles } from './context-builder.js';
 import { handleAIStream } from './ai-providers.js';
 import type { ChatMessage } from './ai-providers.js';
-import { isValidRepoId } from '../api/path-safety.js';
+import { isUploadId, isValidRepoId, normalizeRepoId } from '../api/path-safety.js';
 import { toClientError } from '../api/errors.js';
 
 export const aiRouter = Router();
@@ -33,11 +33,12 @@ interface GitHubApiIssue {
  */
 function getRepoId(url: unknown): string | null {
   if (typeof url !== 'string') return null;
-  const id = url
-    .trim()
-    .replace(/^https?:\/\/(www\.)?github\.com\//, '')
-    .replace(/^local:\/\//, '')
-    .replace(/\/$/, '');
+  const id = normalizeRepoId(
+    url
+      .trim()
+      .replace(/^https?:\/\/(www\.)?github\.com\//i, '')
+      .replace(/^local:\/\//, ''),
+  );
   return isValidRepoId(id) ? id : null;
 }
 
@@ -216,13 +217,25 @@ aiRouter.get('/issues', async (req: Request, res: Response) => {
   }
 
   try {
-    // Fetch from public GitHub API. repoId is validated as owner/repo above,
-    // so it cannot inject extra path segments or query parameters.
+    if (isUploadId(repoId)) {
+      res.status(400).json({ error: 'Uploaded projects have no GitHub issues' });
+      return;
+    }
+
+    // repoId is validated as owner/repo above, so it cannot inject extra path
+    // segments or query parameters. With GITHUB_TOKEN set the request is
+    // authenticated: 5,000 requests/hour instead of 60 per server IP, and
+    // private repositories work.
+    const headers: Record<string, string> = {
+      'User-Agent': 'Atlas-AI-Assistant',
+      'Accept': 'application/vnd.github+json',
+    };
+    if (process.env.GITHUB_TOKEN) {
+      headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
+    }
+
     const response = await fetch(`https://api.github.com/repos/${repoId}/issues?state=open&per_page=30`, {
-      headers: {
-        'User-Agent': 'Reverse-Architect-AI-Assistant',
-        'Accept': 'application/vnd.github.v3+json',
-      },
+      headers,
       signal: AbortSignal.timeout(15_000),
     });
 

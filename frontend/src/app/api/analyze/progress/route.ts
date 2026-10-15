@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:4000';
+import { BACKEND_URL, backendUnreachable, clientHeaders, relayResponse } from '../../../lib/backend-proxy';
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -11,12 +10,13 @@ export async function GET(req: Request) {
   }
 
   try {
-    const res = await fetch(`${BACKEND_URL}/api/analyze/progress?sessionId=${sessionId}`, {
-      cache: 'no-store'
+    const res = await fetch(`${BACKEND_URL}/api/analyze/progress?sessionId=${encodeURIComponent(sessionId)}`, {
+      cache: 'no-store',
+      headers: clientHeaders(req),
     });
 
     if (!res.ok) {
-      return NextResponse.json({ error: `Backend returned ${res.status}` }, { status: res.status });
+      return relayResponse(res.status, await res.text());
     }
 
     // Proxy the Server-Sent Events stream
@@ -28,7 +28,6 @@ export async function GET(req: Request) {
       },
     });
   } catch (err) {
-    console.error('Error proxying progress request:', err);
-    return NextResponse.json({ error: 'Failed to connect to backend' }, { status: 500 });
+    return backendUnreachable('/api/analyze/progress', err);
   }
 }
