@@ -1,0 +1,13 @@
+{
+  "description": "Small TypeScript app with one deliberate import cycle, one orphaned file, and one instance of each design pattern Atlas detects. MoneyFormatter is a negative control.",
+  "cycles": [["src/models/order.ts", "src/models/user.ts"]],
+  "unusedFiles": ["src/legacy/old-report.ts"],
+  "patterns": [
+    { "pattern": "singleton", "label": "Database" },
+    { "pattern": "builder", "label": "RequestBuilder" },
+    { "pattern": "factory", "label": "PaymentFactory" },
+    { "pattern": "observer", "label": "EventBus" },
+    { "pattern": "strategy", "label": "PaymentStrategy" },
+    { "pattern": "adapter", "label": "StripeAdapter" }
+  ]
+}

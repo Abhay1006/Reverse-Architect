@@ -729,7 +729,8 @@ export default function AnalysisSidebar({
             items={(analysis?.patterns ?? []).map((p) => ({
               id: p.nodeId,
               label: nodeLabel(p.nodeId),
-              sublabel: `[${p.pattern.toUpperCase()}] ${p.confidence} confidence`,
+              // Show why it matched, not just that it did.
+              sublabel: `[${p.pattern.toUpperCase()}] ${p.confidence} · ${(p.reasons ?? []).slice(0, 2).join("; ")}`,
             }))}
             onItemClick={panToNode}
           />

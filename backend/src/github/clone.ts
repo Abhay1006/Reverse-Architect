@@ -1,4 +1,19 @@
 import { simpleGit } from 'simple-git';
+import { isValidRepoId } from '../api/path-safety.js';
+
+/** Strict form of a GitHub repository URL; anything else is rejected (SSRF guard). */
+const GITHUB_URL_RE = /^https?:\/\/(www\.)?github\.com\/[\w.-]+\/[\w.-]+\/?$/;
+
+/**
+ * Parse a GitHub repository URL into its clone URL and `owner/repo` id.
+ * @returns null unless `input` is exactly `https://github.com/owner/repo`.
+ */
+export function parseGithubUrl(input: string): { url: string; repoId: string } | null {
+  const url = input.trim();
+  if (!GITHUB_URL_RE.test(url)) return null;
+  const repoId = url.replace(/^https?:\/\/(www\.)?github\.com\//, '').replace(/\/$/, '');
+  return isValidRepoId(repoId) ? { url, repoId } : null;
+}
 
 /**
  * Environment variables passed through to git.

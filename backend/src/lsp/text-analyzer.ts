@@ -62,12 +62,14 @@ export function analyzeFileWithText(filePath: string): ParsedFile {
 
   const lines = content.split('\n');
   const imports = parseImportsFromText(content);
-  const classes = extractClasses(content, lang, filePath);
+  if (lang === 'go') imports.push(...parseGoImportBlocks(content));
+  const classes = extractClasses(content, lang);
   const interfaces = extractInterfaces(content, lang);
-  const functions = extractFunctions(content, lang, filePath, classes);
+  const functions = extractFunctions(content, lang, filePath, classes, interfaces);
 
   return {
     kind: 'file',
+    analyzer: 'text',
     name: path.basename(filePath),
     filePath,
     imports,
@@ -78,11 +80,52 @@ export function analyzeFileWithText(filePath: string): ParsedFile {
   };
 }
 
+/**
+ * Go's grouped form, which the single-line import regex can't see:
+ *   import (
+ *       "fmt"
+ *       store "example.com/app/store"
+ *   )
+ * Kept Go-only: `import (` is also how a JS dynamic import begins.
+ */
+function parseGoImportBlocks(content: string): ParsedImport[] {
+  const imports: ParsedImport[] = [];
+  for (const block of content.matchAll(/^import\s*\(([\s\S]*?)^\)/gm)) {
+    for (const line of block[1]!.matchAll(/^\s*(?:([\w.]+)\s+)?"([^"]+)"/gm)) {
+      const alias = line[1] && line[1] !== '_' && line[1] !== '.' ? line[1] : undefined;
+      imports.push({ kind: 'import', moduleSpecifier: line[2]!, defaultImport: alias, namedImports: [] });
+    }
+  }
+  return imports;
+}
+
+/**
+ * Split a `class X : A, B` inheritance list (C#, Swift, Kotlin) into the
+ * superclass and the interfaces. These languages put the superclass first;
+ * C# interfaces are named `I` + capital by convention, and a Kotlin
+ * superclass is the entry with constructor parentheses.
+ */
+function splitInheritanceList(list: string, lang: Lang): { extendsName: string | undefined; implementsList: string[] } {
+  const entries = list.split(',').map(s => s.trim()).filter(Boolean);
+  if (lang === 'kt') {
+    const base = entries.find(e => e.includes('('));
+    return {
+      extendsName: base?.replace(/\(.*$/, '').trim(),
+      implementsList: entries.filter(e => e !== base).map(e => e.replace(/\(.*$/, '').trim()),
+    };
+  }
+  const [first, ...rest] = entries;
+  const firstIsInterface = lang === 'cs' && first !== undefined && /^I[A-Z]/.test(first);
+  return firstIsInterface || first === undefined
+    ? { extendsName: undefined, implementsList: entries }
+    : { extendsName: first, implementsList: rest };
+}
+
 // ---------------------------------------------------------------------------
 //  Multi-Language Class/Struct Extraction
 // ---------------------------------------------------------------------------
 
-function extractClasses(content: string, lang: Lang, filePath: string): ParsedClass[] {
+function extractClasses(content: string, lang: Lang): ParsedClass[] {
   const classes: ParsedClass[] = [];
   const lines = content.split('\n');
 
@@ -94,7 +137,11 @@ function extractClasses(content: string, lang: Lang, filePath: string): ParsedCl
     case 'py':
       patterns.push(/^class\s+(\w+)(?:\(([^)]*)\))?\s*:/gm);
       break;
-    case 'java': case 'kt': case 'scala': case 'dart':
+    case 'kt':
+      // class Service(val repo: Repo) : Base(), Runner {
+      patterns.push(/(?:public|private|protected|internal|abstract|open|data|sealed)?\s*class\s+(\w+)(?:\s*\([^)]*\))?(?:\s*:\s*([\w(),\s]+?))?\s*(?:\{|$)/gm);
+      break;
+    case 'java': case 'scala': case 'dart':
       patterns.push(/(?:public|private|protected|abstract|open|data|sealed)?\s*class\s+(\w+)(?:\s+extends\s+(\w+))?(?:\s+implements\s+([\w,\s]+))?/gm);
       break;
     case 'rs':
@@ -127,13 +174,17 @@ function extractClasses(content: string, lang: Lang, filePath: string): ParsedCl
     let m;
     while ((m = pat.exec(content)) !== null) {
       const name = m[1]!;
-      const extendsName = m[2]?.trim();
+      let extendsName = m[2]?.trim();
       const implStr = m[3] || '';
-      const implementsList = implStr ? implStr.split(',').map(s => s.trim()).filter(Boolean) : [];
+      let implementsList = implStr ? implStr.split(',').map(s => s.trim()).filter(Boolean) : [];
+      if ((lang === 'cs' || lang === 'swift' || lang === 'kt') && extendsName) {
+        ({ extendsName, implementsList } = splitInheritanceList(extendsName, lang));
+      }
       const startLine = content.substring(0, m.index).split('\n').length - 1;
       const endLine = findBlockEnd(lines, startLine, lang);
       const block = lines.slice(startLine, endLine + 1).join('\n');
-      const methods = extractMethodsFromBlock(block, lang, filePath, startLine);
+      // A Kotlin primary constructor `class Service(` reads like a method.
+      const methods = extractMethodsFromBlock(block, lang).filter(mt => mt.name !== name);
 
       classes.push({
         kind: 'class',
@@ -198,13 +249,14 @@ function extractInterfaces(content: string, lang: Lang): ParsedInterface[] {
       const extList = extStr ? extStr.split(',').map(s => s.trim()).filter(Boolean) : [];
       const startLine = content.substring(0, m.index).split('\n').length - 1;
       const endLine = findBlockEnd(lines, startLine, lang);
+      const block = lines.slice(startLine, endLine + 1).join('\n');
 
       interfaces.push({
         kind: 'interface',
         name,
         isExported: /(?:export|pub|public)\b/.test(m[0]),
         properties: [],
-        methods: [],
+        methods: extractMethodsFromBlock(block, lang),
         extends: extList,
         lineCount: endLine - startLine + 1,
       });
@@ -217,7 +269,7 @@ function extractInterfaces(content: string, lang: Lang): ParsedInterface[] {
 //  Multi-Language Function Extraction
 // ---------------------------------------------------------------------------
 
-function extractFunctions(content: string, lang: Lang, filePath: string, classes: ParsedClass[] = []): ParsedFunction[] {
+function extractFunctions(content: string, lang: Lang, filePath: string, classes: ParsedClass[] = [], interfaces: ParsedInterface[] = []): ParsedFunction[] {
   const functions: ParsedFunction[] = [];
   const lines = content.split('\n');
   const patterns: RegExp[] = [];
@@ -231,7 +283,7 @@ function extractFunctions(content: string, lang: Lang, filePath: string, classes
       patterns.push(/^def\s+(\w+)\s*\(/gm);
       break;
     case 'java': case 'kt': case 'scala': case 'dart':
-      patterns.push(/(?:public|private|protected|static|final|override|suspend)?\s*(?:fun|void|int|String|boolean|long|double|float|[\w<>\[\]]+)\s+(\w+)\s*\(/gm);
+      patterns.push(/(?:public|private|protected|static|final|override|suspend)?\s*(?:fun|void|int|String|boolean|long|double|float|[\w<>[\]]+)\s+(\w+)\s*\(/gm);
       break;
     case 'rs':
       patterns.push(/^(?:pub\s+)?(?:async\s+)?fn\s+(\w+)/gm);
@@ -240,7 +292,7 @@ function extractFunctions(content: string, lang: Lang, filePath: string, classes
       patterns.push(/^(?:static\s+)?(?:inline\s+)?(?:const\s+)?(?:unsigned\s+)?(?:void|int|char|float|double|long|bool|size_t|[\w*]+)\s+(\w+)\s*\(/gm);
       break;
     case 'cs':
-      patterns.push(/(?:public|private|protected|internal|static|async|override|virtual)?\s*(?:void|int|string|bool|Task|[\w<>\[\]]+)\s+(\w+)\s*\(/gm);
+      patterns.push(/(?:public|private|protected|internal|static|async|override|virtual)?\s*(?:void|int|string|bool|Task|[\w<>[\]]+)\s+(\w+)\s*\(/gm);
       break;
     case 'rb':
       patterns.push(/^(?:\s*)def\s+(\w+[?!]?)/gm);
@@ -267,8 +319,8 @@ function extractFunctions(content: string, lang: Lang, filePath: string, classes
 
   // Filter out names that are inside classes (we handle those as methods)
   const classMethodNames = new Set<string>();
-  for (const cls of classes) {
-    for (const m of cls.methods) {
+  for (const owner of [...classes, ...interfaces]) {
+    for (const m of owner.methods) {
       classMethodNames.add(m.name);
     }
   }
@@ -279,6 +331,7 @@ function extractFunctions(content: string, lang: Lang, filePath: string, classes
     while ((m = pat.exec(content)) !== null) {
       const name = m[1]!;
       if (classMethodNames.has(name)) continue; // Skip class methods!
+      if (classes.some(c => c.name === name)) continue; // `class Foo(` in Kotlin/Scala
       if (name === 'main' && lang === 'c') continue; // Skip C main
       if (/^[A-Z_]+$/.test(name)) continue; // Skip ALL_CAPS constants
       
@@ -307,7 +360,7 @@ function extractFunctions(content: string, lang: Lang, filePath: string, classes
 //  Method Extraction (inside class/struct blocks)
 // ---------------------------------------------------------------------------
 
-function extractMethodsFromBlock(block: string, lang: Lang, filePath: string, blockStart: number) {
+function extractMethodsFromBlock(block: string, lang: Lang) {
   const methods: { name: string; parameters: any[]; returnType: string; visibility: 'public' | 'protected' | 'private' | 'unknown'; complexity: number; calledFunctions: string[] }[] = [];
   const patterns: RegExp[] = [];
 
@@ -319,10 +372,10 @@ function extractMethodsFromBlock(block: string, lang: Lang, filePath: string, bl
       patterns.push(/^\s+def\s+(\w+)\s*\(/gm);
       break;
     case 'java': case 'kt': case 'dart': case 'scala':
-      patterns.push(/\s+(?:public|private|protected|static|final|override|abstract|suspend)?\s*(?:fun|void|int|String|boolean|[\w<>\[\]]+)\s+(\w+)\s*\(/gm);
+      patterns.push(/\s+(?:public|private|protected|static|final|override|abstract|suspend)?\s*(?:fun|void|int|String|boolean|[\w<>[\]]+)\s+(\w+)\s*\(/gm);
       break;
     case 'cs':
-      patterns.push(/\s+(?:public|private|protected|internal|static|async|override|virtual|abstract)?\s*(?:void|int|string|bool|Task|[\w<>\[\]]+)\s+(\w+)\s*\(/gm);
+      patterns.push(/\s+(?:public|private|protected|internal|static|async|override|virtual|abstract)?\s*(?:void|int|string|bool|Task|[\w<>[\]]+)\s+(\w+)\s*\(/gm);
       break;
     case 'rb':
       patterns.push(/^\s+def\s+(\w+[?!]?)/gm);
@@ -349,7 +402,6 @@ function extractMethodsFromBlock(block: string, lang: Lang, filePath: string, bl
     while ((m = pat.exec(block)) !== null) {
       const name = m[1]!;
       if (['if', 'for', 'while', 'switch', 'catch', 'constructor', 'class', 'function', 'return'].includes(name)) continue;
-      const bodyStart = block.indexOf('\n', m.index);
       const bodySnippet = block.substring(m.index, Math.min(block.length, m.index + 500));
       methods.push({
         name,
@@ -368,7 +420,7 @@ function extractMethodsFromBlock(block: string, lang: Lang, filePath: string, bl
 //  Go-Specific: Method Extraction (receiver functions)
 // ---------------------------------------------------------------------------
 
-export function extractGoMethods(content: string, filePath: string): Map<string, ParsedFunction[]> {
+export function extractGoMethods(content: string): Map<string, ParsedFunction[]> {
   const methodMap = new Map<string, ParsedFunction[]>();
   const lines = content.split('\n');
   // func (r *Router) Get(path string, handler Handler) { ... }

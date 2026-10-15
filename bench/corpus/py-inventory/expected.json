@@ -1,0 +1,10 @@
+{
+  "description": "Small Python package analysed by the regex text extractor: one import cycle, one orphaned module, and singleton/observer/factory patterns using Python naming (get_instance, create_*).",
+  "cycles": [["inventory/models.py", "inventory/warehouse.py"]],
+  "unusedFiles": ["inventory/legacy/csv_export.py"],
+  "patterns": [
+    { "pattern": "singleton", "label": "Registry" },
+    { "pattern": "observer", "label": "EventDispatcher" },
+    { "pattern": "factory", "label": "PriceCalculatorFactory" }
+  ]
+}

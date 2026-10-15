@@ -18,6 +18,7 @@ import type {
   ParsedProperty,
   ParsedParameter,
   ParsedImport,
+  SourceRange,
 } from 'shared';
 
 // ---------------------------------------------------------------------------
@@ -109,6 +110,7 @@ export function adaptSymbolsToParsedFile(
 
   return {
     kind: 'file',
+    analyzer: 'lsp',
     name: path.basename(filePath),
     filePath, // Will be made relative by the caller
     imports: resolvedImports,
@@ -199,6 +201,7 @@ function adaptClass(sym: DocumentSymbol, filePath: string): ParsedClass {
     implements: implementsList,
     decorators,
     lineCount,
+    range: toSourceRange(sym),
   };
 }
 
@@ -288,6 +291,17 @@ function adaptFunction(sym: DocumentSymbol, filePath: string): ParsedFunction {
     lineCount,
     complexity,
     calledFunctions,
+    range: toSourceRange(sym),
+  };
+}
+
+/** LSP positions are 0-based; SourceRange lines are 1-based like editors show. */
+function toSourceRange(sym: DocumentSymbol): SourceRange {
+  return {
+    startLine: sym.range.start.line + 1,
+    startCol: sym.range.start.character,
+    endLine: sym.range.end.line + 1,
+    endCol: sym.range.end.character,
   };
 }
 
@@ -352,14 +366,15 @@ export function parseImportsFromText(text: string): ParsedImport[] {
   // Match: import * as ns from 'module';
   // Match: import 'module';
   // Match: import type { x } from 'module';
-  const importRegex = /import\s+(?:type\s+)?(?:(?:(\w+)(?:\s*,\s*)?)?(?:\{([^}]*)\})?(?:\*\s+as\s+(\w+))?(?:\s+from\s+)?)?['"]([^'"]+)['"]/g;
+  const importRegex = /import\s+(type\s+)?(?:(?:(\w+)(?:\s*,\s*)?)?(?:\{([^}]*)\})?(?:\*\s+as\s+(\w+))?(?:\s+from\s+)?)?['"]([^'"]+)['"]/g;
 
   let match;
   while ((match = importRegex.exec(text)) !== null) {
-    const defaultImport = match[1] || undefined;
-    const namedImportStr = match[2] || '';
-    const namespaceImport = match[3] || undefined;
-    const moduleSpecifier = match[4]!;
+    const typeOnly = Boolean(match[1]);
+    const defaultImport = match[2] || undefined;
+    const namedImportStr = match[3] || '';
+    const namespaceImport = match[4] || undefined;
+    const moduleSpecifier = match[5]!;
 
     const namedImports = namedImportStr
       .split(',')
@@ -375,7 +390,15 @@ export function parseImportsFromText(text: string): ParsedImport[] {
       defaultImport,
       namedImports,
       namespaceImport,
+      ...(typeOnly ? { typeOnly } : {}),
     });
+  }
+
+  // --- Dynamic import() ---
+  // Match: await import('./module')  (static specifiers only)
+  const dynamicImportRegex = /\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
+  while ((match = dynamicImportRegex.exec(text)) !== null) {
+    imports.push({ kind: 'import', moduleSpecifier: match[1]!, namedImports: [], dynamic: true });
   }
 
   // --- CommonJS require() ---
@@ -388,6 +411,12 @@ export function parseImportsFromText(text: string): ParsedImport[] {
     const moduleSpecifier = match[3]!;
     const namedImports = namedImportStr.split(',').map(s => s.trim().split(/\s*:\s*/)[0]?.trim() || '').filter(Boolean);
     imports.push({ kind: 'import', moduleSpecifier, defaultImport, namedImports });
+  }
+
+  // Any other require(): `module.exports = require('./lib')`, `require('./x')(app)`
+  const bareRequireRegex = /\brequire\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
+  while ((match = bareRequireRegex.exec(text)) !== null) {
+    imports.push({ kind: 'import', moduleSpecifier: match[1]!, namedImports: [] });
   }
 
   // --- Python ---
@@ -469,7 +498,21 @@ export function parseImportsFromText(text: string): ParsedImport[] {
     imports.push({ kind: 'import', moduleSpecifier: match[1]!, namedImports: [] });
   }
 
-  return imports;
+  // The language-specific patterns overlap (`import os` is valid Python and
+  // Swift), so one statement can be matched twice. Merge by module.
+  const merged = new Map<string, ParsedImport>();
+  for (const imp of imports) {
+    const key = `${imp.moduleSpecifier}\u0000${imp.typeOnly ? 't' : ''}${imp.dynamic ? 'd' : ''}`;
+    const prev = merged.get(key);
+    if (!prev) {
+      merged.set(key, imp);
+      continue;
+    }
+    prev.namedImports = [...new Set([...prev.namedImports, ...imp.namedImports])];
+    prev.defaultImport ??= imp.defaultImport;
+    prev.namespaceImport ??= imp.namespaceImport;
+  }
+  return [...merged.values()];
 }
 
 // ---------------------------------------------------------------------------

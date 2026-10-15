@@ -9,7 +9,6 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { LspClient, type LspClientOptions } from './lsp-client.js';
 import { adaptSymbolsToParsedFile, extractImportsFromSource } from './lsp-adapter.js';
-import { uriToPath, pathToUri } from './lsp-types.js';
 import {
   detectProjectLanguage,
   isJsTsLang,
@@ -50,7 +49,6 @@ export async function analyzeWithLsp(
 
   // Decide analysis strategy
   const hasJsTs = filePaths.some(fp => isJsTsLang(detectLang(path.extname(fp))));
-  const hasOther = filePaths.some(fp => !isJsTsLang(detectLang(path.extname(fp))) && detectLang(path.extname(fp)) !== 'unknown');
 
   // If primarily JS/TS, use LSP for those files + text for others
   if (isJsTsLang(primaryLang) && hasJsTs) {
@@ -94,7 +92,7 @@ async function analyzeWithLspEngine(
         if (isJsTsLang(lang)) {
           // Use LSP for JS/TS
           const symbols = await client.getDocumentSymbols(filePath);
-          const imports = await resolveJsImports(filePath, projectPath, filePathSet, client);
+          const imports = await resolveJsImports(filePath, projectPath, filePathSet);
           parsed = adaptSymbolsToParsedFile(filePath, symbols, imports);
         } else {
           // Text-based for non-JS/TS files in mixed projects
@@ -160,7 +158,7 @@ async function analyzeWithTextEngine(
       if (!fp.endsWith('.go')) continue;
       try {
         const content = fs.readFileSync(fp, 'utf-8');
-        const methods = extractGoMethods(content, fp);
+        const methods = extractGoMethods(content);
         for (const [receiver, fns] of methods) {
           if (!allGoMethods.has(receiver)) allGoMethods.set(receiver, []);
           allGoMethods.get(receiver)!.push(...fns);
@@ -220,7 +218,6 @@ async function resolveJsImports(
   filePath: string,
   projectPath: string,
   allFilePaths: Set<string>,
-  client: LspClient,
 ): Promise<ParsedImport[]> {
   const rawImports = extractImportsFromSource(filePath);
 

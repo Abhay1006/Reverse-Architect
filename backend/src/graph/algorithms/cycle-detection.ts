@@ -17,7 +17,7 @@ export function detectCycles(graph: ArchGraph): string[][] {
       currentPath.push(nodeId);
     },
     
-    finishNode: (nodeId: string) => {
+    finishNode: () => {
       // Remove node from path once fully explored
       currentPath.pop();
     },

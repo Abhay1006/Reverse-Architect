@@ -35,14 +35,6 @@ export function isValidRepoId(id: unknown): id is string {
   return id.split('/').every((segment) => segment !== '.' && segment !== '..' && segment.length > 0);
 }
 
-/** Throws unless `id` is a valid repo identifier. */
-export function assertValidRepoId(id: unknown): string {
-  if (!isValidRepoId(id)) {
-    throw new Error('Invalid repository identifier');
-  }
-  return id;
-}
-
 /**
  * True if `target` is `root` itself or lives underneath it.
  * Uses path.relative rather than startsWith, so `/a/repo-evil` is not
@@ -127,11 +119,6 @@ export function assertRealDirWithin(extractDirResolved: string, dir: string): vo
   if (!isInside(realRoot, realDir)) {
     throw new Error(`Directory traversal attempt detected in zip file: ${dir}`);
   }
-}
-
-/** Absolute path to a repo's working directory. Validates the id first. */
-export function repoDir(repoId: string): string {
-  return path.join(CLONES_BASE_DIR, assertValidRepoId(repoId));
 }
 
 /** Create the clones base directory if it does not exist. */

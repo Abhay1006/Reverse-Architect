@@ -73,6 +73,7 @@ export function parseDatabaseSchemas(projectPath: string): ParsedFile[] {
     if (tables.length > 0) {
       parsedFiles.push({
         kind: 'file',
+        analyzer: 'schema',
         name: path.basename(file),
         filePath: file,
         imports: [],

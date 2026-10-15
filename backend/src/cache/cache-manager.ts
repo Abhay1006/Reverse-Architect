@@ -3,6 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import os from 'os';
 import type { AnalysisResponse } from 'shared';
+import { ANALYZER_VERSION } from '../analyzer-version.js';
 
 // Path for the SQLite database
 const DB_PATH = process.env.ATLAS_DB_PATH || path.join(os.homedir(), '.atlas', 'cache.db');
@@ -71,7 +72,9 @@ export class CacheManager {
     const row = db.prepare('SELECT result_json FROM analysis_cache WHERE repo_id = ?').get(repoId) as { result_json: string } | undefined;
     if (!row) return null;
     try {
-      return JSON.parse(row.result_json) as AnalysisPayload;
+      const parsed = JSON.parse(row.result_json) as AnalysisPayload;
+      // Produced by an older analyzer: missing fields would reach the client.
+      return parsed.analyzerVersion === ANALYZER_VERSION ? parsed : null;
     } catch {
       return null;
     }

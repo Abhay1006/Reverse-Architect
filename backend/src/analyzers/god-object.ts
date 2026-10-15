@@ -63,14 +63,3 @@ export function detectGodObjects(
 
   return hits;
 }
-
-/**
- * Convenience: returns just the node IDs flagged as god objects.
- * Use this to populate `AnalysisResult.godObjects`.
- */
-export function getGodObjectIds(
-  graph: ArchGraph,
-  threshold: number = DEFAULT_GOD_OBJECT_THRESHOLD,
-): string[] {
-  return detectGodObjects(graph, threshold).map((h) => h.nodeId);
-}

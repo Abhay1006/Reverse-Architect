@@ -93,12 +93,23 @@ export interface ParsedImport {
   namespaceImport?: string | undefined;
   /** LSP: the URI that definition resolved to */
   definitionUri?: string;
+  /** `import type …`: erased at compile time, no runtime dependency. */
+  typeOnly?: boolean;
+  /** `import('…')`: loaded lazily at runtime. */
+  dynamic?: boolean;
 }
+
+/**
+ * Which extractor produced a ParsedFile. Reported in the analysis coverage so
+ * consumers can tell resolved (LSP) facts from regex-level approximations.
+ */
+export type FileAnalyzer = "lsp" | "text" | "schema";
 
 export interface ParsedFile {
   kind: "file";
   name: string;
   filePath: string;
+  analyzer?: FileAnalyzer;
   imports: ParsedImport[];
   classes: ParsedClass[];
   interfaces: ParsedInterface[];
@@ -123,6 +134,8 @@ export interface ArchNode {
     maxComplexity: number;
     importanceScore?: number;
   };
+  /** Source range of the entity, when the extractor reported one. */
+  range?: SourceRange;
   position: { x: number; y: number };
   style?: Record<string, any>; // Used by React Flow for size overrides
 }
@@ -134,6 +147,8 @@ export interface ArchEdge {
   target: string;
   label?: string;
   type: "import" | "extends" | "implements" | "calls";
+  /** Import edges only: every import behind this edge is `import type`. */
+  typeOnly?: boolean;
 }
 
 // --- Analysis Results ---
@@ -144,10 +159,67 @@ export interface AnalysisResult {
   patterns: PatternMatch[];
 }
 
+export type DesignPattern =
+  | "observer" | "singleton" | "factory" | "builder" | "strategy" | "adapter";
+
+export type Confidence = "high" | "medium" | "low";
+
 export interface PatternMatch {
   nodeId: string;
-  pattern: "observer" | "singleton" | "factory";
-  confidence: "high" | "medium" | "low";
+  pattern: DesignPattern;
+  confidence: Confidence;
+  /** The observations that triggered the match, e.g. `has method "getInstance"`. */
+  reasons: string[];
+  /** Other nodes taking part in the pattern (e.g. a strategy's implementations). */
+  relatedNodeIds?: string[];
+}
+
+// ============================================================
+//  Findings
+//  Every conclusion Atlas draws is reported as a Finding that carries the
+//  evidence behind it and what the analysis could not check. A finding is a
+//  claim to verify, not a verdict.
+// ============================================================
+
+export type FindingKind = "cycle" | "dead-code" | "god-object" | "hotspot" | "pattern";
+
+export interface EvidenceItem {
+  /**
+   * `observed`: read directly from the parsed source (an import, a method name,
+   * a measured number). `inferred`: a conclusion drawn from observations.
+   */
+  basis: "observed" | "inferred";
+  /** Stable rule id, e.g. `dead-code/zero-in-degree`. */
+  rule: string;
+  detail: string;
+  location?: { filePath: string; line?: number };
+}
+
+export interface Finding {
+  /** Stable across runs on the same code: `<kind>:<subject>`. */
+  id: string;
+  kind: FindingKind;
+  title: string;
+  nodeIds: string[];
+  confidence: Confidence;
+  evidence: EvidenceItem[];
+  /** What this finding could not account for. */
+  limitations: string[];
+}
+
+export interface AnalysisCoverage {
+  /** Source files parsed, by extractor. */
+  filesByAnalyzer: Record<FileAnalyzer | "unknown", number>;
+  filesParsed: number;
+  filesInGraph: number;
+  /**
+   * `entry-points`: only files reachable from detected entry points are in the
+   * graph. `all-files`: no entry point was found, so every parsed file is.
+   */
+  graphScope: "entry-points" | "all-files";
+  entryFiles: string[];
+  /** Run-wide caveats that apply to every finding. */
+  limitations: string[];
 }
 
 // --- Complete Graph (internal pipeline representation) ---
@@ -155,6 +227,11 @@ export interface ArchGraph {
   nodes: ArchNode[];
   edges: ArchEdge[];
   analysis: AnalysisResult;
+  /**
+   * Entity nodes another file imports by name. Imports are file-level edges,
+   * so without this an imported-but-not-called class looks unreferenced.
+   */
+  importedEntityIds?: string[];
 }
 
 // ============================================================
@@ -256,6 +333,10 @@ export interface AnalysisResponse {
   godObjectDetails: GodObjectHit[];
   deadCodeDetails: DeadCodeHit[];
   entryPoint: EntryPointResult | null;
+  findings: Finding[];
+  coverage: AnalysisCoverage;
+  /** Bumped whenever the analysis output changes; stale cache entries are ignored. */
+  analyzerVersion: number;
   /** Set by the route handler, not the pipeline. */
   repoId?: string;
 }

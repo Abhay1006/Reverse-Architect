@@ -10,6 +10,7 @@ import { analyzeProjectDir } from './analyzer-pipeline.js';
 import { analysisLimiter, upload } from './middleware.js';
 import { withRepoLock, activeAnalyses, queuedAnalyses } from './analysis-queue.js';
 import { toClientError } from './errors.js';
+import { cloneRepo, parseGithubUrl } from '../github/clone.js';
 import {
   CLONES_BASE_DIR,
   ensureClonesBaseDir,
@@ -140,19 +141,12 @@ apiRouter.post('/analyze/github', analysisLimiter, async (req: Request<Record<st
   const sid = sessionId || 'default-session';
 
   // Strict validation for GitHub URLs to prevent SSRF or malformed repos
-  const githubUrlRegex = /^https?:\/\/(www\.)?github\.com\/[\w.-]+\/[\w.-]+\/?$/;
-  if (!githubUrlRegex.test(url.trim())) {
+  const parsed = parseGithubUrl(url);
+  if (!parsed) {
     res.status(400).json({ error: 'URL must be a valid GitHub repository (e.g., https://github.com/user/repo)' });
     return;
   }
-
-  const cleanUrl = url.trim();
-  const repoId = cleanUrl.replace(/^https?:\/\/(www\.)?github\.com\//, '').replace(/\/$/, '');
-
-  if (!isValidRepoId(repoId)) {
-    res.status(400).json({ error: 'URL must be a valid GitHub repository (e.g., https://github.com/user/repo)' });
-    return;
-  }
+  const { url: cleanUrl, repoId } = parsed;
 
   try {
     // 1. Check cache freshness without cloning
@@ -195,7 +189,6 @@ apiRouter.post('/analyze/github', analysisLimiter, async (req: Request<Record<st
 
       try {
         console.log(`Cloning ${cleanUrl} into ${cloneDir}...`);
-        const { cloneRepo } = await import('../github/clone.js');
         await cloneRepo(cleanUrl, cloneDir);
 
         progressTracker.emitProgress(sid, { step: 'extracting', message: `Running LSP analysis...`, progress: 50 });

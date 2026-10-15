@@ -1,36 +1,30 @@
 import type { ArchNode, PatternMatch } from 'shared';
 
+const FACTORY_PREFIXES = ['create', 'make'];
+
 /**
  * Heuristic check for Factory pattern.
- * Checks if a class has methods starting with 'create', 'make', or 'build'.
+ * Checks if a class has methods starting with 'create' or 'make'.
+ * `build*` methods belong to the builder detector.
  */
 export function detectFactory(node: ArchNode): PatternMatch | null {
   if (node.type !== 'class' || !node.metadata) return null;
 
-  const methods = node.metadata.methods || [];
-  
-  const factoryPrefixes = ['create', 'make', 'build'];
-  
-  // Note: we want to match exact prefix, e.g., 'createNode', 'makeUser' 
-  // and not just contain the word like 'recreate'
-  let factoryMethodsCount = 0;
-  
-  for (const method of methods) {
-    const lower = method.toLowerCase();
-    if (factoryPrefixes.some(prefix => lower.startsWith(prefix))) {
-      factoryMethodsCount++;
-    }
-  }
+  // Match on the prefix only, so 'createNode' counts and 'recreate' does not.
+  const factoryMethods = (node.metadata.methods || []).filter(m =>
+    FACTORY_PREFIXES.some(prefix => m.toLowerCase().startsWith(prefix)),
+  );
+  const isNamedFactory = /factory$/i.test(node.label);
 
-  // A class named "*Factory" or "*Builder" boosts confidence
-  const isNamedFactory = node.label.toLowerCase().includes('factory') || node.label.toLowerCase().includes('builder');
+  const reasons = factoryMethods.slice(0, 5).map(m => `has creation method "${m}"`);
+  if (isNamedFactory) reasons.push(`class name "${node.label}" ends in "Factory"`);
 
-  if (factoryMethodsCount > 0 && isNamedFactory) {
-    return { nodeId: node.id, pattern: 'factory', confidence: 'high' };
-  } else if (factoryMethodsCount >= 2) {
-    return { nodeId: node.id, pattern: 'factory', confidence: 'medium' };
+  if (factoryMethods.length > 0 && isNamedFactory) {
+    return { nodeId: node.id, pattern: 'factory', confidence: 'high', reasons };
+  } else if (factoryMethods.length >= 2) {
+    return { nodeId: node.id, pattern: 'factory', confidence: 'medium', reasons };
   } else if (isNamedFactory) {
-    return { nodeId: node.id, pattern: 'factory', confidence: 'low' };
+    return { nodeId: node.id, pattern: 'factory', confidence: 'low', reasons };
   }
 
   return null;

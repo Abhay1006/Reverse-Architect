@@ -1,0 +1,6 @@
+{
+  "description": "Known blind spots. pages/about.ts is used through a dynamic import; types/node.ts and types/edge.ts form a type-only cycle with no runtime effect; cache.ts calls a method that merely shares a name with logger.ts's cleanup(). Only old/unused.ts is genuinely unused, and there is no runtime cycle.",
+  "cycles": [],
+  "unusedFiles": ["src/old/unused.ts"],
+  "patterns": []
+}

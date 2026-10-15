@@ -94,3 +94,11 @@ describe('buildGraph reachability with NodeNext imports', () => {
     expect(graph.nodes.filter((n) => n.type === 'file')).toHaveLength(4);
   });
 });
+
+describe('manifestReferencedFiles', () => {
+  it('collects main, bin, browser replacements and exports, skipping globs and non-source files', async () => {
+    const { manifestReferencedFiles } = await import('../src/parser/entry-point.js');
+    const dir = new URL('./fixtures/manifest', import.meta.url).pathname;
+    expect(manifestReferencedFiles(dir)).toEqual(['lib/adapters/http.js', 'lib/cli.js', 'lib/index.js', 'lib/null.js']);
+  });
+});

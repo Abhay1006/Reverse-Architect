@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Box, Typography, TextField, Button, Paper, List, ListItemButton, Chip } from '@mui/material';
 import { BugReport as BugIcon, Architecture as ArchitectureIcon, PlayArrow as PlayIcon } from '@mui/icons-material';
 import { useAtlasStore } from '../store/atlas-store';
-import type { AtlasNode } from '../types/nodes';
+import { rankSuspects, type Suspect } from '../lib/bug-hunter';
 
 export default function BugHunterTab({ onGoToGraph }: { onGoToGraph: () => void }) {
   const nodes = useAtlasStore(s => s.nodes);
@@ -10,88 +10,12 @@ export default function BugHunterTab({ onGoToGraph }: { onGoToGraph: () => void 
   const setFocusedNode = useAtlasStore(s => s.setFocusedNode);
 
   const [issueText, setIssueText] = useState("");
-  const [suspects, setSuspects] = useState<{ node: AtlasNode, score: number, reason: string }[]>([]);
+  const [suspects, setSuspects] = useState<Suspect[]>([]);
 
   const handleSearch = () => {
     if (!issueText.trim()) return;
 
-    // 1. Tokenize & Clean
-    const rawWords = issueText.match(/[a-zA-Z0-9_]{3,}/g) || [];
-    const stopwords = new Set(["the", "and", "when", "bug", "fix", "issue", "error", "fails", "this", "that", "with", "from", "have", "been", "there"]);
-    const terms = Array.from(new Set(rawWords.map(w => w.toLowerCase()).filter(w => !stopwords.has(w))));
-
-    if (terms.length === 0) return;
-
-    // 2. Initial BM25 / TF Scoring
-    const scores = new Map<string, number>();
-    const reasons = new Map<string, string>();
-
-    nodes.forEach(n => {
-      let score = 0;
-      const matchedTerms: string[] = [];
-
-      const label = (n.data?.label as string) || "";
-      const path = (n.data?.filePath as string) || "";
-      const meta = n.data?.metadata;
-      
-      const properties = meta?.properties?.join(" ") || "";
-      const methods = meta?.methods?.join(" ") || "";
-      const entities = meta?.entities?.map((e) => e.name).join(" ") || "";
-
-      const bigString = `${label} ${path} ${properties} ${methods} ${entities}`.toLowerCase();
-
-      terms.forEach(term => {
-        let termScore = 0;
-        
-        // Exact matches in filename are high value
-        if (label.toLowerCase().includes(term)) termScore += 10;
-        if (path.toLowerCase().includes(term)) termScore += 5;
-        
-        // Occurrences in content (functions, variables)
-        const occurrences = bigString.split(term).length - 1;
-        termScore += occurrences * 2;
-
-        if (termScore > 0) {
-          score += termScore;
-          matchedTerms.push(term);
-        }
-      });
-
-      if (score > 0) {
-        scores.set(n.id, score);
-        reasons.set(n.id, `Matched keywords: ${matchedTerms.join(", ")}`);
-      }
-    });
-
-    // 3. Spreading Activation (Architectural Context)
-    // If a node is connected to a highly suspected node, bump its score!
-    const finalScores = new Map(scores);
-    edges.forEach(e => {
-      const s1 = scores.get(e.source) || 0;
-      const s2 = scores.get(e.target) || 0;
-
-      if (s1 > 0) {
-        finalScores.set(e.target, (finalScores.get(e.target) || 0) + s1 * 0.4);
-        if (!reasons.has(e.target)) reasons.set(e.target, `Architecturally coupled to suspected node`);
-      }
-      if (s2 > 0) {
-        finalScores.set(e.source, (finalScores.get(e.source) || 0) + s2 * 0.4);
-        if (!reasons.has(e.source)) reasons.set(e.source, `Architecturally coupled to suspected node`);
-      }
-    });
-
-    // 4. Sort & Format
-    const results = Array.from(finalScores.entries())
-      .map(([id, score]) => ({
-        node: nodes.find(n => n.id === id)!,
-        score,
-        reason: reasons.get(id) || ""
-      }))
-      .filter(r => r.node && r.node.type === 'file') // Only suggest files
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 5); // Top 5
-
-    setSuspects(results);
+    setSuspects(rankSuspects(issueText, nodes, edges));
   };
 
   const handleSuspectClick = (nodeId: string) => {
@@ -110,8 +34,9 @@ export default function BugHunterTab({ onGoToGraph }: { onGoToGraph: () => void 
           <BugIcon sx={{ color: 'error.main', fontSize: 32 }} /> Bug Hunter
         </Typography>
         <Typography variant="body1" sx={{ color: 'text.secondary', mb: 4 }}>
-          Paste a GitHub issue or bug description below. Atlas will use a heuristic text-search combined with 
-          architectural spreading-activation (PageRank) to find exactly where in the codebase the issue lives—without using an LLM.
+          Paste a GitHub issue or bug description below. Atlas matches its keywords against file, class and
+          function names, then boosts files connected to strong matches, to suggest where to start looking. It is a
+          quick heuristic that runs without an LLM, so treat the results as leads, not answers.
         </Typography>
 
         <Paper sx={{ p: 3, mb: 4, bgcolor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.1)' }}>

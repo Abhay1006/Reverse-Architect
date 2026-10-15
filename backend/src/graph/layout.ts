@@ -189,7 +189,7 @@ export function computeLayout(graph: ArchGraph, options: LayoutOptions = {}): Po
   }
 
   // 6. Assign relative coordinates to children
-  for (const [parentId, children] of childrenByParent.entries()) {
+  for (const children of childrenByParent.values()) {
     let currentY = 80; // Start below the header
     for (const child of children) {
       positionedNodes.push({

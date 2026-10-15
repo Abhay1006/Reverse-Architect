@@ -47,12 +47,12 @@ describe('Dead Code Analyzer', () => {
     expect(hitIds).not.toContain('6'); // EntryFile (excluded by heuristic)
   });
 
-  it('should respect explicit entry points list', () => {
-    // If we pass '2' (UnusedClass) as an explicit entry point, it shouldn't be flagged as dead
+  it('excludes explicit entry points in addition to the naming heuristic', () => {
     const hits = detectDeadCode(mockGraph, ['2']);
     const hitIds = hits.map(h => h.nodeId);
-    
-    expect(hitIds).not.toContain('2'); // Explicitly ignored
-    expect(hitIds).toContain('6'); // '6' has 0 in-degree and was NOT in the explicit list, so it gets flagged
+
+    expect(hitIds).not.toContain('2'); // Explicit entry point
+    expect(hitIds).not.toContain('6'); // Still recognised by name (main.ts)
+    expect(hitIds).toContain('3');
   });
 });
