@@ -1,0 +1,53 @@
+name: Release
+
+# Keeps a release PR open that bumps the version and updates CHANGELOG.md
+# from Conventional Commit messages. Merging that PR tags the release and
+# publishes `reverse-architect` to npm.
+#
+# One-time npm setup (pick one):
+#  - Trusted publishing (no token): publish 0.1.0 once by hand with
+#    `npm publish -w backend --access public`, then on npmjs.com add this
+#    repository and workflow (release.yml) as a trusted publisher.
+#  - Token: add an npm automation token as the NPM_TOKEN repository secret.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+    steps:
+      - uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  publish:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # npm provenance and trusted publishing
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          registry-url: https://registry.npmjs.org
+      - run: npm install -g npm@latest # trusted publishing needs npm >= 11.5
+      - run: npm ci
+      - run: npm run check
+      - name: Publish
+        run: npm publish -w backend --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
