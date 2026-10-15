@@ -1,111 +1,134 @@
-# 🏛️ Atlas
+# Atlas
 
-**Atlas** is an intelligent, automated Architecture Visualization and AI Analysis tool for modern multi-language codebases.
+**See how a codebase fits together, and get the evidence behind every claim.**
 
-Instead of reading thousands of lines of raw code to deduce interactions, Atlas parses your repository, extracts its entities (Classes, Interfaces, Functions, Database Tables), computes relationships, detects anti-patterns (God Objects, Circular Dependencies, Dead Code), identifies architectural designs (Factories, Observers, Singletons), and renders it all in an interactive, sleek 2D canvas or a stunning 3D WebGL force-directed graph.
+[![CI](https://github.com/Abhay1006/Reverse-Architect/actions/workflows/ci.yml/badge.svg)](https://github.com/Abhay1006/Reverse-Architect/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/reverse-architect?color=cb3837)](https://www.npmjs.com/package/reverse-architect)
+[![MCP server](https://img.shields.io/badge/MCP-server-5c4ee5)](docs/mcp.md)
+[![License: MIT](https://img.shields.io/badge/license-MIT-f4c430)](LICENSE)
+
+Atlas parses a repository, builds its dependency graph, and reports:
+- **circular dependencies**;
+- **hotspots** (complex code that many things depend on);
+- **highly coupled modules**;
+- **possibly unused code**;
+- **design patterns**.
+
+Each finding says what was observed, what was inferred from that, and what the analysis could not see.
+
+Use it three ways:
+
+| | |
+|---|---|
+| **Web app** | An interactive 2D/3D graph with code peek, search, a bug hunter and an AI assistant |
+| **CLI** | `npx reverse-architect cycles .`: readable output or JSON, with a CI exit code |
+| **MCP server** | Lets Claude Code, Cursor, Codex and other agents ask architecture questions instead of reading every file |
+
+![Atlas showing the dependency graph of its own backend](docs/assets/screenshot.png)
 
 ---
 
-## 🏗️ System Architecture
+## Quick start
 
-Atlas operates as a monorepo containing a high-speed Express/TypeScript backend running an LSP (Language Server Protocol) indexer and a modern Next.js client-side SPA.
+**From the terminal.** No install needed; Node.js 20.12 or later:
 
-```mermaid
-graph TD
-    A[Zip Upload / GitHub URL] --> B[Express Backend Server]
-    B --> C{JS/TS Code?}
-    C -->|Yes| D[LSP Pipeline <br/> typescript-language-server]
-    C -->|No| E[Regex Text Analyzer <br/> 16+ Languages]
-    D --> F[Graph Builder <br/> Node/Edge Resolution]
-    E --> F
-    F --> G[Analysis Service <br/> God Objects, Cycles, Patterns]
-    G --> H[Dagre Layout Engine]
-    H --> I[SQLite Cache <br/> better-sqlite3]
-    I --> J[JSON Payload via SSE/REST]
-    J --> K[React Frontend App]
-    K --> L[Zustand State Store]
-    L --> M[2D Canvas / 3D Force-Graph]
+```bash
+npx reverse-architect analyze .                      # overview of the current project
+npx reverse-architect cycles .                       # circular dependencies, with evidence
+npx reverse-architect deps . src/app.ts --dependents # what breaks if I change this?
+npx reverse-architect analyze https://github.com/expressjs/express
 ```
 
----
+**For your coding agent:**
 
-## ✨ Features
+```bash
+claude mcp add reverse-architect -- npx -y reverse-architect mcp
+```
 
-- 🌐 **3D Force-Directed Graph**: Seamlessly toggle between a standard 2D view (React Flow) and an interactive 3D WebGL canvas (Three.js). Features animated directional particle flows, emissive glowing node highlights for entry points and God Objects, and manual camera focus-zoom controls.
-- 🎨 **Multi-Language Brand Colorization**: Support for JS/TS, Python, Go, Rust, Java, Kotlin, Swift, C/C++, C#, Ruby, PHP, SQL, and Prisma. Nodes are custom-badged by language type and dynamically color-coded matching their brand palettes.
-- 🔍 **Interactive Code Peek**: Click any file, class, method, or database schema node to trigger a syntax-highlighted slide-out drawer showing its source code.
-- 🚨 **Anti-Pattern Detection**: Instantly warns you about God Objects (bloated components), Circular Dependencies, and potentially Dead / Unused Code.
-- 🧩 **Design Pattern Detection**: Heuristic analysis identifies Factory, Singleton, Observer, Builder, Strategy, and Adapter patterns in the codebase.
-- 🎯 **Spotlight Search (Cmd+K)**: Apple Spotlight-style search command palette with fuzzy matching for classes, functions, files, and packages, including keyboard navigation.
-- 🦟 **Bug Hunter Tab**: Smart heuristic-based bug localization using PageRank-style degree analysis and spreading activation on the dependency graph to pinpoint hotspots.
-- 🔥 **Complexity Heatmaps**: Dynamically color-code nodes on the canvas based on their cyclomatic complexity (green/teal → orange/red).
-- ⚡ **SQLite Caching & Intelligent Invalidation**: Backend uses `better-sqlite3` and `git ls-remote HEAD` cache checking. Subsequent loads of the same repository version are instantaneous.
-- 📋 **Mermaid & JSON Exports**: Export your codebase's architectural relationships as Markdown-compatible Mermaid flowchart diagrams or download raw graph JSON structure files.
-- 🐙 **1-Click GitHub Loading**: Pull and visualize any public (or private) GitHub repository simply by pasting its URL directly into the engine, powered by `simple-git`.
-- 📁 **Zero-Configuration Zip Uploads**: Drag and drop codebase `.zip` archives directly onto the canvas for secure backend extraction and visualization.
+Then ask, for example: *"Use reverse-architect to find the circular dependencies in this project and tell me which to break first."* Setup for other agents is in [docs/mcp.md](docs/mcp.md).
 
----
-
-## 🚀 Getting Started
-
-Atlas is an npm-workspaces monorepo: a Node.js/TypeScript backend running `typescript-language-server` (with text-based parsers as a fallback), and a React + Next.js frontend.
-
-### Prerequisites
-- Node.js v20+ (v22 recommended — the CI uses 22)
-- `npm`
-- `git` installed globally, and reachable on `PATH` (used for cloning and for cache freshness checks)
-
-### Install
-
-Install once from the repository root — the workspaces handle both packages:
+**The web app**, from a clone of this repository:
 
 ```bash
 npm install
+npm run dev        # API on :4000, web app on http://localhost:3000
 ```
 
-### Run Everything in One Command (Recommended)
-
-```bash
-npm run dev
-```
-
-*Backend API on `http://localhost:4000`, Next.js frontend on `http://localhost:3000`.*
-
-### Running Services Separately (Alternative)
-
-```bash
-# Terminal 1 — backend (tsx watch)
-npm run dev -w backend
-
-# Terminal 2 — frontend
-npm run dev -w frontend
-```
-
-### Production
-
-```bash
-npm run build     # compiles the backend to backend/dist and builds the Next.js app
-npm start         # runs the compiled backend + the Next.js production server
-```
-
-The backend `start` script runs `node dist/backend/src/server.js` — it does **not** use `tsx` in production.
-
-### Useful scripts
-
-| Command | What it does |
-|---|---|
-| `npm run dev` | Both services in watch mode |
-| `npm run build` | Build both workspaces |
-| `npm start` | Build, then run both in production mode |
-| `npm test -w backend` | Backend unit tests (vitest) |
-| `npm test -w frontend` | Frontend store/selector tests |
-| `npm run typecheck -w backend` | `tsc --noEmit` |
-| `npm run lint -w frontend` | ESLint |
-| `npm run cli -w backend -- parse <dir>` | Analyze a local directory and print the graph as JSON |
+Paste a GitHub URL or drop a `.zip` of a project.
 
 ---
 
-## ⚙️ Configuration
+## What Atlas finds
+
+| Finding | How it is detected | Default confidence |
+|---|---|---|
+| Circular dependency | Depth-first search over value imports. Cycles that close only through `import type`, through name-matched calls, or inside one file are kept apart as low confidence. | high / medium |
+| Hotspot | Complexity × (1 + fan-in), top 25 with complexity ≥ 10 | high / medium |
+| Highly coupled | Among the 10 most-connected nodes and over 3× the coupling threshold | medium |
+| Possibly unused | Files nothing imports, or that no entry point reaches. Unused functions and classes are low confidence. | medium |
+| Design pattern | Singleton, Factory, Builder, Observer, Strategy and Adapter, from member names and inheritance | high / medium |
+
+Every finding is a claim to check, not a verdict. [docs/findings.md](docs/findings.md) gives the exact rule and confidence level behind each one, and what each can and cannot see.
+
+**Languages.** JavaScript and TypeScript are parsed through the TypeScript language server, so imports are resolved properly. Python, Go, Java, Kotlin, Rust, C/C++, C#, Ruby, PHP, Swift, Scala, Dart, Lua and Elixir use a regex text extractor: imports and calls are matched by name, so findings are rougher, and every analysis says how many files went through which extractor. SQL and Prisma schemas become database nodes.
+
+### How accurate is it?
+
+[`bench/`](bench) holds labelled projects with known answers, including a corpus of deliberate traps: dynamic `import()`, type-only cycles, and calls that only share a name. CI scores every pull request against them. On real repositories (Express, axios and ky), Atlas reports no circular dependencies at default confidence and explains each candidate it set aside: type-only, a name collision, or recursion. Its one "unused file" in axios checks out by hand. [docs/accuracy.md](docs/accuracy.md) has the full numbers and their caveats, including that the corpus was written by the people tuning the rules.
+
+---
+
+## Web app features
+
+- **2D and 3D graphs:** a React Flow canvas, or a Three.js force-directed graph with animated dependency flow.
+- **Code Peek:** click any file, class, function or table for its syntax-highlighted source.
+- **Analysis panel:** god objects, unused code, runtime cycles, and patterns with the reasons they matched.
+- **Spotlight search (⌘K):** fuzzy search over files, classes, functions and packages.
+- **Bug Hunter:** paste an issue and get the files most likely involved. It matches keywords against names, then boosts files connected to strong matches. It's a quick lead, with no LLM involved.
+- **Complexity heatmap:** colour nodes by estimated cyclomatic complexity.
+- **AI assistant:** chat with OpenAI, Anthropic or Gemini, grounded in the architecture graph. Your API key stays in the browser and is sent per request.
+- **Mermaid and JSON export.**
+- **Caching:** results are stored in SQLite and refreshed when the repository's `HEAD` moves.
+
+## How it works
+
+```mermaid
+graph TD
+    A[Directory, zip upload or GitHub URL] --> B{JS / TS?}
+    B -->|Yes| C[TypeScript language server]
+    B -->|No| D[Regex text extractor, 16 languages]
+    C --> E[Graph builder: imports, calls, inheritance]
+    D --> E
+    E --> F[Analyzers: cycles, hotspots, coupling, unused code, patterns]
+    F --> G[Findings with evidence and coverage]
+    G --> H[Web app, via Express API + SQLite cache]
+    G --> I[CLI]
+    G --> J[MCP server]
+```
+
+The repository is an npm-workspaces monorepo:
+
+- `backend/`: the analysis engine, Express API, CLI and MCP server. It is published to npm as `reverse-architect`.
+- `frontend/`: the Next.js web app.
+- `shared/`: the API types both sides compile against.
+- `bench/`: the accuracy benchmark.
+
+### Development
+
+| Command | What it does |
+|---|---|
+| `npm run dev` | API and web app in watch mode |
+| `npm run check` | Typecheck, lint, dead-code check (knip) and unit tests: what CI runs |
+| `npm run test:e2e` | Browser smoke test (Playwright): upload a project, see the graph |
+| `npm run bench` | Score the analyzer against the labelled corpus |
+| `npm run cli -- analyze <dir>` | Run the CLI from source |
+| `npm run build` / `npm start` | Production build, then serve both |
+
+Development needs Node.js 22.12+ (see `.nvmrc`); the published CLI runs on 20.12+. `git` must be on `PATH` (used for cloning and cache freshness checks).
+
+---
+
+## Configuration
 
 Copy the examples and adjust as needed:
 
@@ -158,7 +181,7 @@ Cloned repositories are kept under `~/.atlas/clones` after analysis so Code Peek
 
 ---
 
-## 📚 Core API Reference
+## Core API Reference
 
 The backend serves REST + SSE under `/api`. Every route is also reachable through the Next.js proxy on port 3000 at the same path.
 
@@ -175,12 +198,15 @@ All three analysis responses share one body, defined once in `shared/types.ts` a
 {
   "nodes": [...],           // React Flow nodes; `data.metadata` and `data.analysis` always present
   "edges": [...],           // `type` is the renderer, `relation` is import|extends|implements|calls
-  "analysis": {             // godObjects, deadCode, cycles, patterns
+  "analysis": {             // godObjects, deadCode, runtime cycles, patterns (with reasons)
     "godObjects": [], "deadCode": [], "cycles": [], "patterns": []
   },
   "godObjectDetails": [],
   "deadCodeDetails": [],
   "entryPoint": { "entryFile": "src/index.ts", "framework": "node" },
+  "findings": [...],        // every conclusion with its evidence; see docs/findings.md
+  "coverage": {...},        // what was parsed, how, and the run-wide limitations
+  "analyzerVersion": 2,     // cached results from another version are re-analyzed
   "repoId": "owner/repo"
 }
 ```
@@ -204,7 +230,7 @@ These require two headers: `x-ai-provider` (`openai` | `anthropic` | `gemini`) a
 
 ---
 
-## 🔒 Security notes
+## Security notes
 
 Atlas clones arbitrary repositories and serves file contents, and it ships **without authentication**. Before exposing it beyond localhost:
 
@@ -216,39 +242,10 @@ Cloned repositories are untrusted content. Path handling for both zip extraction
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
-Contributions are absolutely welcome to help push codebase visualization bounds.
+Contributions are welcome, and labelled benchmark projects especially so. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, conventions and how to keep a fork in sync, and [SECURITY.md](SECURITY.md) to report a vulnerability.
 
-1. **Fork the repo** and clone it locally.
-2. **Create a feature branch** (`git checkout -b feature/EpicVisualization`).
-3. **Make your change.** Before opening a PR, run what CI runs:
-   ```bash
-   npm run typecheck -w backend && npm run typecheck -w frontend
-   npm run lint -w frontend
-   npm test -w backend && npm test -w frontend
-   npm run build
-   ```
-4. **Push to the branch** (`git push origin feature/EpicVisualization`).
-5. **Open a Pull Request.**
+## License
 
-### Conventions worth knowing
-
-- **The API payload is defined once**, in `shared/types.ts` as `AnalysisResponse`. Both sides import it, so adding a field means adding it there first — never redeclare the shape locally. `runGraphPipeline` is typed against it so a missed field fails the build.
-- **Filesystem paths from user input go through `backend/src/api/path-safety.ts`.** Cloned repositories are untrusted content. Don't hand-roll containment checks; extend that module and its tests instead.
-- **Edge `type` is the React Flow renderer, `relation` is the architectural meaning** (`import` / `extends` / `implements` / `calls`). Filter on `relation`.
-- UI styling follows the existing tokens in `globals.css`.
-
-### Keeping your fork up to date
-
-An upstream repository cannot push into its forks — syncing is always initiated from the fork side. Either:
-
-- Use GitHub's **"Sync fork"** button on your fork's page, or run `gh repo sync <you>/Reverse-Architect`, **or**
-- Automate it: copy [`.github/templates/sync-fork.yml`](.github/templates/sync-fork.yml) into your fork at `.github/workflows/sync-fork.yml`. It fast-forwards your default branch from upstream daily and can be run on demand. See the comments in that file — Actions must be enabled on your fork, and GitHub disables scheduled workflows on forks after 60 days of inactivity.
-
----
-
-## 📜 License
-
-Atlas is completely open-source and free to utilize under the MIT License. Go untangle those codebases!
-
+[MIT](LICENSE)

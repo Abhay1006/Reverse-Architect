@@ -2,9 +2,15 @@
 # Atlas-TS .gitignore
 # ========================
 
-# --- Planning & Documentation (local only) ---
-docs/
-# backend/test/ is now tracked
+# --- Local planning notes (public docs in docs/ are tracked) ---
+docs/atlas_project_review.md
+docs/DESIGN_DECISIONS.md
+docs/IMPLEMENTATION_PLAN.md
+docs/PROJECT_REVIEW_*.md
+docs/PROJECT_STRUCTURE.md
+docs/ROADMAP.md
+docs/TECHNICAL_DEEP_DIVE.md
+docs/TODO.md
 
 # --- Dependencies ---
 node_modules/
@@ -59,3 +65,7 @@ temp/
 .Spotlight-V100
 .Trashes
 ehthumbs.db
+
+# Playwright
+test-results/
+playwright-report/

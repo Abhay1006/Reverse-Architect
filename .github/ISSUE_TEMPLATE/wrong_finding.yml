@@ -1,0 +1,36 @@
+name: Wrong or missing finding
+description: Atlas reported something that isn't there, or missed something that is.
+labels: ["accuracy"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        These reports are the most useful kind: each one can become a labelled case in `bench/corpus/`.
+        A public repository and commit we can run against is ideal.
+  - type: input
+    id: target
+    attributes:
+      label: Repository and commit
+      placeholder: https://github.com/owner/repo @ abc1234 (or attach a minimal zip)
+    validations:
+      required: true
+  - type: textarea
+    id: finding
+    attributes:
+      label: The finding
+      description: Paste it from `reverse-architect findings <target> --json`, or describe what was missed.
+      render: json
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why it's wrong
+      description: What the code actually does. Point at the lines if you can.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      placeholder: reverse-architect --version
