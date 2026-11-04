@@ -10,12 +10,15 @@
 #   2. reinstalls dependencies only if a package.json or the lockfile changed,
 #   3. rebuilds only if backend/, frontend/ or shared/ changed,
 #   4. restarts the app and waits for the API and the web app to answer,
-#   5. rolls back to the previous commit if any of that fails.
+#   5. rolls back to the previous commit if any of that fails, reusing the
+#      previous build instead of rebuilding it.
 #
 # Usage (from anywhere; the script finds the repo itself):
 #   scripts/tab-deploy.sh            deploy once if there is a new commit
 #   scripts/tab-deploy.sh watch [s]  check every s seconds (default 60), forever
 #   scripts/tab-deploy.sh restart    restart the app without pulling
+#   scripts/tab-deploy.sh rollback   go back to the commit before the last
+#                                    deploy (run it again to undo)
 #   scripts/tab-deploy.sh stop       stop the app
 #   scripts/tab-deploy.sh status     show deployed commit and whether it runs
 #
@@ -33,6 +36,10 @@
 #                   recovery to that supervisor.
 #   POST_INSTALL    shell command run after every `npm ci`, for host-only
 #                   packages that `npm ci` removes again.
+#   NOTIFY_CMD      shell command run after a deploy, a rollback or a failure,
+#                   with DEPLOY_EVENT (deployed, rolled-back, rollback-failed,
+#                   manual-rollback) and DEPLOY_MESSAGE in its environment.
+#   LOG_MAX_BYTES   size at which a log in logs/ is rotated to .1  (default 5 MB)
 #
 # Settings can also go in .deploy/env (sourced, gitignored), which keeps them
 # with the checkout instead of in whatever starts `watch`.
@@ -58,6 +65,10 @@ LOG_DIR="$REPO_DIR/logs"
 PID_FILE="$STATE_DIR/$APP_NAME.pid"
 FAILED_FILE="$STATE_DIR/failed-sha"
 LOCK_DIR="$STATE_DIR/lock"
+WATCHER_PID="$STATE_DIR/watcher.pid"     # pid of `watch`; exec keeps it across self-updates
+OFFLINE_FILE="$STATE_DIR/offline"        # present while the deploy branch cannot be fetched
+PREVIOUS_FILE="$STATE_DIR/previous-sha"  # commit that ran before the last deploy
+BUILD_PREV="$STATE_DIR/build-prev"       # build output of another commit, for rollback
 DEPLOY_LOG="$LOG_DIR/deploy.log"
 APP_LOG="$LOG_DIR/$APP_NAME.log"
 
@@ -67,6 +78,8 @@ mkdir -p "$STATE_DIR" "$LOG_DIR"
 [ -f "$STATE_DIR/env" ] && . "$STATE_DIR/env"
 RESTART_CMD="${RESTART_CMD:-}"
 POST_INSTALL="${POST_INSTALL:-}"
+NOTIFY_CMD="${NOTIFY_CMD:-}"
+LOG_MAX_BYTES="${LOG_MAX_BYTES:-5242880}"
 
 # The repo's `prepare` script installs husky's git hooks; a deploy checkout
 # never commits, so skip it.
@@ -74,6 +87,27 @@ export HUSKY=0
 
 log() {
   printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" | tee -a "$DEPLOY_LOG"
+}
+
+# Runs NOTIFY_CMD, if set. The timeout matters: termux-notification hangs
+# when the Termux:API app is not installed.
+notify() {
+  [ -n "$NOTIFY_CMD" ] || return 0
+  DEPLOY_EVENT="$1" DEPLOY_MESSAGE="$2" timeout 30 bash -c "$NOTIFY_CMD" >>"$DEPLOY_LOG" 2>&1 ||
+    log "NOTIFY_CMD failed (exit $?)"
+}
+
+# Keeps each log under LOG_MAX_BYTES, with one older copy in .1. Copy and
+# truncate rather than rename, because the app keeps its log open in append
+# mode and carries on writing at the start of the new file.
+rotate_logs() {
+  local f
+  for f in "$LOG_DIR"/*.log; do
+    [ -f "$f" ] || continue
+    if [ "$(wc -c <"$f")" -gt "$LOG_MAX_BYTES" ]; then
+      cp "$f" "$f.1" && : >"$f"
+    fi
+  done
 }
 
 # Reads PORT from a workspace's .env, the same file the app itself loads.
@@ -219,30 +253,92 @@ built() {
   [ -d node_modules ] && [ -f backend/dist/backend/src/server.js ] && [ -f frontend/.next/BUILD_ID ]
 }
 
-# Installs and builds whatever the change from $1 to $2 needs. With an empty $1
-# (first deploy) everything is installed and built.
-build() {
-  local from="$1" to="$2" changed=""
-  if [ -n "$from" ]; then
-    changed="$(git diff --name-only "$from" "$to")"
-  fi
-
+install_deps() {
   # One lockfile for all workspaces. Dev dependencies are needed: the build
   # runs tsc and next.
-  if [ -z "$from" ] || [ ! -d node_modules ] ||
-    grep -qE '^((backend|frontend|shared)/)?package(-lock)?\.json$' <<<"$changed"; then
-    log "installing dependencies"
-    npm ci --no-audit --no-fund || return 1
-    if [ -n "$POST_INSTALL" ]; then
-      log "running POST_INSTALL"
-      bash -c "$POST_INSTALL" || return 1
-    fi
+  log "installing dependencies"
+  npm ci --no-audit --no-fund || return 1
+  if [ -n "$POST_INSTALL" ]; then
+    log "running POST_INSTALL"
+    bash -c "$POST_INSTALL" || return 1
+  fi
+}
+
+# Build output lives in backend/dist and frontend/.next. Next's own build
+# cache (.next/cache) never moves, so builds stay incremental.
+
+# Moves the build that is in place into $BUILD_PREV, labelled with commit $1,
+# so a rollback to $1 can put it back instead of rebuilding.
+stash_build() {
+  local f
+  rm -rf "$BUILD_PREV"
+  mkdir -p "$BUILD_PREV/next"
+  [ -d backend/dist ] && mv backend/dist "$BUILD_PREV/dist"
+  for f in frontend/.next/* frontend/.next/.[!.]*; do
+    [ -e "$f" ] && [ "$(basename "$f")" != cache ] && mv "$f" "$BUILD_PREV/next/"
+  done
+  echo "$1" >"$BUILD_PREV/COMMIT"
+}
+
+# True if $BUILD_PREV holds a complete build of commit $1.
+have_build_of() {
+  [ "$(cat "$BUILD_PREV/COMMIT" 2>/dev/null)" = "$1" ] &&
+    [ -f "$BUILD_PREV/dist/backend/src/server.js" ] && [ -f "$BUILD_PREV/next/BUILD_ID" ]
+}
+
+# Swaps the build in place (labelled $1) with the one in $BUILD_PREV.
+swap_build() {
+  local tmp="$STATE_DIR/build-swap" f
+  rm -rf "$tmp"
+  mkdir -p "$tmp/next"
+  [ -d backend/dist ] && mv backend/dist "$tmp/dist"
+  for f in frontend/.next/* frontend/.next/.[!.]*; do
+    [ -e "$f" ] && [ "$(basename "$f")" != cache ] && mv "$f" "$tmp/next/"
+  done
+  mv "$BUILD_PREV/dist" backend/dist
+  mkdir -p frontend/.next
+  for f in "$BUILD_PREV/next"/* "$BUILD_PREV/next"/.[!.]*; do
+    [ -e "$f" ] && mv "$f" frontend/.next/
+  done
+  rm -rf "$BUILD_PREV"
+  echo "$1" >"$tmp/COMMIT"
+  mv "$tmp" "$BUILD_PREV"
+}
+
+# Removes a half-written build, so it can never be swapped back in.
+discard_build() {
+  local f
+  rm -rf backend/dist
+  for f in frontend/.next/* frontend/.next/.[!.]*; do
+    [ -e "$f" ] && [ "$(basename "$f")" != cache ] && rm -rf "$f"
+  done
+  return 0
+}
+
+# Moves the checkout from commit $1 to commit $2 and installs and builds what
+# that needs. Used for deploys and rollbacks alike: going back to a commit
+# whose build was kept reuses it, which takes seconds instead of a rebuild.
+switch_to() {
+  local from="$1" to="$2" changed
+  git reset --hard --quiet "$to" || return 1
+  changed="$(git diff --name-only "$from" "$to")"
+
+  if [ ! -d node_modules ] || grep -qE '^((backend|frontend|shared)/)?package(-lock)?\.json$' <<<"$changed"; then
+    install_deps || return 1
   fi
 
-  if [ -z "$from" ] || ! built ||
-    grep -qE '^(backend|frontend|shared)/|^package(-lock)?\.json$' <<<"$changed"; then
-    log "building"
-    npm run build || return 1
+  if ! built || grep -qE '^(backend|frontend|shared)/|^package(-lock)?\.json$' <<<"$changed"; then
+    if have_build_of "$to"; then
+      log "reusing the kept build of $(git rev-parse --short "$to")"
+      swap_build "$from"
+    else
+      built && stash_build "$from"
+      log "building"
+      if ! npm run build; then
+        discard_build
+        return 1
+      fi
+    fi
   fi
 }
 
@@ -267,11 +363,30 @@ release_lock() {
   [ "$(cat "$LOCK_DIR/pid" 2>/dev/null)" = "$$" ] && rm -rf "$LOCK_DIR"
 }
 
+# Starts the app if it has stopped, building first if the output is missing.
+ensure_running() {
+  supervised && return 0
+  is_running && return 0
+  log "$APP_NAME is not running, starting it"
+  [ -d node_modules ] || install_deps || return 1
+  built || { log "building" && npm run build; } || return 1
+  restart_app
+}
+
 deploy_once() {
-  if ! git fetch --quiet "$DEPLOY_REMOTE" "$DEPLOY_BRANCH" 2>>"$DEPLOY_LOG"; then
-    log "could not fetch $DEPLOY_REMOTE/$DEPLOY_BRANCH (offline, or CI has not promoted a commit yet)"
-    supervised || is_running || restart_app
+  rotate_logs
+  if ! git fetch --quiet "$DEPLOY_REMOTE" "$DEPLOY_BRANCH" 2>/dev/null; then
+    # Logged once, not on every check: the tablet can be offline for hours.
+    if [ ! -f "$OFFLINE_FILE" ]; then
+      log "could not fetch $DEPLOY_REMOTE/$DEPLOY_BRANCH (offline, or CI has not promoted a commit yet); will keep trying"
+      touch "$OFFLINE_FILE"
+    fi
+    ensure_running
     return 0
+  fi
+  if [ -f "$OFFLINE_FILE" ]; then
+    rm -f "$OFFLINE_FILE"
+    log "$DEPLOY_REMOTE/$DEPLOY_BRANCH is reachable again"
   fi
 
   local current target short
@@ -280,13 +395,9 @@ deploy_once() {
   short="$(git rev-parse --short "$target")"
 
   if [ "$current" = "$target" ] || [ "$target" = "$(cat "$FAILED_FILE" 2>/dev/null)" ]; then
-    # Nothing new to deploy (or the new commit already failed once): just make
-    # sure the app is still running, unless a supervisor already does that.
-    if ! supervised && ! is_running; then
-      log "$APP_NAME is not running, starting it"
-      built || build "" HEAD || return 1
-      restart_app
-    fi
+    # Nothing new to deploy (or the new commit already failed or was rolled
+    # back): just make sure the app is still running.
+    ensure_running
     return 0
   fi
 
@@ -304,22 +415,64 @@ deploy_once() {
   fi
 
   log "deploying $short: $(git log -1 --format=%s "$target")"
-  git merge --ff-only --quiet "$target" || return 1
-
-  if build "$current" "$target" && restart_app; then
+  if switch_to "$current" "$target" && restart_app; then
     rm -f "$FAILED_FILE"
+    echo "$current" >"$PREVIOUS_FILE"
     log "deployed $short"
+    notify deployed "$APP_NAME: deployed $short ($(git log -1 --format=%s "$target"))"
     return 0
   fi
 
-  log "ERROR: deploy of $short failed, rolling back to $(git rev-parse --short "$current")"
+  local back
+  back="$(git rev-parse --short "$current")"
+  log "ERROR: deploy of $short failed, rolling back to $back"
   echo "$target" >"$FAILED_FILE"
-  git reset --hard --quiet "$current"
-  if build "$target" "$current" && restart_app; then
+  if switch_to "$target" "$current" && restart_app; then
     log "rolled back; $short will be skipped until a newer commit passes CI"
+    notify rolled-back "$APP_NAME: $short failed to deploy and was rolled back to $back"
   else
     log "ERROR: rollback failed too; the app may be down. Check $APP_LOG"
+    notify rollback-failed "$APP_NAME: $short failed and so did the rollback to $back; the app may be down"
   fi
+  return 1
+}
+
+# Goes back to the commit that ran before the last deploy, for a commit that
+# passed its health check but is broken in use. The kept build is reused, so
+# this takes seconds. Running it again returns to the newer commit. The
+# rolled-back commit is skipped by the watcher; the next commit CI promotes
+# deploys as usual.
+rollback() {
+  local current prev
+  current="$(git rev-parse HEAD)"
+  prev="$(cat "$PREVIOUS_FILE" 2>/dev/null)"
+  if [ -z "$prev" ] || ! git cat-file -e "$prev^{commit}" 2>/dev/null; then
+    log "ERROR: no previous deploy is recorded; nothing to roll back to"
+    return 1
+  fi
+  if ! git diff --quiet HEAD --; then
+    log "ERROR: the checkout has local changes; stash or discard them first"
+    return 1
+  fi
+  local from_s to_s
+  from_s="$(git rev-parse --short "$current")"
+  to_s="$(git rev-parse --short "$prev")"
+  log "rolling back from $from_s to $to_s"
+
+  if switch_to "$current" "$prev" && restart_app; then
+    echo "$current" >"$PREVIOUS_FILE"
+    # Undoing a rollback clears the skip; otherwise skip what was left behind.
+    if [ "$prev" = "$(cat "$FAILED_FILE" 2>/dev/null)" ]; then
+      rm -f "$FAILED_FILE"
+    else
+      echo "$current" >"$FAILED_FILE"
+    fi
+    log "rolled back to $to_s; 'tab-deploy.sh rollback' again returns to $from_s"
+    notify manual-rollback "$APP_NAME: rolled back from $from_s to $to_s"
+    return 0
+  fi
+  log "ERROR: $to_s did not come up either; the app may be down. Check $APP_LOG"
+  notify rollback-failed "$APP_NAME: manual rollback to $to_s did not come up"
   return 1
 }
 
@@ -340,6 +493,7 @@ watch() {
   before="$(cksum <"$self")"
   # On Termux, keep Android from suspending the process while the screen is off.
   command -v termux-wake-lock >/dev/null 2>&1 && termux-wake-lock
+  echo $$ >"$WATCHER_PID"
   trap 'release_lock; exit 0' INT TERM
   log "watching $DEPLOY_REMOTE/$DEPLOY_BRANCH every ${interval}s"
   while true; do
@@ -356,8 +510,15 @@ watch() {
 status() {
   echo "deployed commit: $(git log -1 --format='%h %s (%cr)')"
   if [ -f "$FAILED_FILE" ]; then
-    echo "skipping failed:  $(git log -1 --format='%h %s' "$(cat "$FAILED_FILE")" 2>/dev/null || cat "$FAILED_FILE")"
+    echo "skipping:        $(git log -1 --format='%h %s' "$(cat "$FAILED_FILE")" 2>/dev/null || cat "$FAILED_FILE") (failed or rolled back)"
   fi
+  if [ -f "$PREVIOUS_FILE" ]; then
+    local prev kept=""
+    prev="$(cat "$PREVIOUS_FILE")"
+    have_build_of "$prev" && kept=", build kept"
+    echo "previous:        $(git log -1 --format='%h %s' "$prev" 2>/dev/null) ('rollback' returns to it$kept)"
+  fi
+  [ -f "$OFFLINE_FILE" ] && echo "deploy branch:   NOT reachable since $(date -r "$OFFLINE_FILE" '+%Y-%m-%d %H:%M')"
   if http_ok; then
     echo "app:             healthy (API :$(backend_port), web :$(frontend_port))"
   elif is_running; then
@@ -365,12 +526,22 @@ status() {
   else
     echo "app:             NOT running"
   fi
+  # Checked by pid, not by name: other apps on the tablet run their own
+  # tab-deploy.sh watch, and a name match would report theirs as ours.
+  local pid
+  pid="$(cat "$WATCHER_PID" 2>/dev/null)"
+  if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null && grep -q "tab-deploy.sh" "/proc/$pid/cmdline" 2>/dev/null; then
+    echo "watcher:         running (pid $pid)"
+  else
+    echo "watcher:         not running"
+  fi
 }
 
 case "${1:-once}" in
   once) locked deploy_once ;;
   watch) watch "${2:-60}" ;;
   restart) locked restart_app ;;
+  rollback) locked rollback ;;
   stop) stop_app && log "stopped $APP_NAME" ;;
   status) status ;;
   *)

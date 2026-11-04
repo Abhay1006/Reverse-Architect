@@ -37,11 +37,14 @@ Never push to `deploy` yourself in normal use; CI owns it.
 2. Runs `npm ci` only if `package-lock.json` or a workspace `package.json`
    changed.
 3. Runs `npm run build` only if something under `backend/`, `frontend/` or
-   `shared/` changed. Docs, benchmark and CI changes just pull.
+   `shared/` changed. Docs, benchmark and CI changes just pull. The build it
+   replaces (`backend/dist` and `frontend/.next`, minus Next's build cache)
+   is kept in `.deploy/build-prev/`.
 4. Restarts the app and waits up to 3 minutes for the API's `/api/health`
    and the web app to answer.
-5. If any step fails, it goes back to the previous commit, rebuilds and
-   restarts that, and skips the bad commit until a newer one arrives.
+5. If any step fails, it goes back to the previous commit, puts the kept
+   build back (seconds, instead of another `next build` on the tablet), and
+   skips the bad commit until a newer one arrives.
 
 It also restarts the app if it finds it has stopped.
 
@@ -135,6 +138,7 @@ tab, and on the tablet with `tail -f logs/deploy.log`.
 | `scripts/tab-deploy.sh watch [seconds]` | Do that forever, every 60 seconds by default                  |
 | `scripts/tab-deploy.sh status`          | Deployed commit, skipped failed commit, whether the app runs  |
 | `scripts/tab-deploy.sh restart`         | Restart the app without pulling (e.g. after editing `.env`)   |
+| `scripts/tab-deploy.sh rollback`        | Go back to the commit before the last deploy; again to undo   |
 | `scripts/tab-deploy.sh stop`            | Stop the app                                                  |
 
 Logs: `logs/deploy.log` for deploys; `logs/reverse-architect.log` for the
@@ -144,11 +148,53 @@ Optional settings, as environment variables or in `.deploy/env` (sourced by
 the script, gitignored): `DEPLOY_BRANCH` (default `deploy`), `DEPLOY_REMOTE`
 (`origin`), `APP_NAME` (`reverse-architect`), `HEALTH_TIMEOUT` (`180`
 seconds), `BACKEND_PORT` (read from `backend/.env`, else `4000`),
-`FRONTEND_PORT` (`3000`; `next start` ignores `PORT` in `frontend/.env`), and `RESTART_CMD`
-and `POST_INSTALL` (below).
+`FRONTEND_PORT` (`3000`; `next start` ignores `PORT` in `frontend/.env`),
+`RESTART_CMD` and `POST_INSTALL` (below), `NOTIFY_CMD` (below) and
+`LOG_MAX_BYTES` (default 5 MB). Values in `.deploy/env` win over the
+environment.
+
+Logs in `logs/` are rotated on each check once they pass `LOG_MAX_BYTES`,
+keeping one older copy as `.1`. When the deploy branch can't be fetched, that
+is logged once, plus once more when it is back, rather than on every check.
 
 When `watch` deploys a commit that changes `tab-deploy.sh` itself, it
 restarts on the new version.
+
+## Rolling back a bad commit by hand
+
+A commit can pass the health check and still be broken in use. To go back to
+the commit that ran before the last deploy:
+
+```bash
+./scripts/tab-deploy.sh rollback
+```
+
+When the kept build belongs to that commit (it does right after a deploy that
+rebuilt), this takes seconds. Running it again returns to the newer commit,
+reusing its build the same way. The rolled-back commit is not redeployed; the
+next commit CI promotes deploys as usual, so push a fix or a revert to `main`.
+`status` shows the commit `rollback` would return to and whether its build is
+kept.
+
+## Notifications
+
+Set `NOTIFY_CMD` in `.deploy/env` to hear about deploys without reading logs.
+It runs after a deploy, an automatic rollback, a failed rollback and a manual
+rollback, with `DEPLOY_EVENT` (`deployed`, `rolled-back`, `rollback-failed`,
+`manual-rollback`) and `DEPLOY_MESSAGE` set. It gets 30 seconds, and its
+failure never affects the deploy.
+
+An Android notification (needs the Termux:API app and `pkg install termux-api`):
+
+```bash
+NOTIFY_CMD='termux-notification --title "Atlas $DEPLOY_EVENT" --content "$DEPLOY_MESSAGE"'
+```
+
+A push to your phone through [ntfy](https://ntfy.sh) (pick a hard-to-guess topic):
+
+```bash
+NOTIFY_CMD='curl -fsS -d "$DEPLOY_MESSAGE" -H "Title: Atlas $DEPLOY_EVENT" https://ntfy.sh/<your-topic>'
+```
 
 ## When something else already runs the app
 
