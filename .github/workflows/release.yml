@@ -4,6 +4,11 @@ name: Release
 # from Conventional Commit messages. Merging that PR tags the release and
 # publishes `reverse-architect` to npm.
 #
+# One-time GitHub setup: Settings -> Actions -> General -> Workflow
+# permissions -> tick "Allow GitHub Actions to create and approve pull
+# requests". Without it release-please fails with "GitHub Actions is not
+# permitted to create or approve pull requests".
+#
 # One-time npm setup (pick one):
 #  - Trusted publishing (no token): publish 0.1.0 once by hand with
 #    `npm publish -w backend --access public`, then on npmjs.com add this
@@ -24,7 +29,7 @@ jobs:
     outputs:
       release_created: ${{ steps.release.outputs.release_created }}
     steps:
-      - uses: googleapis/release-please-action@v4
+      - uses: googleapis/release-please-action@v5
         id: release
         with:
           config-file: release-please-config.json
@@ -38,8 +43,8 @@ jobs:
       contents: read
       id-token: write # npm provenance and trusted publishing
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
         with:
           node-version-file: .nvmrc
           cache: npm
