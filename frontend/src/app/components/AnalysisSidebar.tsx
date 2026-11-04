@@ -61,6 +61,7 @@ export default function AnalysisSidebar({
         zIndex: (theme) => theme.zIndex.drawer + 2,
         "& .MuiDrawer-paper": {
           width: 360,
+          maxWidth: "100vw",
           boxSizing: "border-box",
           background: "var(--glass-bg)",
           backdropFilter: "blur(40px)",

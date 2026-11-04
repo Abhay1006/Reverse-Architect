@@ -6,7 +6,7 @@ import {
   applyNodeChanges,
   applyEdgeChanges,
 } from '@xyflow/react';
-import type { AnalysisResult } from 'shared';
+import type { AnalysisResult, AnalysisCoverage, Finding } from 'shared';
 import type { GodObjectDetail, DeadCodeDetail, EntryPoint } from '../lib/atlas-api';
 import type { AtlasNode } from '../types/nodes';
 
@@ -35,8 +35,13 @@ export interface StoreGraph {
   godObjectDetails: GodObjectDetail[];
   deadCodeDetails: DeadCodeDetail[];
   entryPoint: EntryPoint | null;
+  findings: Finding[];
+  coverage: AnalysisCoverage | null;
   repoId?: string | undefined;
 }
+
+/** The dashboard's tabs. Lives in the store so any panel can switch to the graph. */
+export type DashboardTab = 'overview' | 'graph' | 'files' | 'bug-hunter' | 'ai';
 
 // ── Store Interface ───────────────────────────────────────────────────
 
@@ -47,8 +52,13 @@ interface AtlasState {
   analysisResults: AnalysisResult | null;
   godObjectDetails: GodObjectDetail[];
   deadCodeDetails: DeadCodeDetail[];
-  
+  /** Evidence-backed findings, exactly as the backend reported them. */
+  findings: Finding[];
+  /** What the analysis could and could not see. */
+  coverage: AnalysisCoverage | null;
+
   // --- UI State ---
+  activeTab: DashboardTab;
   selectedNodeId: string | null;
   searchQuery: string;
   focusPath: string;       // Current folder focus (e.g. "src/graph")
@@ -102,6 +112,9 @@ interface AtlasState {
   setCodePeekFile: (file: { filePath: string; label: string } | null) => void;
   toggleHeatmap: () => void;
   setSnackbarMessage: (message: string | null) => void;
+  setActiveTab: (tab: DashboardTab) => void;
+  /** Switch to the graph and bring the first of these nodes into view. */
+  revealInGraph: (nodeIds: string[]) => void;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────
@@ -245,6 +258,9 @@ export const useAtlasStore = create<AtlasState>((set, get) => ({
   analysisResults: null,
   godObjectDetails: [],
   deadCodeDetails: [],
+  findings: [],
+  coverage: null,
+  activeTab: 'overview',
   selectedNodeId: null,
   searchQuery: '',
   focusPath: '',
@@ -265,7 +281,7 @@ export const useAtlasStore = create<AtlasState>((set, get) => ({
   heatmapEnabled: false,
   snackbarMessage: null,
 
-  setGraph: ({ nodes, edges, analysis, godObjectDetails, deadCodeDetails, entryPoint, repoId }) => {
+  setGraph: ({ nodes, edges, analysis, godObjectDetails, deadCodeDetails, entryPoint, findings, coverage, repoId }) => {
     const filePaths = new Set<string>();
     nodes.forEach(n => {
       if (n.type === 'file' && n.data?.filePath) {
@@ -280,6 +296,11 @@ export const useAtlasStore = create<AtlasState>((set, get) => ({
       godObjectDetails: godObjectDetails ?? [],
       deadCodeDetails: deadCodeDetails ?? [],
       entryPoint: entryPoint ?? null,
+      findings: findings ?? [],
+      coverage: coverage ?? null,
+      activeTab: 'overview',
+      selectedNodeId: null,
+      hasGuidedTourShown: false,
       activeRepoId: repoId ?? null,
       codePeekFile: null, // Clear active peek when new project is loaded
       focusPath: '',  // Reset focus on new graph
@@ -455,5 +476,38 @@ export const useAtlasStore = create<AtlasState>((set, get) => ({
 
   setSnackbarMessage: (message) => {
     set({ snackbarMessage: message });
+  },
+
+  setActiveTab: (tab) => {
+    set({ activeTab: tab });
+  },
+
+  revealInGraph: (nodeIds) => {
+    const { nodes } = get();
+    const target = nodeIds.find((id) => nodes.some((n) => n.id === id));
+    if (!target) return;
+    const node = nodes.find((n) => n.id === target);
+    const type = node?.type ?? 'file';
+    set((state) => {
+      // A filter or folder focus could hide the node we were asked to show.
+      const visibleNodeTypes = new Set(state.visibleNodeTypes);
+      visibleNodeTypes.add(type);
+      const filePath = (node?.data?.filePath ?? '').replace(/^\/+/, '');
+      const focus = state.focusPath.replace(/^\/+/, '');
+      const keepFocus = !focus || filePath.startsWith(focus);
+      // Classes and functions are only drawn while their file is expanded.
+      let expandedFiles = state.expandedFiles;
+      if (type !== 'file' && node?.data?.filePath && !expandedFiles.has(node.data.filePath)) {
+        expandedFiles = new Set(expandedFiles).add(node.data.filePath);
+      }
+      return {
+        expandedFiles,
+        activeTab: 'graph',
+        focusPath: keepFocus ? state.focusPath : '',
+        focusedNodeId: null,
+        visibleNodeTypes,
+      };
+    });
+    get().panToNode(target);
   },
 }));

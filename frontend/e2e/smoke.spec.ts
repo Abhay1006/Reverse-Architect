@@ -34,6 +34,14 @@ test('uploading a zip renders the architecture graph', async ({ page }) => {
   await expect(page.locator('.react-flow__node').first()).toBeVisible({ timeout: 90_000 });
   expect(await page.locator('.react-flow__node').count()).toBeGreaterThan(5);
 
+  // The overview reports the backend's findings with their evidence.
+  const cycle = page.getByRole('button', { name: /^Circular dependency: src\/models\/order\.ts/ });
+  await expect(cycle).toBeVisible();
+  await expect(page.getByText('order.ts imports user.ts')).toBeVisible();
+  // "Show in graph" switches tabs and selects a node in the cycle.
+  await page.getByRole('button', { name: 'Show in graph' }).first().click();
+  await expect(page.getByText(/Selected: (order|user)\.ts/)).toBeVisible();
+
   await page.getByRole('tab', { name: 'Graph' }).click();
   await page.getByRole('button', { name: 'Analysis', exact: true }).click();
   // ts-shop is labelled with one cycle and six design patterns.
@@ -43,10 +51,10 @@ test('uploading a zip renders the architecture graph', async ({ page }) => {
   await expect(page.getByText(/has method "getInstance"/)).toBeVisible();
 });
 
-// Regenerates the README screenshot: Atlas analysing its own backend.
+// Regenerates the README screenshots: Atlas analysing its own backend.
 // Run with UPDATE_SCREENSHOT=1 npm run test:e2e -w frontend
 test('README screenshot', async ({ page }) => {
-  test.skip(!process.env.UPDATE_SCREENSHOT, 'only when regenerating docs/assets/screenshot.png');
+  test.skip(!process.env.UPDATE_SCREENSHOT, 'only when regenerating docs/assets/screenshot.png and report.png');
   const backend = path.resolve(__dirname, '../../backend');
   const zipPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'atlas-shot-')), 'backend.zip');
   const zip = new AdmZip();
@@ -59,13 +67,15 @@ test('README screenshot', async ({ page }) => {
   await page.locator('input[type="file"]').setInputFiles(zipPath);
   await expect(page.locator('.react-flow__node').first()).toBeVisible({ timeout: 90_000 });
 
+  // The overview: findings with their evidence.
+  await expect(page.getByText('Architecture report')).toBeVisible();
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: path.resolve(__dirname, '../../docs/assets/report.png') });
+
   await page.getByRole('tab', { name: 'Graph' }).click();
-  // The guided tour pops up shortly after the graph loads.
+  // A "Start here" hint appears on the graph tab the first time.
   const tour = page.getByRole('button', { name: 'Got it, thanks!' });
   await tour.waitFor({ timeout: 10_000 }).then(() => tour.click(), () => {});
-  // The entry file starts selected, which dims everything else.
-  await page.locator('.react-flow__pane').click({ position: { x: 5, y: 5 } });
-  await page.keyboard.press('Escape');
   await page.getByRole('button', { name: 'Fit View' }).click();
   await page.waitForTimeout(1500); // let the layout animation settle
   await page.screenshot({ path: path.resolve(__dirname, '../../docs/assets/screenshot.png') });

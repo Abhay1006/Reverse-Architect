@@ -11,6 +11,8 @@ import {
   Tooltip,
   Snackbar,
   Alert,
+  Drawer,
+  useMediaQuery,
 } from "@mui/material";
 import {
   Menu as MenuIcon,
@@ -60,6 +62,13 @@ export default function Home() {
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isFolderTreeOpen, setIsFolderTreeOpen] = useState(true);
+  // Below md the explorer would eat most of the screen, so it becomes an
+  // overlay drawer that starts closed.
+  const isNarrow = useMediaQuery("(max-width: 899.95px)", { noSsr: true });
+  const [isMobileTreeOpen, setIsMobileTreeOpen] = useState(false);
+  const activeTab = useAtlasStore((state) => state.activeTab);
+  const hasGraph = nodes.length > 0;
+  const toggleTree = () => (isNarrow ? setIsMobileTreeOpen((o) => !o) : setIsFolderTreeOpen((o) => !o));
 
   const triggerFitView = useAtlasStore((state) => state.triggerFitView);
 
@@ -141,7 +150,17 @@ export default function Home() {
   return (
     <Box component="main" sx={{ display: "flex", width: "100vw", height: "100vh", overflow: "hidden", bgcolor: "background.default" }}>
       {/* ── Folder Tree Sidebar ── */}
-      {isFolderTreeOpen && nodes.length > 0 && (
+      {isNarrow && hasGraph && (
+        <Drawer
+          anchor="left"
+          open={isMobileTreeOpen}
+          onClose={() => setIsMobileTreeOpen(false)}
+          slotProps={{ paper: { sx: { width: 280, maxWidth: "85vw", borderLeft: "none", borderRight: "1px solid rgba(255,255,255,0.1)" } } }}
+        >
+          <FolderTree />
+        </Drawer>
+      )}
+      {!isNarrow && isFolderTreeOpen && hasGraph && (
         <Box
           component="aside"
           sx={{
@@ -176,15 +195,17 @@ export default function Home() {
             variant="dense"
             sx={{
               gap: 1.5,
-              px: 2.5,
+              px: { xs: 1.5, sm: 2.5 },
               minHeight: 48,
             }}
           >
             {/* Left side */}
             <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-              <Tooltip title={isFolderTreeOpen ? "Hide sidebar" : "Show sidebar"}>
+              {hasGraph && (
+              <Tooltip title={isFolderTreeOpen ? "Hide explorer" : "Show explorer"}>
                 <IconButton
-                  onClick={() => setIsFolderTreeOpen(!isFolderTreeOpen)}
+                  aria-label="Toggle file explorer"
+                  onClick={toggleTree}
                   size="small"
                   sx={{
                     color: "text.secondary",
@@ -199,19 +220,32 @@ export default function Home() {
                   <MenuIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
+              )}
 
-              <Typography
-                variant="h6"
-                sx={{
-                  fontSize: 18,
-                  fontWeight: 900,
-                  letterSpacing: "-0.05em",
-                  color: "rgba(255,255,255,0.9)",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                ATLAS
-              </Typography>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <Box
+                  aria-hidden
+                  sx={{
+                    width: 22,
+                    height: 22,
+                    borderRadius: 1.5,
+                    background: "linear-gradient(135deg, #6366f1, #a855f7)",
+                    boxShadow: "0 0 16px rgba(99,102,241,0.45)",
+                  }}
+                />
+                <Typography
+                  variant="h6"
+                  sx={{
+                    fontSize: 17,
+                    fontWeight: 800,
+                    letterSpacing: "-0.03em",
+                    color: "rgba(255,255,255,0.92)",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  Atlas
+                </Typography>
+              </Box>
             </Box>
 
             {/* Spacer */}
@@ -219,8 +253,9 @@ export default function Home() {
 
             {/* Right side */}
             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-              <SearchBar />
+              {hasGraph && <SearchBar />}
 
+              {hasGraph && activeTab === "graph" && !isNarrow && (
               <Button
                 onClick={handleExportPng}
                 size="small"
@@ -239,13 +274,18 @@ export default function Home() {
               >
                 Export
               </Button>
+              )}
 
               <Button
                 onClick={() => setIsUploadOpen(true)}
+                aria-label="Analyze"
                 size="small"
                 variant="contained"
                 startIcon={<ReAnalyzeIcon sx={{ fontSize: 14 }} />}
                 sx={{
+                  "& .MuiButton-startIcon": { mr: { xs: 0, sm: 1 }, ml: { xs: 0, sm: -0.5 } },
+                  minWidth: { xs: 32, sm: 64 },
+                  px: { xs: 1, sm: 1.5 },
                   background: "rgba(99,102,241,0.15)",
                   border: "1px solid rgba(99,102,241,0.3)",
                   color: "rgba(255,255,255,0.9)",
@@ -258,15 +298,20 @@ export default function Home() {
                   },
                 }}
               >
-                Analyze
+                <Box component="span" sx={{ display: { xs: "none", sm: "inline" } }}>Analyze</Box>
               </Button>
 
+              {hasGraph && (
               <Button
                 onClick={() => setIsSidebarOpen(true)}
+                aria-label="Analysis"
                 size="small"
                 variant="contained"
                 startIcon={<AnalysisIcon sx={{ fontSize: 14 }} />}
                 sx={{
+                  "& .MuiButton-startIcon": { mr: { xs: 0, sm: 1 }, ml: { xs: 0, sm: -0.5 } },
+                  minWidth: { xs: 32, sm: 64 },
+                  px: { xs: 1, sm: 1.5 },
                   background: "rgba(99,102,241,0.15)",
                   border: "1px solid rgba(99,102,241,0.3)",
                   color: "rgba(255,255,255,0.9)",
@@ -279,14 +324,15 @@ export default function Home() {
                   },
                 }}
               >
-                Analysis
+                <Box component="span" sx={{ display: { xs: "none", sm: "inline" } }}>Analysis</Box>
               </Button>
+              )}
             </Box>
           </Toolbar>
         </AppBar>
 
         {/* Breadcrumb */}
-        {nodes.length > 0 && <Breadcrumb />}
+        {hasGraph && <Breadcrumb />}
 
         {/* Canvas / Empty State */}
         <Box sx={{ flex: 1, position: "relative", overflow: "hidden" }}>
@@ -294,7 +340,7 @@ export default function Home() {
             {isLoading ? (
               <GraphSkeleton />
             ) : nodes.length === 0 ? (
-              <LandingHero />
+              <LandingHero onUpload={() => setIsUploadOpen(true)} />
             ) : (
               <Dashboard />
             )}

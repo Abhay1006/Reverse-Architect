@@ -205,7 +205,8 @@ export default function FolderTree() {
     expandedFolders,
     setFocusPath,
     toggleFolder,
-    setSelectedNode,
+    revealInGraph,
+    setActiveTab,
   } = useAtlasStore();
 
   const tree = useMemo(() => buildFolderTree(nodes), [nodes]);
@@ -213,15 +214,17 @@ export default function FolderTree() {
   const handleFocus = useCallback(
     (path: string) => {
       setFocusPath(path);
+      setActiveTab("graph");
     },
-    [setFocusPath]
+    [setFocusPath, setActiveTab]
   );
 
   const handleSelectNode = useCallback(
     (nodeId: string) => {
-      setSelectedNode(nodeId);
+      // From any tab, a click on a file should show it.
+      revealInGraph([nodeId]);
     },
-    [setSelectedNode]
+    [revealInGraph]
   );
 
   if (nodes.length === 0) {

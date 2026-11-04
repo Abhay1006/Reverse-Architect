@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useEffectEvent, useRef, useMemo } from "react";
 import {
   Dialog,
   Box,
@@ -15,7 +15,10 @@ import { Search as SearchIcon } from "@mui/icons-material";
 import { useAtlasStore } from "../store/atlas-store";
 
 export default function SearchBar() {
-  const { searchQuery, setSearchQuery, nodes, panToNode } = useAtlasStore();
+  const searchQuery = useAtlasStore((s) => s.searchQuery);
+  const setSearchQuery = useAtlasStore((s) => s.setSearchQuery);
+  const nodes = useAtlasStore((s) => s.nodes);
+  const revealInGraph = useAtlasStore((s) => s.revealInGraph);
   const [localQuery, setLocalQuery] = useState(searchQuery);
   const [showResults, setShowResults] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
@@ -61,31 +64,33 @@ export default function SearchBar() {
       .slice(0, 15);
   }, [nodes, localQuery]);
 
-  // Toggle on Cmd+K
+  // Reset state in the event handler, never inside a setState updater:
+  // updaters run during render, and setting another component's state there
+  // is what produced React's "Cannot update a component while rendering" error.
+  const open = () => {
+    setLocalQuery("");
+    setSearchQuery("");
+    setShowResults(false);
+    setSelectedIndex(0);
+    setIsOpen(true);
+  };
+  const close = () => setIsOpen(false);
+
+  // Toggle on Cmd+K / Ctrl+K
+  const toggle = useEffectEvent(() => (isOpen ? close() : open()));
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
-      if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
+      if (e.key.toLowerCase() === "k" && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
-        setIsOpen((open) => {
-          if (!open) {
-            setLocalQuery("");
-            setSearchQuery("");
-            setShowResults(false);
-            setSelectedIndex(0);
-          }
-          return !open;
-        });
-      }
-      if (e.key === "Escape") {
-        setIsOpen(false);
+        toggle();
       }
     };
     document.addEventListener("keydown", down);
     return () => document.removeEventListener("keydown", down);
-  }, [setSearchQuery]);
+  }, []);
 
   const handleSelectNode = (nodeId: string) => {
-    panToNode(nodeId);
+    revealInGraph([nodeId]);
     setIsOpen(false);
     setLocalQuery("");
     setSearchQuery("");
@@ -117,13 +122,6 @@ export default function SearchBar() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, showResults, selectedIndex, results]);
 
-  // Focus input automatically when opened
-  useEffect(() => {
-    if (isOpen && inputRef.current) {
-      setTimeout(() => inputRef.current?.focus(), 100);
-    }
-  }, [isOpen]);
-
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setLocalQuery(value);
@@ -144,7 +142,9 @@ export default function SearchBar() {
     <>
       {/* Search Trigger Button */}
       <Button
-        onClick={() => setIsOpen(true)}
+        onClick={open}
+        disabled={nodes.length === 0}
+        aria-label="Search (Ctrl+K)"
         size="small"
         variant="outlined"
         startIcon={<SearchIcon sx={{ fontSize: 14, opacity: 0.5 }} />}
@@ -152,6 +152,9 @@ export default function SearchBar() {
           color: "text.secondary",
           borderColor: "rgba(255,255,255,0.1)",
           fontSize: "0.6875rem",
+          minWidth: { xs: 32, sm: 64 },
+          px: { xs: 1, sm: 1.5 },
+          "& .MuiButton-startIcon": { mr: { xs: 0, sm: 1 }, ml: { xs: 0, sm: -0.5 } },
           "&:hover": {
             borderColor: "rgba(255,255,255,0.2)",
             color: "text.primary",
@@ -159,12 +162,13 @@ export default function SearchBar() {
           },
         }}
       >
-        Search
+        <Box component="span" sx={{ display: { xs: "none", sm: "inline" } }}>Search</Box>
         <Chip
           label="⌘K"
           size="small"
           sx={{
             ml: 0.5,
+            display: { xs: "none", sm: "inline-flex" },
             height: 18,
             fontSize: "0.5625rem",
             fontWeight: 700,
@@ -177,7 +181,10 @@ export default function SearchBar() {
       {/* Spotlight Modal */}
       <Dialog
         open={isOpen}
-        onClose={() => setIsOpen(false)}
+        onClose={close}
+        // Focus the input once the dialog has entered; MUI otherwise focuses
+        // the dialog container and the first keystrokes go nowhere.
+        TransitionProps={{ onEntered: () => inputRef.current?.focus() }}
         maxWidth="sm"
         fullWidth
         slotProps={{
@@ -215,6 +222,8 @@ export default function SearchBar() {
           <SearchIcon sx={{ fontSize: 20, color: "rgba(255,255,255,0.4)", mr: 2 }} />
           <InputBase
             inputRef={inputRef}
+            autoFocus
+            inputProps={{ "aria-label": "Search symbols and files" }}
             value={localQuery}
             onChange={handleChange}
             placeholder="Search symbols, files..."

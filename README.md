@@ -20,7 +20,7 @@ Use it three ways:
 
 | | |
 |---|---|
-| **Web app** | An interactive 2D/3D graph with code peek, search, a bug hunter and an AI assistant |
+| **Web app** | An architecture report with the evidence behind each finding, plus an interactive 2D/3D graph, code peek, search, a bug hunter and an AI assistant |
 | **CLI** | `npx reverse-architect cycles .`: readable output or JSON, with a CI exit code |
 | **MCP server** | Lets Claude Code, Cursor, Codex and other agents ask architecture questions instead of reading every file |
 
@@ -80,14 +80,17 @@ Every finding is a claim to check, not a verdict. [docs/findings.md](docs/findin
 
 ## Web app features
 
+- **Architecture report:** the Overview tab lists every finding with its confidence, the evidence (observed or inferred, with clickable source locations) and what it could not check. Filter by kind, include low-confidence findings, jump to a finding in the graph, or copy the list as Markdown for a pull request or issue. A coverage panel shows how many files each extractor read.
 - **2D and 3D graphs:** a React Flow canvas, or a Three.js force-directed graph with animated dependency flow.
 - **Code Peek:** click any file, class, function or table for its syntax-highlighted source.
 - **Analysis panel:** god objects, unused code, runtime cycles, and patterns with the reasons they matched.
-- **Spotlight search (⌘K):** fuzzy search over files, classes, functions and packages.
+- **Spotlight search (⌘K / Ctrl+K):** fuzzy search over files, classes, functions and packages.
 - **Bug Hunter:** paste an issue and get the files most likely involved. It matches keywords against names, then boosts files connected to strong matches. It's a quick lead, with no LLM involved.
 - **Complexity heatmap:** colour nodes by estimated cyclomatic complexity.
 - **AI assistant:** chat with OpenAI, Anthropic or Gemini, grounded in the architecture graph. Your API key stays in the browser and is sent per request.
-- **Mermaid and JSON export.**
+- **Mermaid, JSON and PNG export.**
+
+![The architecture report: findings with their evidence and limitations](docs/assets/report.png)
 - **Caching:** results are stored in SQLite and refreshed when the repository's `HEAD` moves.
 
 ## How it works

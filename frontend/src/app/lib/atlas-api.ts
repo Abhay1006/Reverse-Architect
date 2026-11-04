@@ -5,12 +5,12 @@
 // ============================================================
 
 import type {
-  AnalysisResult,
   AnalysisResponse,
   GodObjectHit,
   DeadCodeHit,
   EntryPointResult,
 } from 'shared';
+import type { StoreGraph } from '../store/atlas-store';
 import type { Edge } from '@xyflow/react';
 import type { AtlasNode } from '../types/nodes';
 
@@ -133,15 +133,7 @@ export async function getRecentRepos(): Promise<{ repos: { repo_id: string; repo
 //  Converts the API response into the shape expected by useAtlasStore.setGraph
 // ---------------------------------------------------------------------------
 
-export function toStoreGraph(graph: ReactFlowGraph): {
-  nodes: AtlasNode[];
-  edges: Edge[];
-  analysis: AnalysisResult;
-  godObjectDetails: GodObjectDetail[];
-  deadCodeDetails: DeadCodeDetail[];
-  entryPoint: EntryPoint | null;
-  repoId?: string | undefined;
-} {
+export function toStoreGraph(graph: ReactFlowGraph): StoreGraph {
   const nodes: AtlasNode[] = graph.nodes.map((n) => ({
     id: n.id,
     type: n.type as AtlasNode['type'],
@@ -176,6 +168,9 @@ export function toStoreGraph(graph: ReactFlowGraph): {
     godObjectDetails: graph.godObjectDetails ?? [],
     deadCodeDetails: graph.deadCodeDetails ?? [],
     entryPoint: graph.entryPoint,
+    // Older cached responses may predate findings; treat them as empty.
+    findings: graph.findings ?? [],
+    coverage: graph.coverage ?? null,
     repoId: graph.repoId,
   };
 }

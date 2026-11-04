@@ -23,7 +23,6 @@ import CodePeekOverlay from "./canvas/CodePeekOverlay";
 import GuidedTourOverlay from "./canvas/GuidedTourOverlay";
 
 const Graph3D = dynamic(() => import("./Graph3D"), { ssr: false });
-import CodePeekPanel from "./CodePeekPanel";
 import ClassNode from "./nodes/ClassNode";
 import InterfaceNode from "./nodes/InterfaceNode";
 import FunctionNode from "./nodes/FunctionNode";
@@ -109,9 +108,6 @@ function CanvasInner() {
 
       {/* Guided Tour Overlay */}
       <GuidedTourOverlay />
-
-      {/* Code Peek Sidebar Drawer */}
-      <CodePeekPanel />
     </Box>
   );
 }

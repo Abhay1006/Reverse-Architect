@@ -295,15 +295,30 @@ export function useCanvasNodes() {
     if (panToNodeId) {
       const node = allNodes.find((n) => n.id === panToNodeId);
       if (node) {
-        fitView({
-          nodes: [{ id: panToNodeId }],
-          duration: 800,
-          padding: 3.0,
-        });
-        setTimeout(() => panToNode(null), 1200);
+        // Frame the node together with its direct neighbours, which the
+        // selection layout arranges around it, so the context is visible.
+        const ids = new Set<string>([panToNodeId]);
+        for (const e of allEdges) {
+          if (e.source === panToNodeId) ids.add(e.target);
+          if (e.target === panToNodeId) ids.add(e.source);
+        }
+        // Wait a frame so React Flow has measured the re-laid-out nodes.
+        const timer = setTimeout(() => {
+          fitView({
+            nodes: [...ids].map((id) => ({ id })),
+            duration: 600,
+            padding: 0.25,
+            maxZoom: 1.2,
+          });
+        }, 60);
+        const clear = setTimeout(() => panToNode(null), 1000);
+        return () => {
+          clearTimeout(timer);
+          clearTimeout(clear);
+        };
       }
     }
-  }, [panToNodeId, allNodes, fitView, panToNode]);
+  }, [panToNodeId, allNodes, allEdges, fitView, panToNode]);
 
   const onNodeClick = useCallback(
     (_: React.MouseEvent, node: AtlasNode) => {

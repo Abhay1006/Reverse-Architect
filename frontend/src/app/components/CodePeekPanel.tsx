@@ -109,7 +109,7 @@ export default function CodePeekPanel() {
         position: "fixed",
         right: 0,
         top: 0,
-        width: 580,
+        width: "min(580px, 100vw)",
         height: "100vh",
         bgcolor: "rgba(10, 10, 12, 0.85)",
         backdropFilter: "blur(20px)",

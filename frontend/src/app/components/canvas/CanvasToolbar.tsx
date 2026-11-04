@@ -41,6 +41,11 @@ export default function CanvasToolbar() {
         display: "flex",
         alignItems: "center",
         gap: 1.5,
+        // On narrow screens scroll the toolbar instead of overflowing the page.
+        maxWidth: "calc(100% - 24px)",
+        overflowX: "auto",
+        scrollbarWidth: "none",
+        "& > *": { flexShrink: 0 },
         px: 2,
         py: 0.75,
         borderRadius: 3,
