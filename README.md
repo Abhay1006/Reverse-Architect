@@ -50,8 +50,8 @@ Then ask, for example: *"Use reverse-architect to find the circular dependencies
 **The web app**, from a clone of this repository:
 
 ```bash
-npm install
-npm run dev        # API on :4000, web app on http://localhost:3000
+pnpm install
+pnpm run dev       # API on :4000, web app on http://localhost:3000
 ```
 
 Paste a GitHub URL or drop a `.zip` of a project.
@@ -109,7 +109,7 @@ graph TD
     G --> J[MCP server]
 ```
 
-The repository is an npm-workspaces monorepo:
+The repository is a pnpm-workspaces monorepo (pnpm is pinned in `package.json`; `npm install -g pnpm` or `corepack enable`):
 
 - `backend/`: the analysis engine, Express API, CLI and MCP server. It is published to npm as `reverse-architect`.
 - `frontend/`: the Next.js web app.
@@ -120,12 +120,12 @@ The repository is an npm-workspaces monorepo:
 
 | Command | What it does |
 |---|---|
-| `npm run dev` | API and web app in watch mode |
-| `npm run check` | Typecheck, lint, dead-code check (knip) and unit tests: what CI runs |
-| `npm run test:e2e` | Browser smoke test (Playwright): upload a project, see the graph |
-| `npm run bench` | Score the analyzer against the labelled corpus |
-| `npm run cli -- analyze <dir>` | Run the CLI from source |
-| `npm run build` / `npm start` | Production build; `npm start` serves both, building first only if there is no build yet (after pulling, run `npm run build`) |
+| `pnpm run dev` | API and web app in watch mode |
+| `pnpm run check` | Typecheck, lint, dead-code check (knip) and unit tests: what CI runs |
+| `pnpm run test:e2e` | Browser smoke test (Playwright): upload a project, see the graph |
+| `pnpm bench` | Score the analyzer against the labelled corpus |
+| `pnpm cli analyze <dir>` | Run the CLI from source |
+| `pnpm run build` / `pnpm start` | Production build; `pnpm start` serves both, building first only if there is no build yet (after pulling, run `pnpm run build`) |
 
 Development needs Node.js 22.12+ (see `.nvmrc`); the published CLI runs on 20.12+. `git` must be on `PATH` (used for cloning and cache freshness checks).
 

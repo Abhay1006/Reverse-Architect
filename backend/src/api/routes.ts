@@ -24,7 +24,7 @@ import {
   assertRealDirWithin,
 } from './path-safety.js';
 
-export const apiRouter = Router();
+export const apiRouter: Router = Router();
 
 /** Safely remove a directory tree (best effort). */
 function cleanup(dir: string) {

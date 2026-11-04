@@ -37,7 +37,7 @@ codex mcp add reverse-architect -- npx -y reverse-architect mcp
 
 Cursor reads this from `.cursor/mcp.json` (per project) or `~/.cursor/mcp.json`. Claude Desktop reads it from `claude_desktop_config.json`.
 
-To work from a clone of this repository instead of npm, use `"command": "npm", "args": ["run", "mcp", "-w", "backend", "--silent"]` with `cwd` set to the repository root.
+To work from a clone of this repository instead of npm, use `"command": "pnpm", "args": ["--silent", "--filter", "./backend", "run", "mcp"]` with `cwd` set to the repository root.
 
 Then ask your agent something like:
 

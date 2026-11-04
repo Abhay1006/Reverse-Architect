@@ -1,1 +1,1 @@
-npm run typecheck && npm run knip
+pnpm run typecheck && pnpm run knip

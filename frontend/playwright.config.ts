@@ -15,7 +15,7 @@ export default defineConfig({
   use: { baseURL: `http://localhost:${WEB_PORT}`, trace: 'retain-on-failure', ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } },
   webServer: [
     {
-      command: 'npm run dev -w backend',
+      command: 'pnpm --filter ./backend dev',
       cwd: '..',
       url: `http://localhost:${API_PORT}/api/health`,
       env: { PORT: String(API_PORT), ATLAS_DB_PATH: path.join(os.tmpdir(), `atlas-e2e-${process.pid}.db`) },
@@ -23,7 +23,7 @@ export default defineConfig({
       timeout: 120_000,
     },
     {
-      command: `npx next dev -p ${WEB_PORT}`,
+      command: `pnpm exec next dev -p ${WEB_PORT}`,
       url: `http://localhost:${WEB_PORT}`,
       env: { BACKEND_URL: `http://localhost:${API_PORT}`, NEXT_PUBLIC_BACKEND_URL: `http://localhost:${API_PORT}`, NEXT_PUBLIC_USE_PROXY: 'true' },
       reuseExistingServer: false,

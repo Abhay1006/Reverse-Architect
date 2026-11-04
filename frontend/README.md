@@ -25,8 +25,8 @@ The Next.js client for Atlas. See the [root README](../README.md) for setup, con
 Run from the repository root:
 
 ```bash
-npm run dev -w frontend        # next dev
-npm run lint -w frontend       # eslint
-npm run typecheck -w frontend  # tsc --noEmit
-npm test -w frontend           # vitest
+pnpm --filter ./frontend dev        # next dev
+pnpm --filter ./frontend lint       # eslint
+pnpm --filter ./frontend typecheck  # tsc --noEmit
+pnpm --filter ./frontend test       # vitest
 ```

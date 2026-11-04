@@ -15,8 +15,8 @@ Atlas's findings are heuristics, and a heuristic is only as good as its measured
 Run it:
 
 ```bash
-npm run bench              # median of 3 runs per corpus
-npm run bench -- --json    # full results, including every miss
+pnpm bench                 # median of 3 runs per corpus
+pnpm bench --json          # full results, including every miss
 ```
 
 CI runs the benchmark on every pull request and posts the table to the job summary. The golden tests (`backend/test/corpus.test.ts`) fail on any miss or spurious finding.
@@ -84,4 +84,4 @@ npx reverse-architect analyze https://github.com/axios/axios
      "patterns": [{ "pattern": "singleton", "label": "Database" }]
    }
    ```
-3. Run `npm run bench`. If Atlas gets it wrong, that is the interesting part: open an issue or fix the analyzer, never the labels.
+3. Run `pnpm bench`. If Atlas gets it wrong, that is the interesting part: open an issue or fix the analyzer, never the labels.

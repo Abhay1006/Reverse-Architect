@@ -6,16 +6,16 @@ Thanks for helping. Bug reports, labelled benchmark projects, analyzer fixes and
 
 ```bash
 nvm use            # Node 22.12+, see .nvmrc
-npm install        # all workspaces; also installs the git hooks
-npm run dev        # API on :4000, web app on :3000
+pnpm install       # all workspaces; also installs the git hooks
+pnpm run dev       # API on :4000, web app on :3000
 ```
 
 ## Before you open a pull request
 
 ```bash
-npm run check      # typecheck, lint, knip (dead code), unit tests: what CI runs
-npm run bench      # if you touched an analyzer: did accuracy move?
-npm run test:e2e   # if you touched the upload flow or the graph UI
+pnpm run check     # typecheck, lint, knip (dead code), unit tests: what CI runs
+pnpm bench         # if you touched an analyzer: did accuracy move?
+pnpm run test:e2e  # if you touched the upload flow or the graph UI
 ```
 
 The pre-commit hook lints staged files, and the pre-push hook runs the typecheck and knip.

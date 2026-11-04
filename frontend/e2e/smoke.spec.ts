@@ -52,7 +52,7 @@ test('uploading a zip renders the architecture graph', async ({ page }) => {
 });
 
 // Regenerates the README screenshots: Atlas analysing its own backend.
-// Run with UPDATE_SCREENSHOT=1 npm run test:e2e -w frontend
+// Run with UPDATE_SCREENSHOT=1 pnpm --filter ./frontend test:e2e
 test('README screenshot', async ({ page }) => {
   test.skip(!process.env.UPDATE_SCREENSHOT, 'only when regenerating docs/assets/screenshot.png and report.png');
   const backend = path.resolve(__dirname, '../../backend');

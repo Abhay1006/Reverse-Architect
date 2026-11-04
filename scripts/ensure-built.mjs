@@ -1,9 +1,9 @@
 // ============================================================
 //  Atlas — build-on-first-start guard
-//  `npm start` used to run a full build every time, so every pm2
+//  `pnpm start` used to run a full build every time, so every pm2
 //  restart (including crash restarts) rebuilt both workspaces. This
 //  only builds when an output is missing. After pulling new code,
-//  run `npm run build` yourself — scripts/tab-deploy.sh already does.
+//  run `pnpm run build` yourself — scripts/tab-deploy.sh already does.
 // ============================================================
 
 import { existsSync } from 'node:fs';
@@ -22,5 +22,5 @@ const missing = outputs.filter((p) => !existsSync(p));
 if (missing.length === 0) process.exit(0);
 
 console.log(`[start] Build output missing (${missing.map((p) => path.relative(root, p)).join(', ')}) — building first...`);
-const result = spawnSync('npm', ['run', 'build'], { cwd: root, stdio: 'inherit', shell: process.platform === 'win32' });
+const result = spawnSync('pnpm', ['run', 'build'], { cwd: root, stdio: 'inherit', shell: process.platform === 'win32' });
 process.exit(result.status ?? 1);

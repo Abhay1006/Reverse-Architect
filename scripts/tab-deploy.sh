@@ -34,8 +34,8 @@
 #                   watchdog, systemd, ...): the script then only runs this to
 #                   restart, never starts its own copy, and leaves crash
 #                   recovery to that supervisor.
-#   POST_INSTALL    shell command run after every `npm ci`, for host-only
-#                   packages that `npm ci` removes again.
+#   POST_INSTALL    shell command run after every dependency install, for
+#                   host-only packages that the install removes again.
 #   NOTIFY_CMD      shell command run after a deploy, a rollback or a failure,
 #                   with DEPLOY_EVENT (deployed, rolled-back, rollback-failed,
 #                   manual-rollback) and DEPLOY_MESSAGE in its environment.
@@ -135,7 +135,7 @@ have_pm2() {
 
 # --- process control --------------------------------------------------------
 
-# True if the pid file names a live process that is our `npm start`. Checking
+# True if the pid file names a live process that is our `pnpm start`. Checking
 # its working directory guards against a stale pid reused by another process
 # after a reboot.
 pid_running() {
@@ -173,9 +173,9 @@ stop_app() {
   }
   local pid _
   pid="$(cat "$PID_FILE")"
-  # `npm start` runs the API and the web app under concurrently, all in the
+  # `pnpm start` runs the API and the web app under concurrently, all in the
   # process group start_app created (its id is the leader's pid). Signal and
-  # wait for the whole group: npm itself exits first, and stopping there left
+  # wait for the whole group: pnpm itself exits first, and stopping there left
   # the API running and holding its port.
   kill -TERM -- "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null
   for _ in $(seq 1 20); do
@@ -195,7 +195,7 @@ start_app() {
     if pm2 describe "$APP_NAME" >/dev/null 2>&1; then
       pm2 restart "$APP_NAME" --update-env >/dev/null || return 1
     else
-      pm2 start npm --name "$APP_NAME" --cwd "$REPO_DIR" -- start >/dev/null || return 1
+      pm2 start pnpm --name "$APP_NAME" --cwd "$REPO_DIR" -- start >/dev/null || return 1
     fi
     pm2 save >/dev/null 2>&1
     return 0
@@ -205,7 +205,7 @@ start_app() {
   # not take it down too, and stop_app can signal all of it at once.
   (
     set -m
-    nohup npm start >>"$APP_LOG" 2>&1 &
+    nohup pnpm start >>"$APP_LOG" 2>&1 &
     echo $! >"$PID_FILE"
   )
 }
@@ -257,7 +257,14 @@ install_deps() {
   # One lockfile for all workspaces. Dev dependencies are needed: the build
   # runs tsc and next.
   log "installing dependencies"
-  npm ci --no-audit --no-fund || return 1
+  if [ ! -f pnpm-lock.yaml ] && [ -f package-lock.json ]; then
+    # A rollback to a commit from before the move to pnpm.
+    npm ci --no-audit --no-fund || return 1
+  else
+    # CI=true: without a terminal, pnpm refuses to replace a node_modules
+    # another package manager created instead of asking.
+    CI=true pnpm install --frozen-lockfile || return 1
+  fi
   if [ -n "$POST_INSTALL" ]; then
     log "running POST_INSTALL"
     bash -c "$POST_INSTALL" || return 1
@@ -323,18 +330,18 @@ switch_to() {
   git reset --hard --quiet "$to" || return 1
   changed="$(git diff --name-only "$from" "$to")"
 
-  if [ ! -d node_modules ] || grep -qE '^((backend|frontend|shared)/)?package(-lock)?\.json$' <<<"$changed"; then
+  if [ ! -d node_modules ] || grep -qE '^((backend|frontend|shared)/)?package\.json$|^(package-lock\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml)$' <<<"$changed"; then
     install_deps || return 1
   fi
 
-  if ! built || grep -qE '^(backend|frontend|shared)/|^package(-lock)?\.json$' <<<"$changed"; then
+  if ! built || grep -qE '^(backend|frontend|shared)/|^(package\.json|package-lock\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml)$' <<<"$changed"; then
     if have_build_of "$to"; then
       log "reusing the kept build of $(git rev-parse --short "$to")"
       swap_build "$from"
     else
       built && stash_build "$from"
       log "building"
-      if ! npm run build; then
+      if ! pnpm run build; then
         discard_build
         return 1
       fi
@@ -369,7 +376,7 @@ ensure_running() {
   is_running && return 0
   log "$APP_NAME is not running, starting it"
   [ -d node_modules ] || install_deps || return 1
-  built || { log "building" && npm run build; } || return 1
+  built || { log "building" && pnpm run build; } || return 1
   restart_app
 }
 

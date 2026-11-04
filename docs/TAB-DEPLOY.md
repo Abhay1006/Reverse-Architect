@@ -34,9 +34,9 @@ Never push to `deploy` yourself in normal use; CI owns it.
 ## What a deploy does
 
 1. Fast-forwards the tablet's checkout to the new commit.
-2. Runs `npm ci` only if `package-lock.json` or a workspace `package.json`
-   changed.
-3. Runs `npm run build` only if something under `backend/`, `frontend/` or
+2. Runs `pnpm install --frozen-lockfile` only if `pnpm-lock.yaml`,
+   `pnpm-workspace.yaml` or a workspace `package.json` changed.
+3. Runs `pnpm run build` only if something under `backend/`, `frontend/` or
    `shared/` changed. Docs, benchmark and CI changes just pull. The build it
    replaces (`backend/dist` and `frontend/.next`, minus Next's build cache)
    is kept in `.deploy/build-prev/`.
@@ -60,6 +60,7 @@ F-Droid. On a Linux machine, skip the `pkg` and Termux:Boot parts.
 
    ```bash
    pkg update && pkg install git nodejs
+   npm install -g pnpm  # the version is pinned by packageManager in package.json
    npm install -g pm2   # optional but recommended: restarts the app if it crashes
    ```
 
@@ -204,12 +205,12 @@ same ports. Set `RESTART_CMD` to the command that restarts it through that
 supervisor. The script then only runs that command when deploying and leaves
 crash recovery to the supervisor; `stop` is refused.
 
-`POST_INSTALL` runs after every `npm ci`, for packages the host needs but the
+`POST_INSTALL` runs after every dependency install, for packages the host needs but the
 lockfile doesn't list. Example `.deploy/env` for a tablet whose services run
 in tmux session `services`:
 
 ```bash
-RESTART_CMD='tmux kill-window -t services:=atlas 2>/dev/null; tmux new-window -d -t services -n atlas "cd $HOME/Reverse-Architect && npm start"'
+RESTART_CMD='tmux kill-window -t services:=atlas 2>/dev/null; tmux new-window -d -t services -n atlas "cd $HOME/Reverse-Architect && pnpm start"'
 ```
 
 The `=` in `services:=atlas` makes tmux match the window name exactly.

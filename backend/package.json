@@ -44,7 +44,7 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "prepack": "npm run build && cp ../LICENSE LICENSE",
+    "prepack": "pnpm run build && cp ../LICENSE LICENSE",
     "postpack": "rm -f LICENSE",
     "bench": "tsx ../bench/run.ts"
   },
@@ -74,7 +74,7 @@
     "@types/supertest": "^7.2.1",
     "eslint": "^9.39.5",
     "globals": "^17.13.0",
-    "shared": "*",
+    "shared": "workspace:*",
     "supertest": "^7.3.0",
     "tsx": "^4.21.0",
     "typescript-eslint": "^8.71.2",

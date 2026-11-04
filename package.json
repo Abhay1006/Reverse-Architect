@@ -2,35 +2,31 @@
   "name": "reverse-architect-root",
   "version": "0.1.0",
   "private": true,
-  "workspaces": [
-    "frontend",
-    "backend",
-    "shared"
-  ],
   "scripts": {
-    "dev": "concurrently -n api,web -c blue,magenta \"npm run dev -w backend\" \"npm run dev -w frontend\"",
-    "build": "npm run build --workspaces --if-present",
-    "start": "node scripts/ensure-built.mjs && concurrently -n api,web -c blue,magenta \"npm run start -w backend\" \"npm run start -w frontend\"",
-    "typecheck": "npm run typecheck --workspaces --if-present",
-    "lint": "npm run lint --workspaces --if-present",
-    "test": "npm test --workspaces --if-present",
-    "test:e2e": "npm run test:e2e -w frontend",
+    "dev": "concurrently -n api,web -c blue,magenta \"pnpm --filter ./backend dev\" \"pnpm --filter ./frontend dev\"",
+    "build": "pnpm -r --if-present run build",
+    "start": "node scripts/ensure-built.mjs && concurrently -n api,web -c blue,magenta \"pnpm --filter ./backend start\" \"pnpm --filter ./frontend start\"",
+    "typecheck": "pnpm -r --if-present run typecheck",
+    "lint": "pnpm -r --if-present run lint",
+    "test": "pnpm -r --if-present test",
+    "test:e2e": "pnpm --filter ./frontend test:e2e",
     "knip": "knip",
-    "check": "npm run typecheck && npm run lint && npm run knip && npm test",
-    "bench": "npm run bench --silent -w backend --",
-    "cli": "npm run cli -w backend --",
+    "check": "pnpm run typecheck && pnpm run lint && pnpm run knip && pnpm test",
+    "bench": "pnpm --silent --filter ./backend run bench",
+    "cli": "pnpm --silent --filter ./backend run cli",
     "prepare": "husky"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",
     "husky": "^9.1.7",
     "knip": "^6.41.0",
-    "lint-staged": "^17.6.0"
+    "lint-staged": "^17.6.0",
+    "shared": "workspace:*"
   },
   "engines": {
     "node": ">=22.12"
   },
-  "packageManager": "npm@11.20.0",
+  "packageManager": "pnpm@12.16.1",
   "lint-staged": {
     "backend/**/*.ts": "eslint --config backend/eslint.config.js --no-warn-ignored",
     "frontend/**/*.{ts,tsx}": "eslint --config frontend/eslint.config.mjs --no-warn-ignored"

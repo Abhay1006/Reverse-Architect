@@ -3,12 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "npx next dev",
-    "build": "node -e \"require('child_process').spawnSync('npx', ['next', 'build', ...(process.platform === 'android' ? ['--webpack'] : [])], { stdio: 'inherit' })\"",
-    "start": "npx next start",
-    "lint": "npx eslint",
-    "test": "npx vitest run",
-    "typecheck": "npx tsc --noEmit",
+    "dev": "next dev",
+    "build": "node -e \"require('child_process').spawnSync('next', ['build', ...(process.platform === 'android' ? ['--webpack'] : [])], { stdio: 'inherit' })\"",
+    "start": "next start",
+    "lint": "eslint",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
     "test:e2e": "playwright test"
   },
   "dependencies": {
@@ -39,7 +39,7 @@
     "eslint": "^9.39.4",
     "eslint-config-next": "16.3.8",
     "jsdom": "^30.1.2",
-    "shared": "*",
+    "shared": "workspace:*",
     "typescript": "^5",
     "vitest": "^4.1.9"
   }

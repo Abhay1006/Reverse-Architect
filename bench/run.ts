@@ -6,7 +6,7 @@
 //  precision/recall for cycles, unused files and design patterns,
 //  plus wall time, CPU time and peak memory.
 //
-//  Usage: npm run bench [-- --runs 3] [-- --json]
+//  Usage: pnpm bench [--runs 3] [--json]
 // ============================================================
 
 import '../backend/src/stdio-guard.js';

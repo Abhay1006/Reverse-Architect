@@ -7,7 +7,7 @@ import type { ChatMessage } from './ai-providers.js';
 import { isUploadId, isValidRepoId, normalizeRepoId } from '../api/path-safety.js';
 import { toClientError } from '../api/errors.js';
 
-export const aiRouter = Router();
+export const aiRouter: Router = Router();
 
 /** Providers we know how to stream from. */
 const SUPPORTED_PROVIDERS = new Set(['openai', 'anthropic', 'gemini']);

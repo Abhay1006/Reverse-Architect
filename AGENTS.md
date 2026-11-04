@@ -25,10 +25,10 @@ Atlas (npm package: `reverse-architect`) analyses a codebase's architecture and 
 ## Commands
 
 ```bash
-npm run check        # typecheck + lint + knip + unit tests (CI)
-npm run bench        # accuracy against the labelled corpus
-npm run test:e2e     # Playwright smoke test
-npm run cli -- analyze bench/corpus/ts-shop
+pnpm run check       # typecheck + lint + knip + unit tests (CI)
+pnpm bench           # accuracy against the labelled corpus
+pnpm run test:e2e    # Playwright smoke test
+pnpm cli analyze ../bench/corpus/ts-shop   # runs in backend/, so paths are relative to it
 ```
 
 Use Conventional Commit subjects. `frontend/AGENTS.md` has notes specific to the Next.js version in use.
