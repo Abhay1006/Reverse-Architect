@@ -1,6 +1,6 @@
 {
   "name": "reverse-architect",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Architecture analysis for codebases, as a CLI and an MCP server: dependency graphs, circular imports, hotspots, coupling, possibly unused code and design patterns, each with the evidence behind it.",
   "keywords": [
     "architecture",
