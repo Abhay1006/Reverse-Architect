@@ -3,7 +3,7 @@
 //  `npm start` used to run a full build every time, so every pm2
 //  restart (including crash restarts) rebuilt both workspaces. This
 //  only builds when an output is missing. After pulling new code,
-//  run `npm run build` yourself — the deploy workflow already does.
+//  run `npm run build` yourself — scripts/tab-deploy.sh already does.
 // ============================================================
 
 import { existsSync } from 'node:fs';

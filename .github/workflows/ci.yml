@@ -5,6 +5,8 @@ on:
   push:
     branches: [main]
 
+# A newer push to the same branch cancels the older run, so an older run can
+# never finish last and move the deploy branch back to an older commit.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -28,6 +30,8 @@ jobs:
       - run: npm run knip
       - run: npm test
       - run: npm run build
+      - name: shellcheck
+        run: shellcheck scripts/*.sh
 
   benchmark:
     name: Accuracy benchmark
@@ -90,3 +94,21 @@ jobs:
           name: playwright-report
           path: frontend/playwright-report
           retention-days: 7
+
+  # Continuous delivery for the self-hosted tablet. Once a push to main passes
+  # every job above, point the `deploy` branch at that commit. The tablet runs
+  # scripts/tab-deploy.sh, which watches `deploy`, so it only ever pulls
+  # commits that passed CI. See docs/TAB-DEPLOY.md.
+  promote:
+    name: Promote to the deploy branch
+    needs: [check, benchmark, package, e2e]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Move deploy to this commit
+        run: |
+          git push --force origin "${GITHUB_SHA}:refs/heads/deploy"
+          echo "Promoted \`${GITHUB_SHA::12}\` to \`deploy\`; the tablet picks it up on its next check." >>"$GITHUB_STEP_SUMMARY"

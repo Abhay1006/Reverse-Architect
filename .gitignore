@@ -69,3 +69,7 @@ ehthumbs.db
 # Playwright
 test-results/
 playwright-report/
+
+# Tablet deploy state and logs (scripts/tab-deploy.sh)
+/.deploy/
+/logs/

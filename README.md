@@ -256,17 +256,11 @@ The backend limits each client IP: 100 API requests per 15 minutes, 30 analyses 
 
 ---
 
-## Deploying with the included workflow
+## Deploying to a self-hosted machine (CI/CD)
 
-`.github/workflows/deploy.yml` runs `npm run check` (typecheck, lint, knip, tests) and the build on every push to `main`, then deploys over SSH through a Cloudflare tunnel. It needs these repository secrets:
+When a push to `main` passes every CI job (checks, benchmark, package test, browser test), CI moves the `deploy` branch to that commit. On the host, `scripts/tab-deploy.sh watch` polls `deploy` and, when it moves, fast-forwards, reinstalls only if a lockfile changed, rebuilds only if `backend/`, `frontend/` or `shared/` changed, restarts the app (pm2 if installed), and waits for `/api/health` and the web app to answer. If any step fails it rolls back to the previous commit and skips the bad one.
 
-| Secret | Purpose |
-|---|---|
-| `SSH_HOST`, `SSH_USERNAME`, `SSH_KEY` | Where and how to connect |
-| `SSH_KNOWN_HOSTS` | The host's SSH key as a `known_hosts` line, so the runner can verify it is talking to the real host. Copy it from a machine that has connected before: `ssh-keygen -F <SSH_HOST> -f ~/.ssh/known_hosts` |
-| `APP_DIR` *(optional)* | Checkout location on the host (default `~/Reverse-Architect`) |
-| `DEPLOY_PAT` *(optional)* | Token for the fetch, if `GITHUB_TOKEN` is not enough |
-| `HEALTHCHECK_URL` *(optional)* | Public URL of `/api/health`, checked after the deploy |
+The host pulls from GitHub, so it needs no inbound SSH, open port or repository secrets. Setup: [docs/TAB-DEPLOY.md](docs/TAB-DEPLOY.md).
 
 ---
 
